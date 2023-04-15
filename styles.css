@@ -38,6 +38,64 @@ body{
     z-index: -99;
 }
 
+.popupMessage{
+    position: absolute;
+    color: white;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    backdrop-filter: blur(5px) brightness(0.5);
+    -webkit-backdrop-filter: blur(5px) brightness(0.5);
+}
+
+.popupText{
+    background-color: black;
+    border: 2px solid gray;
+    border-radius: 20px;
+    width: 50%;
+    padding: 20px;
+    z-index: 9999999;
+}
+
+.popupText p{
+    border-top: 1px solid white;
+    margin-top: 10px;
+    padding-top: 10px;
+}
+
+.popupText button{
+    padding-inline: 20px;
+    border-radius: 7.5px;
+    border: none;
+    font-size: 17px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.closePopup{
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+}
+
+@media screen and (max-width: 450px) {
+    .popupText h2{
+        font-size: 16px;
+    }
+    .popupText p{
+        font-size: 13px;
+    }
+}
+
+@media screen and (max-width: 600px) {
+    .popupText{
+        width: 70%;
+    }
+}
+
 /* ---HEADER--- */
 
 header{

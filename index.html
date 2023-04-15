@@ -12,9 +12,30 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" integrity="sha512-E8QSvWZ0eCLGk4km3hxSsNmGWbLtSCSUcewDQPQWZF6pEU8GlT8a5fF32wOl1i8ftdMhssTrF/OhyGWwonTcXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://kit.fontawesome.com/1d408b5acd.js" crossorigin="anonymous"></script>
+    <script>
+        function closePopup(){
+            document.getElementsByClassName("popupMessage")[0].style.display = "none";
+        }
+    </script>
 </head>
 <body>
     <div class="backgroundBlur"></div>
+
+    <div class="popupMessage">
+        <div class="closePopup" onclick="closePopup();"></div>
+        <div class="popupText">
+            <h2>Welcome to Crimson Music, Hope you have a great time!</h2>
+            <p>One thing to keep in mind is that this is "supposed" to be a mobile app, 
+                so that is why the layout on pc might be janky. The app will keep improving
+                as time goes on. Another thing is that Firebase limits 
+                the data rates for content and you might not be seeing songs here or at a 
+                random time the app will stop displaying images and playing songs. Also 
+                the app is still in development so some features don't work!
+            </p>
+            <button onclick="closePopup();">Close</button>
+        </div>
+    </div>
+
     <header id="header">
         <div class="welMes">
             <h2 class="headerText">Good <label id="timeOfDay">Morning</label>,</h2>
@@ -67,6 +88,19 @@
                 <h3>Does nothing<input id="trueDarkBtn2" class="settingCheck" type="checkbox"></h3>
                 <h5>Some text to see how it looks</h5>
                 <hr>
+            </span>
+            <span>
+                <h5 style="color: rgb(185, 185, 185) !important;">
+                    PLEASE READ:<br><br>
+
+                    This app was one of my first projects and the code is quite old so don't expect much. 
+                    One thing to keep in mind is that this is "supposed" to be a mobile app, 
+                    so that is why the layout on pc might be janky. The app will keep improving
+                    as time goes on. Another thing is that Firebase limits 
+                    the data rates for content and you might not be seeing songs here or at a 
+                    random time the app will stop displaying images and playing songs. Also 
+                    the app is still in development so some features don't work!
+                </h5>
             </span>
         </div>
     </div>
