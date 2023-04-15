@@ -365,6 +365,7 @@ input[type="checkbox"]:checked::before {
 .content{
     height: 100%;
     width: 100%;
+    max-width: 500px;
     position: relative;
     margin: 15px;
     margin-top: 80px;
@@ -380,10 +381,17 @@ input[type="checkbox"]:checked::before {
     padding-top: 10px;
 }
 
+.moreOptions{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .moreOptions .likedSongs{
     background: linear-gradient(225deg, rgb(116, 0, 19), rgb(44, 0, 26));
     padding: 10px;
-    width: 50%;
+    width: 100%;
+    max-width: 250px;
     display: flex;
     align-items: center;
     margin-block: 2.5px;
@@ -408,7 +416,9 @@ input[type="checkbox"]:checked::before {
     background-color: rgb(106, 23, 114);
     background-image: url('radioback.gif');
     background-blend-mode: color-burn;
-    width: 50%;
+    background-size: cover;
+    width: 100%;
+    max-width: 250px;
     display: flex;
     align-items: center;
     margin-block: 2.5px;
@@ -451,7 +461,8 @@ input[type="checkbox"]:checked::before {
 .moreOptions .youFollow{
     padding: 10px;
     background: linear-gradient(225deg, rgb(0, 31, 116), rgb(1, 0, 44));
-    width: 50%;
+    width: 100%;
+    max-width: 250px;
     display: flex;
     align-items: center;
     margin-block: 2.5px;
@@ -474,7 +485,8 @@ input[type="checkbox"]:checked::before {
 .moreOptions .friends{
     padding: 10px;
     background: linear-gradient(225deg, rgb(0, 116, 29), rgb(12, 44, 0));
-    width: 50%;
+    width: 100%;
+    max-width: 250px;
     display: flex;
     align-items: center;
     margin-block: 2.5px;
@@ -623,7 +635,7 @@ input[type="checkbox"]:checked::before {
     color: white;
     font-size: 20px;
     position: absolute;
-    top: 14px;
+    top: 7px;
     right: 4%;
     z-index: 1;
 }
@@ -1460,8 +1472,8 @@ footer li h2{
     }
     .playercontrols{
         position: absolute;
-        top: 30%;
-        left: 50vw;
+        top: 40%;
+        right: 0;
         height: 20%;
         padding: 0;
     }
