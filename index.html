@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="webtitle">Crimson Music</title>
+    <link id="icon" rel="icon" href="gradient.gif">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css">
+    <script type="module" src="firebase.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" integrity="sha512-E8QSvWZ0eCLGk4km3hxSsNmGWbLtSCSUcewDQPQWZF6pEU8GlT8a5fF32wOl1i8ftdMhssTrF/OhyGWwonTcXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://kit.fontawesome.com/1d408b5acd.js" crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="backgroundBlur"></div>
+    <header id="header">
+        <div class="welMes">
+            <h2 class="headerText">Good <label id="timeOfDay">Morning</label>,</h2>
+            <h1 id="accountName">Guest</h1>
+        </div>
+        <i id="settings" class="bi bi-gear headerText"></i>
+    </header>
+
+    <div class="loginPage" id="loginPage">
+        <h1>Sign Up</h1>
+        <input type="text" name="username" placeholder="Username" id="userInp">
+        <input type="text" name="email" placeholder="Email" id="emailInp">
+        <input type="password" name="password" placeholder="Password" id="passInp">
+        <p class="youhave">Already have an account? <a id="alreadyHasAccount">Log In!</a></p>
+        <p class="youdonthave">Don't have an account? <a id="dontHaveAccount">Create One!</a></p>
+        <button id="signup">Sign Up</button>
+        <button id="signin">Sign In</button>
+        <button id="googleSignIn"><i class="bi bi-google"></i>Google</button>
+        <img id="accountUserPhoto">
+        <h3></h3>
+        <h5></h5>
+        <button id="signOutBtn">Sign out</button>
+        <i id="closeLoginPage" class="fa-solid fa-circle-chevron-left"></i>
+    </div>
+
+    <div id="settingsPage" class="settings">
+        <h1>Settings</h1>
+        <i id="closeSettings" class="fa-solid fa-circle-chevron-left"></i>
+        <div>
+            <span>
+                <h3>App Theme <select name="settingsTheme" id="settingsTheme" class="settingsTheme">
+                    <option value="Light">Light</option>
+                    <option value="Dark" selected>Dark</option>
+                    <option value="TrueDark">TrueDark</option>
+                  </select></h3>
+                <h5>Change the theme </h5>
+                <hr>
+            </span>
+            <span>
+                <h3>Neki tamo setting 2 <input id="trueDarkBtn2" class="settingCheck" type="checkbox"></h3>
+                <h5>Neki tamo tekst ispod setinga 2</h5>
+                <hr>
+            </span>
+            <span>
+                <h3>Neki tamo setting 3 <input id="trueDarkBtn2" class="settingCheck" type="checkbox"></h3>
+                <h5>Neki tamo tekst ispod setinga 3</h5>
+                <hr>
+            </span>
+            <span>
+                <h3>Neki tamo setting 4 <input id="trueDarkBtn2" class="settingCheck" type="checkbox"></h3>
+                <h5>Neki tamo tekst ispod setinga 4</h5>
+                <hr>
+            </span>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="yourSection">
+
+            <div class="moreOptions">
+                <a class="likedSongs">
+                        <h2>Liked Songs</h2>
+                        <i class="bi bi-suit-heart"></i>
+                </a>
+                <a name="radio" id="openRadio" class="radioSongs">
+                    <h2>Radio</h2>
+                    <i class="bi bi-broadcast"></i>
+                </a>
+            </div>
+            
+            <div class="moreOptions">
+                <a class="youFollow">
+                    <h2>You Follow</h2>
+                    <i class="bi bi-person-plus"></i>
+                </a>
+                <a class="friends">
+                    <h2>Friends</h2>
+                    <i class="bi bi-person"></i>
+                </a>
+            </div>
+        </div>
+            
+        <div class="discover">
+            <h2 class="headerText">You might like <i id="refreshRecSongs" class="bi bi-arrow-clockwise headerText"></i></h2>
+            <ul class="recsongs" id="recsongs">
+                
+            </ul>
+            
+            <h2 class="headerText">Recommended Artists</h2>
+            <div class="recartists" id="recartists">
+                
+            </div>
+        </div>
+
+        <div class="search">
+            <div>
+                <input id="searchbox" type="search" placeholder="Search Whatever!">
+                <i class="bi bi-search"></i>
+            </div>
+        </div>
+
+        <div class="artistProfile">
+            <i id="closeArtist" class="fa-solid fa-circle-chevron-left"></i>
+            <img id="artistBanner" src="">
+            <h2 id="artistName"></h2>
+            <h4>Followers: <p id="numberOfListens" style="display: inline">0</p></h4>
+            <div class="artistButtons">
+                <button id="followBtn"><i class="bi bi-plus-circle"></i>Follow</button>
+                <button><i class="bi bi-play-circle"></i>Play All</button>
+            </div>
+            <div id="artistSongsDiv" class="artistSongsDiv">
+                <h3>Newest Releases</h3>
+                <ul id="artistSongs">
+                    
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="outerplayer">
+        <div class="player" id="player">
+            <div class="currentSong">
+                <img class="songBanner" id="songBanner" src="noPhoto.png">
+                <div class="title">
+                    <h3 id="currentSongName">Song Title Right Here</h3>
+                    <h4 id="currentSongCreator">Creator</h4>
+                </div>
+            </div>
+            <div class="seekTrack" id="seekTrack">
+                <div class="customSeek" id="customSeek"></div>
+                <div class="customFollow" id="customFollow"></div>
+                <div class="customDot" id="customDot"></div>
+                <input id="songTime" class="songTime" type="range" value="0" min="0" max="100">
+                <p class="currentTime">0:00</p>
+                <p class="endTime">0:00</p>
+            </div>
+            <div id="openBigPlayer"></div>
+            <div class="playercontrols">
+                <i class="bi bi-suit-heart"></i>
+                <i class="bi bi-skip-start" id="back"></i>
+                <i class="bi bi-pause-circle-fill" id="masterPlay"></i>
+                <i class="bi bi-skip-end" id="next"></i>
+                <i id="repeat" class="fa-solid fa-repeat"></i>
+            </div>
+        </div>
+        <div class="playerHeader">
+            <i id="closeBigPlayer" class="fa-solid fa-circle-chevron-left exitBigPlayer"></i>
+            <h3 id="playedFrom">Playing From<br><p id="playedFromSpot"></p></h3>
+            <i id="addToPlaylist" class="bi bi-plus-circle"></i>
+        </div>
+    </div>
+
+    <footer>
+        <li id="openHome" class="activescreen">
+            <i class="bi bi-house"></i>
+            <h2>HOME</h2>
+        </li>
+        <li id="openSearch">
+            <i class="bi bi-search"></i>
+            <h2>SEARCH</h2>
+        </li>
+        <li id="openPlaylists">
+            <i class="bi bi-music-note-list"></i>
+            <h2>PLAYLISTS</h2>
+        </li>
+        <li id="openAccount">
+            <img id="accountPhoto" src="noPhoto.png">
+            <h2>ACCOUNT</h2>
+        </li>
+    </footer>
+</body>
+</html>
