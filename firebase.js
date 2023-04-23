@@ -59,7 +59,7 @@ openPlaylists.addEventListener('click', ()=>{
     skloniArtistaPlaylists();
 })
 
-// Stvaranje pesama i dobijanje URLa
+// LOADING SONG AND GETTING THE URL
 
 var radioOn = false;
 var webtitle = document.getElementById('webtitle');
