@@ -59,7 +59,7 @@ openPlaylists.addEventListener('click', ()=>{
     skloniArtistaPlaylists();
 })
 
-// LOADING SONG AND GETTING THE URL
+// LOADING THE SONG AND GETTING THE URL
 
 var radioOn = false;
 var webtitle = document.getElementById('webtitle');
