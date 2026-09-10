@@ -22,7 +22,7 @@ export default function BouncyPressable({
   style,
   ...props
 }: PropsWithChildren<BouncyPressableProps>) {
-  const { reduceMotion } = useAppSettings();
+  const { performanceMode, reduceMotion } = useAppSettings();
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -32,11 +32,11 @@ export default function BouncyPressable({
         {...props}
         disabled={disabled}
         onPressIn={(event) => {
-          scale.value = reduceMotion ? 1 : withTiming(pressedScale, { duration: 90 });
+          scale.value = reduceMotion || performanceMode ? 1 : withTiming(pressedScale, { duration: 90 });
           onPressIn?.(event);
         }}
         onPressOut={(event) => {
-          scale.value = reduceMotion ? 1 : withSpring(1, { damping: 7, mass: 0.42, stiffness: 330 });
+          scale.value = reduceMotion || performanceMode ? 1 : withSpring(1, { damping: 7, mass: 0.42, stiffness: 330 });
           onPressOut?.(event);
         }}
         style={[styles.pressable, contentStyle]}>

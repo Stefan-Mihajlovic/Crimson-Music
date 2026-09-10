@@ -83,6 +83,14 @@ export class AudiusSessionClient {
     this.notify();
     return session;
   }
+  async updateAccount(account: AudiusAccount, expectedRevision: number) {
+    if (this.revision !== expectedRevision || this.session?.account.id !== account.id) {
+      throw new AudiusSessionError('The Audius account changed. Please try again.', 'cancelled');
+    }
+    this.session = { ...this.session, account };
+    await this.persist();
+    return account;
+  }
   async clear() {
     this.revision += 1;
     this.session = null;

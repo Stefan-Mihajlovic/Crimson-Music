@@ -99,8 +99,10 @@ export function loginAudius() {
 }
 
 export async function refreshAudiusAccount() {
+  const revision = client.version();
   const payload = await audiusRequest<unknown>('/me');
-  return resolveAccount(payload, await client.accessToken());
+  const account = await resolveAccount(payload, await client.accessToken());
+  return client.updateAccount(account, revision);
 }
 
 /** Never send account tokens to an artwork mirror, CDN, or a third-party URL. */

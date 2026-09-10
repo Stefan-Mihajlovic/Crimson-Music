@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { activateAccount } from '@/services/account-lifecycle';
+import { activateAccount, isAccountDeleted, registerAccountCleanup } from '@/services/account-lifecycle';
 import { clearAudiusCaches } from '@/services/audius';
 import { AudiusSessionError, getAudiusSession, loginAudius, logoutAudius, refreshAudiusAccount, restoreAudiusSession, subscribeAudiusSession } from '@/services/audius-session';
 import type { AudiusAccount } from '@/services/audius-session-core';
@@ -11,7 +11,6 @@ export type CrimsonUser = {
   DisplayName?: string;
   Email: string;
   ProfilePhoto?: string;
-  AppTheme?: string;
   AuthProvider: 'audius';
   CanWrite: boolean;
   FavoriteCategories: string[];
@@ -23,18 +22,21 @@ export class CrimsonAuthError extends Error {
   constructor(message: string, code = 'general') { super(message); this.name = 'CrimsonAuthError'; this.code = code; }
 }
 
-type Preferences = { FavoriteCategories?: string[]; RecommendationStyle?: RecommendationStyle; AppTheme?: string };
+type Preferences = { FavoriteCategories?: string[]; RecommendationStyle?: RecommendationStyle };
 const preferencesKey = (uid: string) => `crimson.audius.preferences.v1:${uid}`;
 const styles: RecommendationStyle[] = ['familiar', 'balanced', 'surprise', 'underground'];
 async function userFrom(account: AudiusAccount): Promise<CrimsonUser> {
   let preferences: Preferences = {};
-  try { preferences = JSON.parse(await AsyncStorage.getItem(preferencesKey(account.id)) || '{}'); } catch { /* Use device defaults. */ }
+  try {
+    const parsed: unknown = JSON.parse(await AsyncStorage.getItem(preferencesKey(account.id)) || '{}');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) preferences = parsed as Preferences;
+  } catch { /* Use device defaults. */ }
   return {
     uid: account.id, Username: account.handle, DisplayName: account.name, Email: '', ProfilePhoto: account.picture,
     AuthProvider: 'audius', CanWrite: getAudiusSession()?.scope === 'write',
     FavoriteCategories: Array.isArray(preferences.FavoriteCategories) ? preferences.FavoriteCategories.filter((v) => typeof v === 'string').slice(0, 10) : [],
     RecommendationStyle: styles.includes(preferences.RecommendationStyle!) ? preferences.RecommendationStyle : 'balanced',
-    AppTheme: preferences.AppTheme || 'Auto', OnboardingComplete: true,
+    OnboardingComplete: true,
   };
 }
 export const hasCompletePersonalization = (user: CrimsonUser | null | undefined) => Boolean(user);
@@ -68,13 +70,25 @@ export function subscribeAuthSession(listener: (user: CrimsonUser | null) => voi
     if (!getAudiusSession()) { clearAudiusCaches(); listener(null); }
   });
 }
-async function updatePreferences(uid: string, patch: Preferences) {
-  const session = getAudiusSession();
-  if (session?.account.id !== uid) throw new CrimsonAuthError('Login with Audius to continue.');
-  const current = await userFrom(session.account);
-  await AsyncStorage.setItem(preferencesKey(uid), JSON.stringify({ FavoriteCategories: current.FavoriteCategories, RecommendationStyle: current.RecommendationStyle, AppTheme: current.AppTheme, ...patch }));
-  return userFrom(session.account);
+const preferenceWrites = new Map<string, Promise<CrimsonUser>>();
+registerAccountCleanup(async (uid) => { await preferenceWrites.get(uid)?.catch(() => undefined); });
+function updatePreferences(uid: string, patch: Preferences): Promise<CrimsonUser> {
+  const previous = preferenceWrites.get(uid);
+  const operation = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(async () => {
+    const session = getAudiusSession();
+    if (session?.account.id !== uid || isAccountDeleted(uid)) throw new CrimsonAuthError('Login with Audius to continue.');
+    const current = await userFrom(session.account);
+    await AsyncStorage.setItem(preferencesKey(uid), JSON.stringify({
+      FavoriteCategories: current.FavoriteCategories,
+      RecommendationStyle: current.RecommendationStyle,
+      ...patch,
+    }));
+    if (getAudiusSession()?.account.id !== uid) throw new CrimsonAuthError('The Audius account changed. Please try again.');
+    return userFrom(getAudiusSession()!.account);
+  });
+  preferenceWrites.set(uid, operation);
+  void operation.finally(() => { if (preferenceWrites.get(uid) === operation) preferenceWrites.delete(uid); }).catch(() => undefined);
+  return operation;
 }
-export const updateUserTheme = (uid: string, theme: string) => updatePreferences(uid, { AppTheme: ['Auto', 'Light', 'Dark'].includes(theme) ? theme : 'Auto' });
 export const updateUserRecommendationStyle = (uid: string, style: RecommendationStyle) => updatePreferences(uid, { RecommendationStyle: styles.includes(style) ? style : 'balanced' });
 export const completeUserOnboarding = (uid: string, categories: string[], style: RecommendationStyle) => updatePreferences(uid, { FavoriteCategories: [...new Set(categories.map((v) => v.trim()).filter(Boolean))].slice(0, 10), RecommendationStyle: styles.includes(style) ? style : 'balanced' });

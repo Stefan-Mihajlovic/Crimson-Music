@@ -6,11 +6,15 @@ An open-source Audius music player built with Expo 57, React Native, and TypeScr
 
 ## Features
 
-- Discover and search Audius tracks, artists, and playlists.
-- Play music and manage Audius favorites, follows, and playlists.
+- Discover music matched to saved genres and listening habits, continue recent listening, and catch new tracks from followed artists.
+- Search Audius tracks, artists, and playlists with recent searches, type filters, and paginated results.
+- Play music with one ordered queue, queue editing, playback recovery, and a paused session restore.
+- Manage Audius favorites, follows, and playlists, including privacy, titles, descriptions, track order, and deletion.
+- Generate a Vault mood mix and save it to your Audius library.
 - Personalize discovery with device-local music preferences.
 - View local listening history and statistics, and Audius notifications.
-- Save music for offline listening on native platforms, with storage and network controls.
+- Save music for offline listening on native platforms, with storage controls and a visible download queue, Wi-Fi waiting, retry, and cancellation.
+- Use a persistent desktop web player with browser media commands, keyboard shortcuts, seeking, and volume.
 - Use Data Saver, Reduce Motion, and Performance Mode to adjust the experience.
 
 Audius supplies the catalog, streams, identity, and account permissions. Availability and API limits remain subject to Audius. Crimson is an independent client, not an official Audius application.
@@ -72,7 +76,7 @@ Maintainers preparing a public source or binary release should read [publishing 
 | `src/components/` | Shared UI and platform-specific controls |
 | `src/providers/` | Authentication, playback, downloads, settings, and connectivity |
 | `src/services/` | Audius integration, persistence, and local music state |
-| `plugins/` | Canonical iOS native integration sources |
+| `plugins/` | Canonical iOS and Android native integration sources |
 | `scripts/` | Native project and dependency compatibility patches |
 | `tests/` | Unit and integration tests |
 

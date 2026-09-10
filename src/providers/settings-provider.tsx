@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, useColorScheme } from 'react-native';
 import { setDataSaverEnabled } from '@/services/data-usage';
 
 export type AppThemeMode = 'Light' | 'Dark' | 'Auto';
@@ -61,6 +61,10 @@ type SettingsContextValue = AppSettings & {
   colors: AppPalette;
   isDark: boolean;
   resolvedTheme: ResolvedAppTheme;
+  requestedReduceMotion: boolean;
+  systemReduceMotion: boolean;
+  settingsError: string | null;
+  retrySaveSettings: () => void;
   updateSettings: (patch: Partial<AppSettings>) => void;
 };
 
@@ -78,6 +82,38 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   const systemColorScheme = useColorScheme();
   const [settings, setSettings] = useState<AppSettings>(defaults);
   const [ready, setReady] = useState(false);
+  const [systemReduceMotion, setSystemReduceMotion] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const settingsRef = useRef(settings);
+  const persistence = useRef<Promise<void>>(Promise.resolve());
+  const saveRevision = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (active) setSystemReduceMotion(enabled);
+    }).catch(() => undefined);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setSystemReduceMotion);
+    return () => { active = false; subscription.remove(); };
+  }, []);
+
+  const saveSettings = useCallback((next: AppSettings) => {
+    const revision = ++saveRevision.current;
+    persistence.current = persistence.current.catch(() => undefined).then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)));
+    void persistence.current.then(() => {
+      if (revision === saveRevision.current) setSettingsError(null);
+    }).catch(() => {
+      if (revision === saveRevision.current) setSettingsError('Settings changed for this session, but could not be saved on this device.');
+    });
+  }, []);
+
+  const updateSettings = useCallback((patch: Partial<AppSettings>) => {
+    const next = { ...settingsRef.current, ...patch };
+    settingsRef.current = next;
+    if (typeof patch.dataSaver === 'boolean') setDataSaverEnabled(patch.dataSaver);
+    setSettings(next);
+    saveSettings(next);
+  }, [saveSettings]);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +129,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
           performanceMode: parsed?.performanceMode === true,
         };
         setDataSaverEnabled(restored.dataSaver);
+        settingsRef.current = restored;
         setSettings(restored);
       } catch {
         // Ignore invalid settings left by an older build.
@@ -111,18 +148,16 @@ export function SettingsProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<SettingsContextValue>(() => ({
     ...settings,
+    reduceMotion: settings.reduceMotion || systemReduceMotion,
+    requestedReduceMotion: settings.reduceMotion,
+    systemReduceMotion,
+    settingsError,
+    retrySaveSettings: () => saveSettings(settingsRef.current),
     colors: palettes[resolvedTheme],
     isDark: resolvedTheme === 'Dark',
     resolvedTheme,
-    updateSettings: (patch) => {
-      if (typeof patch.dataSaver === 'boolean') setDataSaverEnabled(patch.dataSaver);
-      setSettings((current) => {
-        const next = { ...current, ...patch };
-        void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => undefined);
-        return next;
-      });
-    },
-  }), [resolvedTheme, settings]);
+    updateSettings,
+  }), [resolvedTheme, settings, systemReduceMotion, settingsError, saveSettings, updateSettings]);
 
   return <SettingsContext.Provider value={value}>{ready ? children : null}</SettingsContext.Provider>;
 }

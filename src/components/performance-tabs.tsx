@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useNavigation, useRootNavigationState } from 'expo-router';
+import { type Href, useRouter, useSegments } from 'expo-router';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,11 +11,11 @@ import { useAppSettings } from '@/providers/settings-provider';
 import type { AppRouteGroup } from '@/services/action-sheet';
 import { requestSearchFocus } from '@/services/navigation-events';
 
-const tabs: { name: AppRouteGroup; label: string; icon: SymbolViewProps['name'] }[] = [
-  { name: '(home)', label: 'Home', icon: { ios: 'house.fill', android: 'home', web: 'home' } },
-  { name: '(search)', label: 'Search', icon: { ios: 'magnifyingglass', android: 'search', web: 'search' } },
-  { name: '(library)', label: 'Library', icon: { ios: 'folder', android: 'folder', web: 'folder' } },
-  { name: '(account)', label: 'Account', icon: { ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' } },
+const tabs: { name: AppRouteGroup; href: Href; label: string; icon: SymbolViewProps['name'] }[] = [
+  { name: '(home)', href: '/(app)/(home)', label: 'Home', icon: { ios: 'house.fill', android: 'home', web: 'home' } },
+  { name: '(search)', href: '/(app)/(search)/search', label: 'Search', icon: { ios: 'magnifyingglass', android: 'search', web: 'search' } },
+  { name: '(library)', href: '/(app)/(library)/library', label: 'Library', icon: { ios: 'folder', android: 'folder', web: 'folder' } },
+  { name: '(account)', href: '/(app)/(account)/account', label: 'Account', icon: { ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' } },
 ];
 
 /** iOS 26 ignores native tab blur overrides. Hide that bar and control the same navigator. */
@@ -23,13 +23,13 @@ export default function PerformanceTabs() {
   const { colors } = useAppSettings();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
-  const root = useRootNavigationState();
-  const state = root.routes.find((route) => route.name === '(app)')?.state;
+  const router = useRouter();
+  const segments = useSegments();
+  const activeGroup = segments.find((segment) => tabs.some((tab) => tab.name === segment));
   return (
     <View style={[styles.bar, { bottom: Math.max(8, insets.bottom - 8), backgroundColor: colors.elevated, borderColor: colors.border }]}>
       {tabs.map((tab) => {
-        const selected = state?.routes[state.index ?? 0]?.name === tab.name;
+        const selected = activeGroup === tab.name;
         const color = selected ? colors.accent : colors.secondaryText;
         return (
           <Pressable
@@ -38,9 +38,8 @@ export default function PerformanceTabs() {
             accessibilityLabel={tab.label}
             accessibilityState={{ selected }}
             onPress={() => {
-              if (!state?.key) return;
-              if (selected && tab.name === '(search)') requestSearchFocus();
-              if (!selected) navigation.dispatch({ type: 'NAVIGATE', target: state.key, payload: { name: tab.name } });
+              router.navigate(tab.href);
+              if (selected && tab.name === '(search)' && segments.at(-1) === 'search') requestSearchFocus();
             }}
             style={({ pressed }) => [styles.tab, selected && { backgroundColor: colors.background }, pressed && styles.pressed]}>
             {tab.name === '(account)' ? (

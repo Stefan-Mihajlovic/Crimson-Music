@@ -29,33 +29,8 @@ const defaultArtworkPageGap = 30;
 type SongPage = CrimsonSong | null;
 
 function useAdjacentSongs() {
-  const { currentSong, playSong, queue, queueIndex, repeatMode, source, sourceId } = usePlayer();
-
-  const previousIndex = queue.length > 1
-    ? queueIndex > 0
-      ? queueIndex - 1
-      : repeatMode === 'all'
-        ? queue.length - 1
-        : -1
-    : -1;
-  const nextIndex = queue.length > 1
-    ? queueIndex >= 0 && queueIndex < queue.length - 1
-      ? queueIndex + 1
-      : repeatMode === 'all'
-        ? 0
-        : -1
-    : -1;
-  const previousSong = previousIndex >= 0 ? queue[previousIndex] : null;
-  const nextSong = nextIndex >= 0 ? queue[nextIndex] : null;
-
-  const selectPrevious = useCallback(() => {
-    if (previousSong) playSong(previousSong, queue, source, sourceId);
-  }, [playSong, previousSong, queue, source, sourceId]);
-  const selectNext = useCallback(() => {
-    if (nextSong) playSong(nextSong, queue, source, sourceId);
-  }, [nextSong, playSong, queue, source, sourceId]);
-
-  return { currentSong, nextSong, previousSong, selectNext, selectPrevious };
+  const { currentSong, nextSong, previousSong, playNext, playPrevious } = usePlayer();
+  return { currentSong, nextSong, previousSong, selectNext: playNext, selectPrevious: playPrevious };
 }
 
 function useSwipePager({

@@ -55,8 +55,8 @@ export default function SongListRow({
 const styles = StyleSheet.create({
   shell: { height: 56 },
   row: { backgroundColor: 'transparent', borderWidth: 0 },
-  content: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 8, paddingRight: 62 },
-  menuButton: { position: 'absolute', top: 8, right: 9, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  content: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingRight: 44 },
+  menuButton: { position: 'absolute', top: 8, right: -7.5, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
   menuSymbol: { width: 25, height: 25 },
   copy: { flex: 1, minWidth: 0 },
   title: { fontSize: 16, lineHeight: 19, fontWeight: '500' },

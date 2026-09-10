@@ -1,194 +1,168 @@
 import { SymbolView } from 'expo-symbols';
-import { memo, useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import PlayerDetailsTabs from '@/components/player-details-tabs';
+import ReorderableQueue, { type QueueEntry } from '@/components/reorderable-queue';
 import { PlayerDetailsTab } from '@/components/player-details-tabs.types';
-import PlayerLyricsView from '@/components/player-lyrics-view';
 import NowPlayingArtwork from '@/components/now-playing-artwork';
 import DownloadStatusIcon from '@/components/download-status-icon';
+import SongListRow from '@/components/song-list-row';
 import { usePlayer, usePlayerStatus } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
-import {
-  CrimsonSong,
-  loadPlayerLyrics,
-  loadRelatedSongs,
-  PlayerLyrics,
-  RelatedSong,
-} from '@/services/music';
-
-const emptyLyrics: PlayerLyrics = { karaoke: [], lyrics: [] };
+import { CrimsonSong, loadRelatedSongs, RelatedSong } from '@/services/music';
+import { actionSheetHref } from '@/services/action-sheet';
 
 export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTab?: PlayerDetailsTab }) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useAppSettings();
-  const { currentSong, playSong, queue, source, sourceId } = usePlayer();
-  const [tab, setTab] = useState<PlayerDetailsTab>(initialTab);
-  const [lyrics, setLyrics] = useState<PlayerLyrics>(emptyLyrics);
-  const [lyricsSongId, setLyricsSongId] = useState('');
+  const { currentSong, playSong, queue, queueIndex, source, autoplayEnabled, toggleAutoplay,
+    playQueueIndex, removeFromQueue, moveQueueItem } = usePlayer();
+  const [tab, setTab] = useState<PlayerDetailsTab>(initialTab === 'lyrics' ? 'queue' : initialTab);
   const [related, setRelated] = useState<RelatedSong[]>([]);
-  const [relatedSongId, setRelatedSongId] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loadedRequest, setLoadedRequest] = useState('');
+  const [error, setError] = useState('');
+  const [revision, setRevision] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const songId = currentSong?.id;
+  const requestKey = `${songId || ''}:${revision}`;
+  const loading = tab === 'related' && loadedRequest !== requestKey;
 
   useEffect(() => {
-    if (!currentSong || tab === 'queue') return;
-    const songId = currentSong.id;
-    if (tab === 'lyrics' && lyricsSongId === songId) return;
-    if (tab === 'related' && relatedSongId === songId) return;
-
+    if (!songId || tab !== 'related') return;
     let active = true;
-    const task = InteractionManager.runAfterInteractions(() => {
-      if (!active) return;
-      setLoading(true);
-      const request = tab === 'lyrics'
-        ? loadPlayerLyrics(songId).then((result) => {
-            if (!active) return;
-            setLyrics(result);
-            setLyricsSongId(songId);
-          })
-        : loadRelatedSongs(songId).then((result) => {
-            if (!active) return;
-            setRelated(result);
-            setRelatedSongId(songId);
-          });
-      request
-        .catch(() => {
-          if (!active) return;
-          if (tab === 'lyrics') {
-            setLyrics(emptyLyrics);
-            setLyricsSongId(songId);
-          } else {
-            setRelated([]);
-            setRelatedSongId(songId);
-          }
-        })
-        .finally(() => { if (active) setLoading(false); });
-    });
-    return () => {
-      active = false;
-      task.cancel();
-    };
-  }, [currentSong, lyricsSongId, relatedSongId, tab]);
+    void loadRelatedSongs(songId).then((songs) => {
+      if (active) { setRelated(songs); setError(''); }
+    }).catch(() => {
+      if (active) setError('Related music could not be loaded.');
+    }).finally(() => { if (active) setLoadedRequest(requestKey); });
+    return () => { active = false; };
+  }, [songId, tab, requestKey]);
 
-  const playQueueSong = useCallback((song: CrimsonSong) => {
-    playSong(song, queue, source, sourceId);
-  }, [playSong, queue, source, sourceId]);
+  const items = useMemo<QueueEntry[]>(() => {
+    const occurrences = new Map<string, number>();
+    return queue.map((song, index) => {
+      const occurrence = occurrences.get(song.id) || 0;
+      occurrences.set(song.id, occurrence + 1);
+      return { song, index, key: `${song.id}:${occurrence}` };
+    }).slice(queueIndex + 1);
+  }, [queue, queueIndex]);
 
-  const playRelatedSong = useCallback((song: RelatedSong) => {
-    playSong(song, related, 'Related');
-  }, [playSong, related]);
+  if (!currentSong) return <ScrollView style={styles.list}><Text style={[styles.empty, { color: colors.secondaryText }]}>Choose a song to start your queue.</Text></ScrollView>;
 
-  if (!currentSong) {
-    return <View style={[styles.screen, { backgroundColor: colors.elevated }]}><Text style={[styles.empty, { color: colors.secondaryText }]}>Nothing is playing.</Text></View>;
-  }
-
-  const loadedForCurrentSong = tab === 'lyrics' ? lyricsSongId === currentSong.id : relatedSongId === currentSong.id;
-
-  return (
-    <View style={[styles.screen, { backgroundColor: colors.elevated }]}>
-      <PlayerDetailsTabs onChange={setTab} value={tab} />
-
-      {tab === 'queue' ? (
-        <FlatList
-          alwaysBounceVertical
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          data={queue}
-          initialNumToRender={10}
-          keyExtractor={(song, index) => `${song.id}-${index}`}
-          ListHeaderComponent={<View style={styles.sourceBlock}><Text style={[styles.overline, { color: colors.secondaryText }]}>Playing from</Text><Text style={[styles.source, { color: colors.text }]}>{source}</Text></View>}
-          maxToRenderPerBatch={8}
-          renderItem={({ item }) => (
-            <PlayerSheetRow
-              onPress={() => playQueueSong(item)}
-              reason={item.creator}
-              song={item}
-            />
-          )}
-          showsVerticalScrollIndicator={false}
-          updateCellsBatchingPeriod={40}
-          windowSize={7}
-        />
-      ) : loading && !loadedForCurrentSong ? (
-        <ActivityIndicator color={colors.accent} size="large" style={styles.loader} />
-      ) : tab === 'lyrics' ? (
-        <PlayerLyricsView karaoke={lyrics.karaoke} lyrics={lyrics.lyrics} />
-      ) : (
-        <FlatList
-          alwaysBounceVertical
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 24 }}
-          data={related}
-          initialNumToRender={8}
-          keyExtractor={(song) => song.id}
-          ListEmptyComponent={<Text style={[styles.empty, { color: colors.secondaryText }]}>No related songs found yet.</Text>}
-          renderItem={({ item }) => (
-            <PlayerSheetRow
-              onPress={() => playRelatedSong(item)}
-              reason={`${item.creator} · ${item.reason}`}
-              song={item}
-            />
-          )}
-          showsVerticalScrollIndicator={false}
-          windowSize={7}
-        />
-      )}
-    </View>
-  );
-}
-
-const PlayerSheetRow = memo(function PlayerSheetRow({ onPress, reason, song }: { onPress: () => void; reason: string; song: CrimsonSong }) {
-  const { currentSong, togglePlay } = usePlayer();
-  return currentSong?.id === song.id
-    ? <CurrentPlayerSheetRow onPress={togglePlay} reason={reason} song={song} />
-    : <PlayerSheetRowContent onPress={onPress} reason={reason} song={song} />;
-});
-
-function CurrentPlayerSheetRow({ onPress, reason, song }: { onPress: () => void; reason: string; song: CrimsonSong }) {
-  // Only the current row subscribes to live playback status.
-  const { playing } = usePlayerStatus();
-  return <PlayerSheetRowContent active playing={playing} onPress={onPress} reason={reason} song={song} />;
-}
-
-function PlayerSheetRowContent({ active = false, playing = false, onPress, reason, song }: {
-  active?: boolean;
-  playing?: boolean;
-  onPress: () => void;
-  reason: string;
-  song: CrimsonSong;
-}) {
-  const { colors } = useAppSettings();
-  return (
-    <Pressable
-      accessibilityLabel={`${active && playing ? 'Pause' : 'Play'} ${song.title} by ${song.creator}`}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, active && { backgroundColor: colors.accentSoft }, pressed && styles.rowPressed]}>
-      <NowPlayingArtwork borderRadius={10} size={46} song={song} />
-      <View style={styles.rowCopy}>
-        <Text numberOfLines={1} style={[styles.rowTitle, { color: active ? colors.accent : colors.text }]}>{song.title}</Text>
-        <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.secondaryText }]}>{reason}</Text>
+  // iOS sizes a direct ScrollView child of its native sheet content wrapper.
+  // Keep all header content inside that list and avoid native View ancestors.
+  const header = <View>
+    <PlayerDetailsTabs onChange={setTab} value={tab} />
+    {tab === 'queue' ? <>
+      <View style={styles.sourceBlock}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.overline, { color: colors.secondaryText }]}>Playing from</Text>
+          <Text numberOfLines={2} style={[styles.source, { color: colors.text }]}>{source}</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={editing ? 'Finish editing queue' : 'Edit upcoming queue'}
+          disabled={!items.length} onPress={() => setEditing(!editing)} style={styles.textButton}>
+          <Text style={{ color: colors.accent, fontWeight: '700', opacity: items.length ? 1 : 0.4 }}>{editing ? 'Done' : 'Edit'}</Text>
+        </Pressable>
       </View>
-      <DownloadStatusIcon trackId={song.id} />
-      <SymbolView
-        name={active && playing ? 'pause.fill' : 'play.fill'}
-        size={active ? 18 : 14}
-        tintColor={active ? colors.accent : colors.secondaryText}
-      />
-    </Pressable>
+      <Text style={[styles.section, { color: colors.secondaryText }]}>NOW PLAYING</Text>
+      <SongRow song={currentSong} active onPlay={() => playQueueIndex(queueIndex)} subtitle={currentSong.creator} />
+      <Text style={[styles.section, { color: colors.secondaryText }]}>UP NEXT</Text>
+      {editing ? <Text style={[styles.editHint, { color: colors.secondaryText }]}>Drag a handle to move a song. Hold near an edge to scroll.</Text> : null}
+    </> : null}
+  </View>;
+
+  return (
+    <>
+      {tab === 'queue' ? (
+        <ReorderableQueue
+          items={items}
+          editing={editing}
+          onMove={moveQueueItem}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          ListHeaderComponent={header}
+          renderRow={(item, handle) => <View style={styles.queueRow}>
+            <View style={{ flex: 1 }}><SongRow song={item.song} active={false}
+              onPlay={() => playQueueIndex(item.index)} subtitle={item.song.creator} /></View>
+            {editing ? <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.song.title} from queue`}
+              onPress={() => removeFromQueue(item.index)} style={styles.rowControl}>
+              <SymbolView name="minus.circle" size={22} tintColor={colors.secondaryText} />
+            </Pressable> : null}
+            {handle}
+          </View>}
+          ListFooterComponent={<>
+            <View style={styles.queueFooter}>
+              {!items.length ? <Text style={[styles.emptyQueue, { color: colors.secondaryText }]}>Your queue is clear. Add a song or explore Related.</Text> : null}
+              <Pressable accessibilityRole="switch" accessibilityState={{ checked: autoplayEnabled }} onPress={toggleAutoplay} style={styles.footerRow}>
+                <SymbolView name="infinity" size={23} tintColor={autoplayEnabled ? colors.accent : colors.secondaryText} />
+                <View style={{ flex: 1 }}><Text style={{ color: colors.text, fontWeight: '700' }}>Autoplay {autoplayEnabled ? 'on' : 'off'}</Text><Text style={{ color: colors.secondaryText, marginTop: 3 }}>Keep listening when your queue ends.</Text></View>
+              </Pressable>
+              {queueIndex > 0 ? <Pressable accessibilityRole="button" onPress={() => setShowHistory(!showHistory)} style={styles.textButton}><Text style={{ color: colors.accent }}>{showHistory ? 'Hide' : 'Show'} previously played ({queueIndex})</Text></Pressable> : null}
+            </View>
+            {showHistory && queueIndex > 0 ? <>
+              <Text style={[styles.section, { color: colors.secondaryText }]}>PREVIOUSLY PLAYED</Text>
+              {queue.slice(0, queueIndex).map((song, index) => <SongRow key={`${song.id}:${index}`} song={song} active={false}
+                onPlay={() => playQueueIndex(index)} subtitle={song.creator} />)}
+            </> : null}
+          </>}
+        />
+      ) : <FlatList
+          key="related"
+          data={loading || error ? [] : related}
+          keyExtractor={(song) => song.id}
+          style={styles.list}
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          ListHeaderComponent={header}
+          ListEmptyComponent={loading ? <ActivityIndicator color={colors.accent} style={styles.loader} />
+            : error ? <View style={styles.error}><Text style={{ color: colors.secondaryText }}>{error}</Text><Pressable accessibilityRole="button" onPress={() => setRevision(revision + 1)} style={styles.textButton}><Text style={{ color: colors.accent }}>Retry</Text></Pressable></View>
+            : <Text style={[styles.empty, { color: colors.secondaryText }]}>No related songs available yet.</Text>}
+          renderItem={({ item }) => <View style={styles.relatedRow}>
+            <SongListRow
+              song={item}
+              onPress={() => playSong(item, related, 'Related')}
+              onMenuPress={() => router.push(actionSheetHref({
+                type: 'song', id: item.id, title: item.title, subtitle: item.creator,
+                image: item.imageSmall || item.image, artistId: item.artistId, source: item.source,
+              }))}
+            />
+          </View>}
+        />}
+    </>
   );
 }
 
+const SongRow = memo(function SongRow({ song, active, onPlay, subtitle }: { song: CrimsonSong; active: boolean; onPlay: () => void; subtitle: string }) {
+  const { togglePlay } = usePlayer();
+  return active ? <ActiveSongRow song={song} onPlay={togglePlay} subtitle={subtitle} /> : <SongRowContent song={song} onPlay={onPlay} subtitle={subtitle} />;
+});
+function ActiveSongRow({ song, onPlay, subtitle }: { song: CrimsonSong; onPlay: () => void; subtitle: string }) {
+  const { playing } = usePlayerStatus();
+  return <SongRowContent active playing={playing} song={song} onPlay={onPlay} subtitle={subtitle} />;
+}
+function SongRowContent({ song, onPlay, subtitle, active = false, playing = false }: { song: CrimsonSong; onPlay: () => void; subtitle: string; active?: boolean; playing?: boolean }) {
+  const { colors } = useAppSettings();
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${song.title} by ${song.creator}`} accessibilityState={{ selected: active }} onPress={onPlay} style={({ pressed }) => [styles.row, (active || pressed) && { backgroundColor: colors.accentSoft }]}>
+    <NowPlayingArtwork borderRadius={10} size={46} song={song} />
+    <View style={styles.rowCopy}><Text numberOfLines={1} style={[styles.rowTitle, { color: active ? colors.accent : colors.text }]}>{song.title}</Text><Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.secondaryText }]}>{subtitle}</Text></View>
+    <DownloadStatusIcon trackId={song.id} />
+    <SymbolView name={active && playing ? 'pause.fill' : 'play.fill'} size={active ? 18 : 14} tintColor={colors.text} />
+  </Pressable>;
+}
 const styles = StyleSheet.create({
-  screen: { flex: 1, overflow: 'hidden' },
-  sourceBlock: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 13 },
-  overline: { fontSize: 13 },
-  source: { marginTop: 3, fontSize: 20, fontWeight: '800' },
-  row: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(220,214,247,0.12)' },
-  rowPressed: { backgroundColor: 'rgba(220,214,247,0.10)' },
-  rowCopy: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 15, fontWeight: '700' },
-  rowSubtitle: { marginTop: 2, fontSize: 13 },
-  loader: { marginTop: 70 },
-  empty: { padding: 24, fontSize: 15 },
+  list: { flex: 1 }, sourceBlock: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 13, flexDirection: 'row', alignItems: 'center' },
+  overline: { fontSize: 13 }, source: { marginTop: 3, fontSize: 20, fontWeight: '800' },
+  section: { fontSize: 11, fontWeight: '700', letterSpacing: 1, paddingHorizontal: 22, paddingTop: 14, paddingBottom: 8 },
+  row: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 10 },
+  rowCopy: { flex: 1, minWidth: 0 }, rowTitle: { fontSize: 15, fontWeight: '700' }, rowSubtitle: { marginTop: 2, fontSize: 13 },
+  queueRow: { flex: 1, flexDirection: 'row', alignItems: 'center' }, rowControl: { width: 42, minHeight: 60, alignItems: 'center', justifyContent: 'center' },
+  textButton: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }, relatedRow: { paddingHorizontal: 22, paddingVertical: 7 },
+  queueFooter: { paddingHorizontal: 20, paddingTop: 16, gap: 8 }, footerRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  emptyQueue: { fontSize: 14, paddingVertical: 14 }, editHint: { fontSize: 12, lineHeight: 17, paddingHorizontal: 22, paddingBottom: 10 },
+  loader: { marginTop: 70 }, empty: { padding: 24, fontSize: 15 }, error: { padding: 24, alignItems: 'center' },
 });

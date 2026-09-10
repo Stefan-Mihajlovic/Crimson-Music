@@ -38,3 +38,79 @@ jobs:
         run: npm run test:integration
       - name: Expo compatibility
         run: npx expo-doctor
+
+  web-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Export static web application
+        run: npx expo export --platform web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crimson-web
+          path: dist/
+          retention-days: 7
+
+  android-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Generate native Android project and media adapter
+        run: npx expo prebuild --platform android --no-install
+      - name: Compile Android debug application
+        working-directory: android
+        run: ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crimson-android-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+  ios-build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Generate native iOS project
+        run: npx expo prebuild --platform ios --no-install
+      - name: Prepare build scripts and CocoaPods
+        run: |
+          node scripts/fix-expo-ios-paths.js
+          pod install --project-directory=ios
+      - name: Compile unsigned iOS application
+        run: >-
+          xcodebuild -workspace ios/CrimsonMusic.xcworkspace
+          -scheme CrimsonMusic -configuration Release
+          -destination 'generic/platform=iOS'
+          -derivedDataPath .build/ios CODE_SIGNING_ALLOWED=NO
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: 'true'

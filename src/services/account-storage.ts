@@ -2,6 +2,10 @@ export function belongsToAccount(key: string, uid: string) {
   const exact = [
     `crimson.account.profile.v1:${uid}`,
     `crimson.audius.preferences.v1:${uid}`,
+    `crimson.notifications.seen.v1:${uid}`,
+    `crimson.vault.last-mood:${uid}`,
+    `crimson.player.session.v1:${uid}`,
+    `crimson.player.progress.v1:${uid}`,
     `crimson.offline.data.v1:history:${uid}`,
     `crimson.downloads.manifest.v1:${uid}`,
     `crimson.downloads.preferences.v1:${uid}`,

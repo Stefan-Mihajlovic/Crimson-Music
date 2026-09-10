@@ -13,7 +13,6 @@ import {
   signOut as clearAuthSession,
   subscribeAuthSession,
   updateUserRecommendationStyle,
-  updateUserTheme,
 } from '@/services/auth';
 
 type AuthContextValue = {
@@ -25,7 +24,6 @@ type AuthContextValue = {
   signInWithAudius: () => Promise<CrimsonUser>;
   signOut: () => Promise<void>;
   updateRecommendationStyle: (style: RecommendationStyle) => Promise<CrimsonUser>;
-  updateTheme: (theme: string) => Promise<CrimsonUser>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -87,16 +85,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
       disconnectAndClearLocalData: async () => {
         if (!user) throw new Error('Log in before clearing this device’s account data.');
+        const startedAtRevision = sessionRevision.current;
+        // Keep the authenticated screen available to retry a failed cleanup.
+        // Logging out in a finally block used to strand partially removed data.
+        await clearDeletedAccountData(user.uid);
+        if (startedAtRevision !== sessionRevision.current) return;
         const revision = ++sessionRevision.current;
-        try {
-          await clearDeletedAccountData(user.uid);
-        } finally {
-          try {
-            await clearAuthSession();
-          } finally {
-            applyUser(null, revision);
-          }
-        }
+        await clearAuthSession();
+        applyUser(null, revision);
       },
       signInWithAudius: async () => {
         const revision = ++sessionRevision.current;
@@ -113,13 +109,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!user) throw new Error('Sign in before changing your recommendation style.');
         const revision = sessionRevision.current;
         const nextUser = await updateUserRecommendationStyle(user.uid, style);
-        applyUser(nextUser, revision);
-        return nextUser;
-      },
-      updateTheme: async (theme) => {
-        if (!user) throw new Error('Sign in before changing your theme.');
-        const revision = sessionRevision.current;
-        const nextUser = await updateUserTheme(user.uid, theme);
         applyUser(nextUser, revision);
         return nextUser;
       },

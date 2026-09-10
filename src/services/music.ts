@@ -1,3 +1,5 @@
+import { resetPlayerListeningHistory } from '@/services/playback-session';
+import { preferredGenres, rankDiscoveryTracks, type DiscoveryProfile } from '@/services/discovery-profile';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isAccountDeleted, registerAccountCleanup } from '@/services/account-lifecycle';
 import { reportError } from '@/services/telemetry';
@@ -58,7 +60,7 @@ export type {
 export type PlayerLyrics = { lyrics: string[]; karaoke: KaraokeLine[] };
 export type PlayerExtras = PlayerLyrics & { related: RelatedSong[] };
 export type CrimsonCollectionField = 'LikedSongs' | 'FollowedArtists' | 'LikedPlaylists';
-export type ListeningEventType = 'play' | 'complete' | 'skip' | 'like' | 'unlike' | 'playlistAdd' | 'playlistRemove' | 'searchClick';
+export type ListeningEventType = 'play' | 'complete' | 'skip' | 'like' | 'unlike' | 'playlistAdd' | 'playlistRemove' | 'searchClick' | 'sessionEnd';
 export type ListeningHistoryCursor = {
   event: string;
   seenTrackIds: string[];
@@ -206,21 +208,6 @@ function shuffled<T>(items: T[], seed: string) {
   return next;
 }
 
-function variedTracks(items: CrimsonSong[], count: number, seed: string) {
-  const chosen: CrimsonSong[] = [];
-  const artistIds = new Set<string>();
-  const candidates = shuffled(Array.from(new Map(items.map((song) => [song.id, song])).values()), seed);
-  candidates.forEach((song) => {
-    if (chosen.length >= count || (song.artistId && artistIds.has(song.artistId))) return;
-    chosen.push(song);
-    if (song.artistId) artistIds.add(song.artistId);
-  });
-  candidates.forEach((song) => {
-    if (chosen.length < count && !chosen.some((item) => item.id === song.id)) chosen.push(song);
-  });
-  return chosen.slice(0, count);
-}
-
 function compactObject<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
 }
@@ -321,8 +308,10 @@ type AudiusActivity<T> = { item: T };
 // Audius mutations are indexed asynchronously. Keep acknowledged writes briefly so a
 // second edit cannot overwrite the first with an older discovery-node response.
 const confirmedPlaylistEdits = new Map<string, { expiresAt: number; record: AudiusPlaylistRecord }>();
+const deletedPlaylists = new Map<string, number>();
 const confirmedCollectionStates = new Map<string, { expiresAt: number; value: boolean }>();
 registerAccountCleanup((uid) => {
+  for (const key of deletedPlaylists.keys()) if (key.startsWith(`${uid}:`)) deletedPlaylists.delete(key);
   for (const key of confirmedPlaylistEdits.keys()) if (key.startsWith(`${uid}:`)) confirmedPlaylistEdits.delete(key);
   for (const key of confirmedCollectionStates.keys()) if (key.startsWith(`${uid}:`)) confirmedCollectionStates.delete(key);
 });
@@ -354,6 +343,7 @@ async function readAudiusList<T>(path: string): Promise<T[]> {
 }
 
 async function readAudiusPlaylist(playlistId: string, uid?: string): Promise<AudiusPlaylistRecord> {
+  if (uid && (deletedPlaylists.get(`${uid}:${playlistId}`) || 0) > Date.now()) throw new Error('This playlist was deleted.');
   const confirmed = uid ? confirmedPlaylistEdits.get(`${uid}:${playlistId}`) : undefined;
   if (confirmed && confirmed.expiresAt > Date.now()) return confirmed.record;
   const path = `/playlists/${encodeURIComponent(playlistId)}`;
@@ -371,14 +361,14 @@ function playlistFromAudius(record: AudiusPlaylistRecord, uid?: string) {
   };
 }
 
-export async function createOwnedPlaylist(uid: string, title: string, coverUri?: string): Promise<CrimsonPlaylist> {
+export async function createOwnedPlaylist(uid: string, title: string, coverUri?: string, options: {visibility?: 'public' | 'private'; description?: string; trackIds?: string[]} = {}): Promise<CrimsonPlaylist> {
   requireUser(uid);
   const normalizedTitle = title.trim();
   if (!normalizedTitle) throw new Error('Give your playlist a name.');
   if (coverUri) throw new Error('Create the playlist without a cover, then add artwork on Audius.');
   const response = await audiusRequest<{ playlist_id?: string }>(withUser('/playlists', uid), {
     method: 'POST',
-    body: { playlist_name: normalizedTitle, is_private: false, is_album: false, playlist_contents: [] },
+    body: { playlist_name: normalizedTitle, description: options.description || '', is_private: options.visibility === 'private', is_album: false, playlist_contents: [...new Set(options.trackIds || [])].map((id) => ({track_id:id, timestamp:Math.floor(Date.now()/1000)})) },
   });
   requireUser(uid);
   if (!response.playlist_id) throw new Error('Audius did not return the new playlist ID.');
@@ -389,7 +379,9 @@ export async function createOwnedPlaylist(uid: string, title: string, coverUri?:
     id: response.playlist_id,
     playlist_name: normalizedTitle,
     user: { id: uid, name: artist?.name || 'Audius listener', handle: artist?.handle },
-    playlist_contents: [],
+    is_private: options.visibility === 'private',
+    description: options.description || '',
+    playlist_contents: [...new Set(options.trackIds || [])].map((id) => ({track_id:id, timestamp:Math.floor(Date.now()/1000)})),
   };
   confirmedPlaylistEdits.set(`${uid}:${record.id}`, { expiresAt: Date.now() + 30_000, record });
   return playlistFromAudius(record, uid);
@@ -415,9 +407,12 @@ export async function loadLibraryFeed(
     for (const [key, confirmed] of confirmedPlaylistEdits) {
       if (key.startsWith(`${uid}:`) && confirmed.expiresAt > Date.now()) playlistRecords.set(confirmed.record.id, confirmed.record);
     }
+    for (const [key, until] of deletedPlaylists) {
+      if (key.startsWith(`${uid}:`) && until > Date.now()) playlistRecords.delete(key.slice(uid.length + 1));
+    }
     const feed: LibraryFeed = {
       playlists: [...playlistRecords.values()].map((record) => playlistFromAudius(record, uid)),
-      likedPlaylists: liked.map(({ item }) => playlistFromAudius(item, uid)),
+      likedPlaylists: liked.filter(({ item }) => (deletedPlaylists.get(`${uid}:${item.id}`) || 0) <= Date.now()).map(({ item }) => playlistFromAudius(item, uid)),
       followedArtists: followed.map(mapAudiusArtist),
     };
     // playlist_contents includes every track ID, so picker membership uses the full collection.
@@ -514,6 +509,46 @@ export async function setSongInOwnedPlaylist(
   });
 }
 
+export type OwnedPlaylistUpdate = { title?: string; description?: string; visibility?: 'private' | 'public'; trackIds?: string[]; expectedTrackIds?: string[] };
+export async function updateOwnedPlaylist(uid: string, playlistId: string, update: OwnedPlaylistUpdate): Promise<CrimsonPlaylist> {
+  requireUser(uid);
+  return serializeLibraryWrite(`${uid}:playlist:${playlistId}`, async () => {
+    const record = await readAudiusPlaylist(playlistId, uid);
+    requireUser(uid);
+    if (record.user?.id !== uid) throw new Error('You can only edit your own Audius playlists.');
+    if (update.title !== undefined && !update.title.trim()) throw new Error('Give your playlist a name.');
+    if (update.expectedTrackIds && JSON.stringify((record.playlist_contents || []).map((item) => item.track_id)) !== JSON.stringify(update.expectedTrackIds)) throw new Error('This playlist changed on Audius. Reload it before saving your edits.');
+    const oldContents = new Map((record.playlist_contents || []).map((item) => [item.track_id, item]));
+    const patch = {
+      ...(update.title !== undefined ? { playlist_name: update.title.trim() } : {}),
+      ...(update.description !== undefined ? { description: update.description } : {}),
+      ...(update.visibility !== undefined ? { is_private: update.visibility === 'private' } : {}),
+      ...(update.trackIds ? { playlist_contents: [...new Set(update.trackIds)].map((id) => oldContents.get(id) || { track_id: id, timestamp: Math.floor(Date.now() / 1000) }) } : {}),
+    };
+    await audiusRequest(withUser(`/playlists/${encodeURIComponent(playlistId)}`, uid), { method: 'PUT', body: patch });
+    requireUser(uid);
+    const next = { ...record, ...patch };
+    confirmedPlaylistEdits.set(`${uid}:${playlistId}`, { expiresAt: Date.now() + 60_000, record: next });
+    clearAudiusCaches();
+    return playlistFromAudius(next, uid);
+  });
+}
+export async function deleteOwnedPlaylist(uid: string, playlistId: string): Promise<void> {
+  requireUser(uid);
+  return serializeLibraryWrite(`${uid}:playlist:${playlistId}`, async () => {
+    const record = await readAudiusPlaylist(playlistId, uid);
+    requireUser(uid);
+    if (record.user?.id !== uid) throw new Error('You can only delete your own Audius playlists.');
+    await audiusRequest(withUser(`/playlists/${encodeURIComponent(playlistId)}`, uid), { method: 'DELETE' });
+    requireUser(uid);
+    confirmedPlaylistEdits.delete(`${uid}:${playlistId}`);
+    deletedPlaylists.set(`${uid}:${playlistId}`, Date.now() + 5 * 60_000);
+    clearAudiusCaches();
+    const cached = await readOfflineData<LibraryFeed>(`library:${uid}`);
+    if (cached) await saveOfflineData(`library:${uid}`, { ...cached, playlists: cached.playlists.filter((p) => p.id !== playlistId), likedPlaylists: cached.likedPlaylists.filter((p) => p.id !== playlistId) });
+  });
+}
+
 export async function loadArtistDetail(artistId: string): Promise<ArtistDetail> {
   const [artist, songs, relatedArtists] = await Promise.all([
     getAudiusArtist(artistId),
@@ -542,7 +577,9 @@ async function loadPlaylistDetailOnline(playlistId: string, uid?: string, owned 
   ]);
   const playlist = playlistFromAudius(record, uid);
   if (owned && !playlist.owned) throw new Error('This playlist is not owned by your Audius account.');
-  return { playlist: { ...playlist, songs: songs.map((song) => song.id) }, songs };
+  const trackMap = new Map(songs.map((song) => [song.id, song]));
+  const ordered = playlist.songs.flatMap((id) => trackMap.has(id) ? [trackMap.get(id)!] : []);
+  return { playlist, songs: ordered };
 }
 
 export async function loadPlaylistDetail(
@@ -670,9 +707,12 @@ export async function loadRelatedSongs(songId: string, count = 8): Promise<Relat
     seen.add(song.id);
     related.push({ ...song, reason });
   };
-  artistTracks.forEach((song) => add(song, 'Artist'));
-  genreTracks.forEach((song) => add(song, 'Similar vibe'));
-  recommendedTracks.forEach((song) => add(song, 'For you'));
+  const recent = new Set((getCurrentAudiusUserId() ? await readLocalListeningEvents(getCurrentAudiusUserId()!) : []).filter((event) => event.type === 'play').slice(0, 20).map((event) => event.trackId));
+  const sources: [CrimsonSong[], RelatedSong['reason']][] = [[genreTracks, 'Similar vibe'], [recommendedTracks, 'For you'], [artistTracks.slice(0, 2), 'Artist']];
+  for (let index = 0; index < Math.max(...sources.map(([items]) => items.length)); index++) {
+    for (const [items, reason] of sources) if (items[index] && !recent.has(items[index].id)) add(items[index], reason);
+  }
+  for (const [items, reason] of sources) items.forEach((song) => add(song, reason));
   return related;
 }
 
@@ -707,7 +747,7 @@ function vaultTrackScore(track: CrimsonSong, profile: (typeof vaultMoodProfiles)
   return moodScore + genreScore + tagScore;
 }
 
-export async function loadVaultMood(mood: VaultMood, uid = getCurrentAudiusUserId() || undefined) {
+export async function loadVaultMood(mood: VaultMood, uid = getCurrentAudiusUserId() || undefined, variation = 0) {
   const profile = vaultMoodProfiles[mood];
   const limits = discoveryRequestLimits();
   const [personalized, recommended, ...genreGroups] = await Promise.all([
@@ -718,9 +758,11 @@ export async function loadVaultMood(mood: VaultMood, uid = getCurrentAudiusUserI
   const candidates = Array.from(new Map(
     [...personalized, ...recommended, ...genreGroups.flat()].map((song) => [song.id, song]),
   ).values());
-  const seed = `${uid || 'guest'}:${mood}:${Math.floor(Date.now() / 3_600_000)}`;
+  const history = uid ? await readLocalListeningEvents(uid) : [];
+  const recent = new Set(history.filter((event) => event.type === 'play').slice(0, 30).map((event) => event.trackId));
+  const seed = `${uid || 'guest'}:${mood}:${Math.floor(Date.now() / 3_600_000)}:${variation}`;
   const ranked = shuffled(candidates, seed)
-    .map((song) => ({ score: vaultTrackScore(song, profile), song }))
+    .map((song) => ({ score: vaultTrackScore(song, profile) - (recent.has(song.id) ? 3 : 0), song }))
     .filter((item) => item.score > 0)
     .sort((first, second) => second.score - first.score)
     .map((item) => item.song);
@@ -737,51 +779,54 @@ export async function loadVaultMood(mood: VaultMood, uid = getCurrentAudiusUserI
   return selected;
 }
 
-export async function loadHomeFeed(uid = getCurrentAudiusUserId() || undefined, rotation = Date.now(), onSongsReady?: (songs: CrimsonSong[]) => void) {
+export type HomeFeed = {
+  songs: CrimsonSong[]; artists: CrimsonArtist[]; playlists: CrimsonPlaylist[];
+  featuredArtist: CrimsonArtist | null; newReleases: CrimsonSong[];
+  reasons: Record<string, string>; updatedAt: number;
+};
+export async function loadHomeFeed(uid = getCurrentAudiusUserId() || undefined, rotation = Date.now(), onSongsReady?: (songs: CrimsonSong[]) => void, profile: DiscoveryProfile = {}): Promise<HomeFeed> {
   const limits = discoveryRequestLimits();
-  const scope = `home:${uid || 'guest'}`;
-  const seed = `${uid || 'guest'}:${rotation}`;
+  const profileKey = `${preferredGenres(profile).join(',')}:${profile.recommendationStyle || 'balanced'}`;
+  const scope = `home:${uid || 'guest'}:${profileKey}`;
   try {
-    const genre = homeArtistGenres[Math.abs(Math.floor(rotation / 1000)) % homeArtistGenres.length];
-    // These sources are independent: start them together, not in three waves.
-    const [selectedSongs, topArtists, genreArtists, playlistRecords] = await Promise.all([
-      loadCachedHomeTracks(uid, limits.tracks).catch(() => []).then(async (cachedSongs) => {
-        if (cachedSongs.length) return cachedSongs;
-        const trending = await getTrendingAudiusTracks(limits.tracks);
-        return trending;
-      }).then((songs) => {
-        const selected = variedTracks(songs, 5, `${seed}:tracks`);
-        if (!uid || !isAccountDeleted(uid)) onSongsReady?.(selected);
+    const genres = preferredGenres(profile);
+    const [history, follows] = await Promise.all([
+      uid ? readLocalListeningEvents(uid) : Promise.resolve([]),
+      uid ? discoveryCache.get(`home-follows:${uid}`, () => readAudiusList<AudiusArtistRecord>(withUser(userPath(uid, '/following'), uid)), 5 * 60_000).catch(() => []) : Promise.resolve([]),
+    ]);
+    const recent = new Set(history.filter((e) => e.type === 'play').slice(0, 40).map((e) => e.trackId));
+    const skipped = new Set(history.filter((e) => e.type === 'skip').slice(0, 30).map((e) => e.trackId));
+    const followed = new Set(follows.map((artist) => artist.id || ''));
+    const artistGenre = genres[Math.abs(rotation) % Math.max(1, genres.length)] || homeArtistGenres[Math.abs(rotation) % homeArtistGenres.length];
+    const [selected, topArtists, playlistRecords, releaseGroups] = await Promise.all([
+      Promise.all([
+        loadCachedHomeTracks(uid, limits.tracks).catch(() => getTrendingAudiusTracks(limits.tracks)),
+        ...genres.slice(0, limits.vaultGenres).map((genre) => getTrendingAudiusTracks(limits.vaultTracks, genre).catch(() => [])),
+      ]).then((groups) => {
+        const ranked = rankDiscoveryTracks(groups.flat(), profile, recent, skipped, followed, rotation);
+        const selected: typeof ranked = [];
+        const artistsSeen = new Set<string>();
+        for (const item of ranked) {
+          if (selected.length < 5 && !artistsSeen.has(item.song.artistId)) {
+            selected.push(item); artistsSeen.add(item.song.artistId);
+          }
+        }
+        for (const item of ranked) { if (selected.length < 5 && !selected.includes(item)) selected.push(item); }
+        if (!uid || !isAccountDeleted(uid)) onSongsReady?.(selected.map((item) => item.song));
         return selected;
       }),
-      getTopAudiusArtists(limits.artists).catch(() => []),
-      limits.extraArtists ? getTopAudiusArtists(limits.extraArtists, genre).catch(() => []) : Promise.resolve([]),
-      discoveryCache.get(`playlists:${uid || 'guest'}:${limits.playlists}`, () =>
-        audiusRequest<{ data: AudiusPlaylistRecord[] }>(`/playlists/trending?limit=${limits.playlists}&time=week`), 5 * 60_000)
-        .then((response) => response.data || []).catch(() => []),
+      getTopAudiusArtists(limits.artists, artistGenre).catch(() => []),
+      discoveryCache.get(`playlists:${uid || 'guest'}:${limits.playlists}`, () => audiusRequest<{data: AudiusPlaylistRecord[]}>(`/playlists/trending?limit=${limits.playlists}&time=week`), 5 * 60_000).then((r) => r.data || []).catch(() => []),
+      Promise.all(follows.slice(0, limits.extraArtists ? 4 : 2).map((artist) => getAudiusArtistTracks(artist.id!, 2).catch(() => []))),
     ]);
-    const homeSongArtists = new Set(selectedSongs.map((song) => song.artistId).filter(Boolean));
-    const artists = shuffled(
-      Array.from(new Map([...topArtists, ...genreArtists].map((artist) => [artist.id, artist])).values())
-        .filter((artist) => !homeSongArtists.has(artist.id)),
-      `${seed}:artists`,
-    ).slice(0, 10);
-    const playlists = playlistRecords.map((record) => playlistFromAudius(record, uid));
-    const feed = {
-      songs: selectedSongs,
-      artists,
-      playlists: playlists.slice(0, 6),
-      featuredArtist: artists[artists.length - 1] || null,
-    };
+    const songs = selected.map((item) => item.song);
+    const artists = shuffled(topArtists, `${uid}:${rotation}:artists`).slice(0, 10);
+    const newReleases = [...new Map(releaseGroups.flat().map((song) => [song.id, song])).values()].sort((a, b) => (Date.parse(b.releaseDate) || 0) - (Date.parse(a.releaseDate) || 0)).slice(0, 6);
+    const feed: HomeFeed = { songs, artists, playlists: playlistRecords.map((r) => playlistFromAudius(r, uid)).slice(0, 6), featuredArtist: artists[0] || null, newReleases, reasons: Object.fromEntries(selected.map((item) => [item.song.id, item.reason])), updatedAt: Date.now() };
     void saveOfflineData(scope, feed).catch(() => undefined);
     return feed;
   } catch (error) {
-    const cached = await readOfflineData<{
-      artists: CrimsonArtist[];
-      featuredArtist: CrimsonArtist | null;
-      playlists: CrimsonPlaylist[];
-      songs: CrimsonSong[];
-    }>(scope);
+    const cached = await readOfflineData<HomeFeed>(scope);
     if (cached) return cached;
     throw error;
   }
@@ -799,17 +844,53 @@ export type LocalListeningEvent = {
   localDayKey: string;
   localMonthKey: string;
   occurredAt: number;
+  sessionId?: string;
 };
 
 const historyWrites = new Map<string, Promise<void>>();
+const historyListeners = new Map<string, Set<() => void>>();
+const historyRevisions = new Map<string, number>();
+const historyClearEpochs = new Map<string, number>();
+export function subscribeLocalListeningHistory(uid: string, listener: () => void) {
+  const listeners = historyListeners.get(uid) || new Set<() => void>();
+  historyListeners.set(uid, listeners);
+  listeners.add(listener);
+  return () => { listeners.delete(listener); if (!listeners.size) historyListeners.delete(uid); };
+}
+function notifyHistory(uid: string) { historyListeners.get(uid)?.forEach((listener) => listener()); }
+export async function clearLocalListeningHistory(uid: string) {
+  requireUser(uid);
+  // Reset at the request boundary: checkpoints created while storage is clearing
+  // must contain only listening performed after the clear action.
+  historyClearEpochs.set(uid, (historyClearEpochs.get(uid) || 0) + 1);
+  resetPlayerListeningHistory(uid);
+  const operation = (historyWrites.get(uid) || Promise.resolve()).catch(() => undefined).then(async () => {
+    requireUser(uid);
+    await AsyncStorage.removeItem(offlineDataKey(`history:${uid}`));
+    historyRevisions.set(uid, (historyRevisions.get(uid) || 0) + 1);
+    for (const key of listeningStatsCache.keys()) if (key.startsWith(`${uid}:`)) listeningStatsCache.delete(key);
+    for (const key of listeningStatsRequests.keys()) if (key.startsWith(`${uid}:`)) listeningStatsRequests.delete(key);
+    notifyHistory(uid);
+  });
+  historyWrites.set(uid, operation);
+  try { await operation; } finally { if (historyWrites.get(uid) === operation) historyWrites.delete(uid); }
+}
 registerAccountCleanup(async (uid) => {
   await historyWrites.get(uid)?.catch(() => undefined);
   await Promise.allSettled([...libraryWrites.entries()].filter(([key]) => key.startsWith(`${uid}:`)).map(([, pending]) => pending));
 });
 
+async function readStoredListeningEvents(uid: string): Promise<LocalListeningEvent[]> {
+  const raw = await AsyncStorage.getItem(offlineDataKey(`history:${uid}`));
+  if (!raw) return [];
+  const events: unknown = JSON.parse(raw);
+  if (!Array.isArray(events)) throw new Error('The listening history could not be read.');
+  return events.filter((event): event is LocalListeningEvent => Boolean(event && typeof event === 'object' && typeof event.id === 'string' && typeof event.type === 'string' && Number.isFinite(event.occurredAt)));
+}
+
 export async function readLocalListeningEvents(uid: string): Promise<LocalListeningEvent[]> {
   await historyWrites.get(uid)?.catch(() => undefined);
-  return await readOfflineData<LocalListeningEvent[]>(`history:${uid}`) || [];
+  return readStoredListeningEvents(uid);
 }
 
 export async function recordListeningEvent(
@@ -820,7 +901,10 @@ export async function recordListeningEvent(
   extra: Record<string, unknown> = {},
 ) {
   if (!uid || uid !== getCurrentAudiusUserId() || isAccountDeleted(uid)) return;
-  const now = new Date();
+  const clearEpoch = historyClearEpochs.get(uid) || 0;
+  const occurredAt = type === 'sessionEnd' && typeof extra.occurredAt === 'number' && Number.isFinite(extra.occurredAt)
+    ? Math.max(1, Math.min(Date.now(), extra.occurredAt)) : Date.now();
+  const now = new Date(occurredAt);
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const event: LocalListeningEvent = {
     id: `${now.getTime()}-${Math.random().toString(36).slice(2)}`,
@@ -834,14 +918,21 @@ export async function recordListeningEvent(
     localDayKey: `${monthKey}-${String(now.getDate()).padStart(2, '0')}`,
     localMonthKey: monthKey,
     occurredAt: now.getTime(),
+    sessionId: typeof extra.sessionId === 'string' ? extra.sessionId : undefined,
   };
   const previous = historyWrites.get(uid) || Promise.resolve();
   const pending = previous.catch(() => undefined).then(async () => {
-    if (uid !== getCurrentAudiusUserId() || isAccountDeleted(uid)) return;
-    const history = await readOfflineData<LocalListeningEvent[]>(`history:${uid}`) || [];
+    if (uid !== getCurrentAudiusUserId() || isAccountDeleted(uid) || clearEpoch !== (historyClearEpochs.get(uid) || 0)) return;
+    const history = await readStoredListeningEvents(uid);
     // Local playback statistics never require a backend or write to the Audius account.
-    await saveOfflineData(`history:${uid}`, [event, ...history].slice(0, 20_000));
+    const retained = type === 'sessionEnd' && event.sessionId
+      ? history.filter((prior) => prior.type !== 'sessionEnd' || prior.sessionId !== event.sessionId)
+      : history;
+    await saveOfflineData(`history:${uid}`, [event, ...retained].slice(0, 20_000));
+    historyRevisions.set(uid, (historyRevisions.get(uid) || 0) + 1);
     listeningStatsCache.delete(`${uid}:${monthKey}`);
+    listeningStatsRequests.delete(`${uid}:${monthKey}`);
+    notifyHistory(uid);
   });
   historyWrites.set(uid, pending);
   try {
@@ -857,10 +948,15 @@ export async function loadListeningHistoryPage(
   uid: string,
   after: ListeningHistoryCursor | null = null,
   pageSize = 15,
+  options: { mode?: 'recent' | 'sessions'; query?: string } = {},
 ): Promise<ListeningHistoryPage> {
   requireUser(uid);
   const events = await readLocalListeningEvents(uid);
   const seenTrackIds = new Set(after?.seenTrackIds || []);
+  const query = options.query?.trim().toLowerCase() || '';
+  const matches = (event: LocalListeningEvent) => event.type === 'play' && event.snapshot && event.trackId
+    && (options.mode === 'sessions' || !seenTrackIds.has(event.trackId))
+    && (!query || `${event.snapshot.title || ''} ${event.snapshot.creator || ''}`.toLowerCase().includes(query));
   const cursorIndex = after ? events.findIndex((event) => event.id === after.event) : -1;
   const start = cursorIndex >= 0 ? cursorIndex + 1 : 0;
   const items: ListeningHistoryEntry[] = [];
@@ -870,7 +966,7 @@ export async function loadListeningHistoryPage(
   for (; index < events.length && items.length < count; index += 1) {
     const event = events[index];
     eventCursor = event.id;
-    if (event.type !== 'play' || !event.snapshot || !event.trackId || seenTrackIds.has(event.trackId)) continue;
+    if (!matches(event) || !event.snapshot) continue;
     seenTrackIds.add(event.trackId);
     items.push({
       id: event.id,
@@ -878,7 +974,7 @@ export async function loadListeningHistoryPage(
       song: songFromData(event.snapshot, event.trackId),
     });
   }
-  const hasMore = events.slice(index).some((event) => event.type === 'play' && event.snapshot && event.trackId && !seenTrackIds.has(event.trackId));
+  const hasMore = events.slice(index).some(matches);
   return { items, cursor: eventCursor ? { event: eventCursor, seenTrackIds: [...seenTrackIds] } : null, hasMore };
 }
 
@@ -894,6 +990,7 @@ export async function loadMonthlyListeningStats(
   if (!options.force && cached && cached.expiresAt > Date.now()) return cached.value;
   const inFlight = listeningStatsRequests.get(cacheKey);
   if (!options.force && inFlight) return inFlight;
+  const historyRevision = historyRevisions.get(uid) || 0;
   const request = (async (): Promise<ProfileListeningStats> => {
     const events = (await readLocalListeningEvents(uid)).filter((event) => event.localMonthKey === monthKey);
     const plays = events.filter((event) => event.type === 'play');
@@ -930,12 +1027,19 @@ export async function loadMonthlyListeningStats(
       streak = index > 0 && day === listeningDays[index - 1] + 1 ? streak + 1 : 1;
       longestStreak = Math.max(longestStreak, streak);
     });
-    const seconds = events.reduce((sum, event) => {
-      // Complete/skip is recorded once at the end of a play; counting play events as well would double minutes.
-      if (event.type !== 'complete' && event.type !== 'skip') return sum;
+    const measuredSessions = new Map<string, number>();
+    for (const event of events) {
+      if (event.type !== 'sessionEnd') continue;
+      const key = event.sessionId || event.id;
+      const seconds = Number.isFinite(event.playedSeconds) ? Math.max(0, event.playedSeconds) : 0;
+      measuredSessions.set(key, Math.max(measuredSessions.get(key) || 0, seconds));
+    }
+    const legacySeconds = events.reduce((sum, event) => {
+      if ((event.type !== 'complete' && event.type !== 'skip') || event.sessionId) return sum;
       const elapsed = Number.isFinite(event.playedSeconds) ? event.playedSeconds : 0;
       return sum + Math.max(0, event.duration > 0 ? Math.min(elapsed, event.duration) : elapsed);
     }, 0);
+    const seconds = legacySeconds + [...measuredSessions.values()].reduce((sum, value) => sum + value, 0);
     const value: ProfileListeningStats = {
       artists: artists.size,
       listeningDays: listeningDays.length,
@@ -949,7 +1053,7 @@ export async function loadMonthlyListeningStats(
       topTracks: rankedTracks.slice(0, 6),
       uniqueTracks: new Set(plays.map((event) => event.trackId).filter(Boolean)).size,
     };
-    if (!isAccountDeleted(uid) && uid === getCurrentAudiusUserId()) listeningStatsCache.set(cacheKey, { expiresAt: Date.now() + 60_000, value });
+    if ((historyRevisions.get(uid) || 0) === historyRevision && !isAccountDeleted(uid) && uid === getCurrentAudiusUserId()) listeningStatsCache.set(cacheKey, { expiresAt: Date.now() + 60_000, value });
     return value;
   })();
   listeningStatsRequests.set(cacheKey, request);
