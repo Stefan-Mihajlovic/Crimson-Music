@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { AuthProvider, useAuth } from '../src/providers/auth-provider';
-import { refreshSession, restoreSession, subscribeAuthSession, updateUserTheme } from '../src/services/auth';
+import { refreshSession, restoreSession, signOut, subscribeAuthSession, updateUserRecommendationStyle } from '../src/services/auth';
 import { clearDeletedAccountData } from '../src/services/account-cleanup';
 
 jest.mock('../src/services/account-cleanup', () => ({ clearDeletedAccountData: jest.fn(async () => {}) }));
@@ -13,7 +13,7 @@ jest.mock('../src/services/auth', () => ({
   signOut: jest.fn(async () => {}),
   signInWithAudius: jest.fn(async () => ({ uid: 'new', onboardingComplete: false })),
   subscribeAuthSession: jest.fn(() => () => {}),
-  updateUserTheme: jest.fn(),
+  updateUserRecommendationStyle: jest.fn(),
 }));
 
 let auth;
@@ -46,12 +46,12 @@ test('a delayed background profile refresh cannot sign an old user back in', asy
 test('a delayed profile mutation cannot replace the next authenticated account', async () => {
   await act(async () => { root = create(tree()); });
   const updating = deferred();
-  updateUserTheme.mockReturnValueOnce(updating.promise);
+  updateUserRecommendationStyle.mockReturnValueOnce(updating.promise);
   let pending;
-  await act(async () => { pending = auth.updateTheme('Dark'); });
+  await act(async () => { pending = auth.updateRecommendationStyle('surprise'); });
   await act(async () => auth.signOut());
   await act(async () => auth.signInWithAudius());
-  await act(async () => { updating.resolve({ uid: 'old', theme: 'Dark', onboardingComplete: true }); await pending; });
+  await act(async () => { updating.resolve({ uid: 'old', RecommendationStyle: 'surprise', onboardingComplete: true }); await pending; });
   expect(auth.user.uid).toBe('new');
   expect(auth.onboardingComplete).toBe(false);
 });
@@ -76,12 +76,17 @@ test('an expired Audius session clears the active account and rejects a stale re
   expect(auth.user).toBeNull();
 });
 
-test('clearing local account data disconnects even when device cleanup fails', async () => {
+test('failed local cleanup stays available to retry and disconnects after successful removal', async () => {
   await act(async () => { root = create(tree()); });
   clearDeletedAccountData.mockRejectedValueOnce(new Error('Device storage unavailable'));
   await act(async () => {
     await expect(auth.disconnectAndClearLocalData()).rejects.toThrow('Device storage unavailable');
   });
   expect(clearDeletedAccountData).toHaveBeenCalledWith('old');
+  expect(auth.user.uid).toBe('old');
+  expect(signOut).not.toHaveBeenCalled();
+  await act(async () => auth.disconnectAndClearLocalData());
+  expect(clearDeletedAccountData).toHaveBeenCalledTimes(2);
+  expect(signOut).toHaveBeenCalledTimes(1);
   expect(auth.user).toBeNull();
 });

@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import PlaylistCover from '@/components/playlist-cover';
 import { useAuth } from '@/providers/auth-provider';
@@ -21,6 +21,10 @@ import {
 
 export default function HomeQuickAccess() {
   const { user } = useAuth();
+  return <AccountQuickAccess key={user?.uid || 'guest'} uid={user?.uid} />;
+}
+
+function AccountQuickAccess({ uid }: { uid?: string }) {
   const { colors } = useAppSettings();
   const { isOffline } = useNetwork();
   const { playSong } = usePlayer();
@@ -29,14 +33,13 @@ export default function HomeQuickAccess() {
   const router = useRouter();
   const [recent, setRecent] = useState<CrimsonSong[]>([]);
   const [collections, setCollections] = useState<LibraryCollectionItem[]>([]);
-  useEffect(() => { setRecent([]); setCollections([]); }, [user?.uid]);
   useFocusEffect(useCallback(() => {
     let active = true;
-    if (!user?.uid) return;
+    if (!uid) return;
     void Promise.all([
-      loadListeningHistoryPage(user.uid, null, 4),
-      readOfflineData<LibraryFeed>(`library:${user.uid}`),
-      readLocalListeningEvents(user.uid),
+      loadListeningHistoryPage(uid, null, 4),
+      readOfflineData<LibraryFeed>(`library:${uid}`),
+      readLocalListeningEvents(uid),
     ]).then(([page, library, events]) => {
       if (!active) return;
       setRecent(page.items.map((item) => item.song));
@@ -45,7 +48,7 @@ export default function HomeQuickAccess() {
         : []);
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [user?.uid]));
+  }, [uid]));
 
   const available = isOffline ? downloadedSongs : recent;
   const items = [

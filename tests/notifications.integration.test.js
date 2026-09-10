@@ -1,5 +1,6 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
 
+jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('@/services/audius-session', () => ({
   audiusRequest: jest.fn(),
   getCurrentAudiusUserId: jest.fn(),
@@ -23,8 +24,9 @@ const payload = (items, unreadCount = 3) => ({
   related: { users: [{ id: 'artist-1', name: 'Artist One', profile_picture: { '150x150': 'https://images.example/artist-small.jpg', '480x480': 'https://images.example/artist-large.jpg' } }] },
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.resetModules();
+  await require('@react-native-async-storage/async-storage').clear();
   session = require('../src/services/audius-session');
   session.getCurrentAudiusUserId.mockReturnValue('listener-1');
   session.subscribeAudiusSession.mockImplementation((listener) => { accountChanged = listener; return () => {}; });
@@ -48,9 +50,15 @@ test('fetches real notification pages with names, lightweight pictures, unread s
 
 test('coalesces mounted header requests and reuses the first page until explicitly refreshed', async () => {
   let resolve;
-  session.audiusRequest.mockReturnValue(new Promise((done) => { resolve = done; }));
+  let requestStarted;
+  const started = new Promise((done) => { requestStarted = done; });
+  session.audiusRequest.mockImplementation(() => {
+    requestStarted();
+    return new Promise((done) => { resolve = done; });
+  });
   const first = notifications.loadNotificationsPage('listener-1');
   const second = notifications.loadNotificationsPage('listener-1');
+  await started;
   expect(session.audiusRequest).toHaveBeenCalledTimes(1);
   resolve(payload([makeFollow(0)]));
   const [a, b] = await Promise.all([first, second]);
@@ -94,6 +102,8 @@ test('logout clears the unread snapshot and in-flight notifications cannot cross
   let resolve;
   session.audiusRequest.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
   const inFlight = notifications.loadNotificationsPage('listener-1', null, { force: true });
+  // The service restores local seen markers before starting its network request.
+  await Promise.resolve();
   session.getCurrentAudiusUserId.mockReturnValue('listener-2');
   accountChanged();
   expect(notifications.getNotificationUnreadCount('listener-1')).toBe(0);

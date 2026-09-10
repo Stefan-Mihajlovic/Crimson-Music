@@ -52,7 +52,7 @@ jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => (
 jest.mock('../src/services/action-sheet', () => ({ useDetailRoutes: () => ({ historyHref: () => '/history', notificationsHref: () => '/notifications' }) }));
 jest.mock('../src/services/notifications', () => ({
   subscribeNotificationUnreadCount: () => () => {},
-  getNotificationUnreadCount: () => 0,
+  getNotificationUnseenCount: () => 0,
   loadNotificationsPage: jest.fn(),
 }));
 

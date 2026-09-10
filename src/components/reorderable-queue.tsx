@@ -1,11 +1,9 @@
-/* eslint-disable react-hooks/immutability */
-
 import { SymbolView } from 'expo-symbols';
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { FlatList, type FlatListProps, type ViewProps, StyleSheet, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  cancelAnimation, measure, scrollTo, useAnimatedRef, useAnimatedScrollHandler,
+  cancelAnimation, measure, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler,
   useAnimatedStyle, useDerivedValue, useFrameCallback, useSharedValue, withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -80,13 +78,16 @@ export default function ReorderableQueue({ items, editing, onMove, renderRow, ..
   useDerivedValue(() => {
     if (source.get() >= 0) target.set(Math.max(0, Math.min(maximum, source.get() + Math.round(offset.get() / rowHeight))));
   });
+  // Mirror the UI-thread gesture state only when a drag starts or ends.
+  useAnimatedReaction(() => source.get() >= 0, (active, previous) => {
+    if (active !== previous) scheduleOnRN(setDragging, active);
+  });
   const resetDrag = useCallback(() => {
     cancelAnimation(translation);
     touching.set(false);
     source.set(-1);
     target.set(-1);
     translation.set(0);
-    setDragging(false);
   }, [source, target, touching, translation]);
 
   useLayoutEffect(() => {
@@ -100,7 +101,6 @@ export default function ReorderableQueue({ items, editing, onMove, renderRow, ..
       onMove(items[from].index, items[to].index);
     } else resetDrag();
   }, [items, onMove, resetDrag]);
-  const beginDrag = useCallback(() => setDragging(true), []);
   const onScroll = useAnimatedScrollHandler((event) => {
     scrollOffset.set(event.contentOffset.y);
   });
@@ -151,7 +151,6 @@ export default function ReorderableQueue({ items, editing, onMove, renderRow, ..
         touching={touching}
         rowHeight={rowHeight}
         reduceMotion={reduceMotion}
-        onStart={beginDrag}
         onCommit={commit}
         onCancel={resetDrag}
       /> : null)}
@@ -160,11 +159,11 @@ export default function ReorderableQueue({ items, editing, onMove, renderRow, ..
 }
 
 function QueueHandle({ title, index, maximum, source, target, translation, startScroll, scrollOffset, pointerY, touching,
-  rowHeight, reduceMotion, onStart, onCommit, onCancel }: {
+  rowHeight, reduceMotion, onCommit, onCancel }: {
   title: string; index: number; maximum: number; rowHeight: number; reduceMotion: boolean;
   source: SharedValue<number>; target: SharedValue<number>; translation: SharedValue<number>;
   startScroll: SharedValue<number>; scrollOffset: SharedValue<number>; pointerY: SharedValue<number>; touching: SharedValue<boolean>;
-  onStart: () => void; onCommit: (from: number, to: number) => void; onCancel: () => void;
+  onCommit: (from: number, to: number) => void; onCancel: () => void;
 }) {
   const { colors } = useAppSettings();
   const gesture = useMemo(() => Gesture.Pan()
@@ -177,7 +176,6 @@ function QueueHandle({ title, index, maximum, source, target, translation, start
       target.set(index);
       pointerY.set(event.absoluteY);
       touching.set(true);
-      scheduleOnRN(onStart);
     })
     .onUpdate((event) => {
       translation.set(event.translationY);
@@ -196,7 +194,7 @@ function QueueHandle({ title, index, maximum, source, target, translation, start
         touching.set(false);
         scheduleOnRN(onCancel);
       }
-    }), [index, onCancel, onCommit, onStart, pointerY, reduceMotion, rowHeight, scrollOffset, source, startScroll, target, touching, translation]);
+    }), [index, onCancel, onCommit, pointerY, reduceMotion, rowHeight, scrollOffset, source, startScroll, target, touching, translation]);
 
   return <GestureDetector gesture={gesture}>
     <Animated.View accessible accessibilityLabel={`Reorder ${title}`} accessibilityHint="Drag to move this song in the queue"

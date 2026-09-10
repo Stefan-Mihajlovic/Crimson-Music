@@ -3,6 +3,7 @@ import React from 'react';
 import { AppState } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { setAudioModeAsync } from 'expo-audio';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { PlayerProvider, usePlayer, usePlayerSpectrum } from '../src/providers/player-provider';
 import { getUserCollectionState, loadRelatedSongs, recordListeningEvent, resolveTrackPlaybackUrl, toggleUserCollectionItem } from '../src/services/music';
@@ -57,6 +58,7 @@ function deferred() {
 }
 
 beforeEach(async () => {
+  await AsyncStorage.clear();
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   jest.useFakeTimers();
   AppState.currentState = 'active';
@@ -103,15 +105,28 @@ test('failed streams do not create play or skip listening events', async () => {
 });
 
 test('Play retries a failed source instead of resuming the previous native track', async () => {
+  await start('previous');
+  mockAudio.play.mockClear();
+  mockAudio.replace.mockClear();
+  resolveTrackPlaybackUrl.mockClear();
   resolveTrackPlaybackUrl.mockRejectedValueOnce(new Error('offline'));
   await start('retry');
-  expect(player.playbackError).toContain('tap Play');
-  expect(mockAudio.replace).toHaveBeenCalledWith(null);
+  expect(player.playbackState).toBe('error');
+  expect(player.playbackError).toBeTruthy();
+  expect(mockAudio.pause).toHaveBeenCalled();
+  expect(mockAudio.play).not.toHaveBeenCalled();
+  const retry = deferred();
+  resolveTrackPlaybackUrl.mockReturnValueOnce(retry.promise);
   await act(async () => player.togglePlay());
+  expect(mockAudio.play).not.toHaveBeenCalled();
+  expect(mockAudio.replace).not.toHaveBeenCalled();
+  await act(async () => retry.resolve('https://example.test/retry.mp3'));
   await act(async () => jest.advanceTimersByTime(100));
   expect(player.playbackError).toBeNull();
   expect(resolveTrackPlaybackUrl).toHaveBeenCalledTimes(2);
   expect(player.currentSong.id).toBe('retry');
+  expect(mockAudio.replace).toHaveBeenCalledWith(expect.objectContaining({ uri: 'https://example.test/retry.mp3', name: 'retry' }));
+  expect(mockAudio.play).toHaveBeenCalledTimes(1);
 });
 
 test('play is emitted once only after loaded audio is actually playing', async () => {
@@ -142,6 +157,7 @@ test('stale like reads and mutations cannot change the next song heart', async (
 });
 
 test('repeat one records completion and keeps the same track', async () => {
+  loadRelatedSongs.mockResolvedValueOnce([{ ...song('related'), streamable: true }]);
   await start('a');
   await act(async () => { player.toggleRepeat(); player.toggleRepeat(); });
   mockStatus = { ...mockStatus, playing: true, currentTime: 1 };
@@ -150,7 +166,8 @@ test('repeat one records completion and keeps the same track', async () => {
   await act(async () => root.update(tree()));
   expect(recordListeningEvent.mock.calls.filter((call) => call[1] === 'complete')).toHaveLength(1);
   expect(player.currentSong.id).toBe('a');
-  expect(loadRelatedSongs).not.toHaveBeenCalled();
+  expect(player.queue.map((track) => track.id)).toEqual(['a']);
+  expect(resolveTrackPlaybackUrl).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'a' }));
 });
 
 test('sign out clears the queue and invalidates a pending stream', async () => {

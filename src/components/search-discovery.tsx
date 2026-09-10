@@ -25,11 +25,15 @@ const mixes: {
 ];
 
 export default function SearchDiscovery() {
+  const { user } = useAuth();
+  const uid = user?.uid || null;
+  return <AccountSearchDiscovery key={uid || 'guest'} uid={uid} />;
+}
+
+function AccountSearchDiscovery({ uid }: { uid: string | null }) {
   const { width } = useWindowDimensions();
   const { colors } = useAppSettings();
-  const { user } = useAuth();
   const { playSong } = usePlayer();
-  const uid = user?.uid || null;
   const [loading, setLoading] = useState<AudiusDiscoveryMix | null>(null);
   const [error, setError] = useState('');
   const revision = useRef(0);
@@ -43,7 +47,7 @@ export default function SearchDiscovery() {
       revision.current += 1;
       pending.current = false;
     };
-  }, [uid]));
+  }, []));
 
   const startMix = async (mix: typeof mixes[number]) => {
     if (pending.current) return;

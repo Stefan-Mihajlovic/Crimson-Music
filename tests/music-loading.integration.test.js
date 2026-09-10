@@ -107,7 +107,7 @@ test('playlist creation uses Audius server ID and never uploads a cover to an ap
   audiusRequest.mockResolvedValueOnce({ playlist_id: 'created' });
   await expect(createOwnedPlaylist('owner', ' My mix ')).resolves.toMatchObject({ id: 'created', source: 'audius', ownerId: 'owner', title: 'My mix' });
   expect(audiusRequest).toHaveBeenCalledWith('/playlists?user_id=owner', {
-    method: 'POST', body: { playlist_name: 'My mix', is_private: false, is_album: false, playlist_contents: [] },
+    method: 'POST', body: { playlist_name: 'My mix', description: '', is_private: false, is_album: false, playlist_contents: [] },
   });
   await expect(createOwnedPlaylist('owner', 'Cover mix', 'file:///cover.jpg')).rejects.toThrow('add artwork on Audius');
 });
@@ -175,7 +175,7 @@ test('Data Saver requests smaller discovery pages and reuses recommendations wit
   expect(audiusRequest.mock.calls.filter(([path]) => path.includes('playlists/trending'))).toEqual([
     ['/playlists/trending?limit=6&time=week'],
   ]);
-  expect(getTopAudiusArtists.mock.calls).toEqual([[12], [12]]);
+  expect(getTopAudiusArtists.mock.calls).toEqual([[12, expect.any(String)], [12, expect.any(String)]]);
   setDataSaverEnabled(false);
 });
 
