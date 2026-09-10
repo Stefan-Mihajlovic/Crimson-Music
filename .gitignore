@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+
+# Expo and generated builds
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Generated native projects (Expo prebuild)
+/ios/
+/android/
+
+# Native build artifacts and signing files
+.build/
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.ipa
+*.apk
+*.aab
+
+# Metro
+.metro-health-check*
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+.secret.*
+
+# Tests and TypeScript
+coverage/
+*.tsbuildinfo
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.pem
+
+# Local signing, provider configuration, and private export/audit material
+credentials.json
+service-account*.json
+*-service-account.json
+GoogleService-Info.plist
+google-services.json
+.firebase/
+*.xcuserstate
+xcuserdata/

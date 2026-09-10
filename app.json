@@ -1,0 +1,81 @@
+{
+  "expo": {
+    "name": "Crimson Music",
+    "slug": "crimson-music-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "crimsonmusic",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.stefanmihajlovic.crimsonmusic",
+      "infoPlist": {
+        "CFBundleDisplayName": "Crimson Music",
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false,
+          "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": [
+              {
+                "UISceneConfigurationName": "Default Configuration",
+                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).SceneDelegate"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "android": {
+      "package": "com.stefanmihajlovic.crimsonmusic",
+      "adaptiveIcon": {
+        "backgroundColor": "#17070D",
+        "foregroundImage": "./assets/images/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#17070D",
+          "image": "./assets/images/icon.png",
+          "imageWidth": 180
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Crimson Music to choose a profile photo."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
+      "./plugins/with-crimson-remote-controls",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Crimson Music to use the microphone for voice search.",
+          "speechRecognitionPermission": "Allow Crimson Music to recognize speech for voice search."
+        }
+      ],
+      "expo-asset",
+      "expo-image",
+      "expo-web-browser",
+      "@sentry/react-native/expo"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

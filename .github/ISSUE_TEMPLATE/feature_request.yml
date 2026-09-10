@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an improvement to the Audius listening experience in Crimson.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the listener's need and the behavior you would like to see. Check existing issues for related requests first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would this help you do?
+      description: Describe the problem or use case, including your current workaround if you have one.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe how the feature would work from the listener's perspective.
+    validations:
+      required: true
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Relevant platforms
+      multiple: true
+      options:
+        - iOS
+        - Android
+        - Web
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Alternatives and context
+      description: Optional. Include related issues, sketches, or Audius documentation that would help explain the request.

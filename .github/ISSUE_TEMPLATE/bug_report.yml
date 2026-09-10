@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a reproducible problem in Crimson Music.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe what happened and how to reproduce it. Remove account tokens, API secrets, personal data, and authorization URLs from logs and screenshots.
+        For security vulnerabilities, follow [SECURITY.md](https://github.com/Stefan-Mihajlovic/Crimson-Music/blob/main/SECURITY.md) instead of posting details publicly.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - iOS
+        - Android
+        - Web
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version or commit
+      description: Include the release version or commit you built, and whether this is a development or release build.
+      placeholder: "1.0.0, commit abc1234, release build"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Device and operating system
+      description: For web issues, include the browser and its version.
+      placeholder: "iPhone 15 Pro, iOS version; or browser and OS version"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the starting screen and relevant settings, such as offline mode, Data Saver, or Performance Mode.
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include any visible error and whether the problem happens every time.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots and logs
+      description: Optional. Attach relevant screenshots or paste a short log excerpt after removing credentials and personal data.
