@@ -145,7 +145,7 @@ function RootNavigator() {
           contentStyle: { backgroundColor: colors.background },
         }}
       />
-      {['category', 'favorites'].map((name) => (
+      {['category', 'favorites', 'privacy', 'downloads'].map((name) => (
         <Stack.Screen
           key={name}
           name={name}

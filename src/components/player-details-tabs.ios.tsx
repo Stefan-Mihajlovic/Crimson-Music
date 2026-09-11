@@ -8,7 +8,6 @@ import { useAppSettings } from '@/providers/settings-provider';
 
 const tabs: { label: string; value: PlayerDetailsTab }[] = [
   { label: 'UP NEXT', value: 'queue' },
-  { label: 'LYRICS', value: 'lyrics' },
   { label: 'RELATED', value: 'related' },
 ];
 const trackPadding = 5;
@@ -101,15 +100,16 @@ export default function PlayerDetailsTabs({ onChange, value }: PlayerDetailsTabs
 
 const styles = StyleSheet.create({
   track: {
-    height: 56,
+    height: 52,
+    flexShrink: 0,
     marginTop: 14,
-    marginHorizontal: 13,
+    marginHorizontal: 20,
     marginBottom: 8,
     flexDirection: 'row',
     padding: trackPadding,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 28,
+    borderRadius: 26,
     borderCurve: 'continuous',
   },
   thumb: {
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     top: trackPadding,
     bottom: trackPadding,
     overflow: 'hidden',
-    borderRadius: 23,
+    borderRadius: 21,
     borderCurve: 'continuous',
     shadowColor: '#7E46D8',
     shadowOpacity: 0.3,

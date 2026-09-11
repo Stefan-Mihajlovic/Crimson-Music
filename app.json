@@ -61,6 +61,7 @@
         }
       ],
       "./plugins/with-crimson-remote-controls",
+      "./plugins/with-android-media-controls",
       [
         "expo-speech-recognition",
         {

@@ -19,6 +19,9 @@ const credits = [
   { title: 'Reggae category photo', subtitle: 'Unsplash · Debra Fisher', url: 'https://unsplash.com/photos/PPLpumj7ibA?utm_source=crimson_music&utm_medium=referral' },
   { title: 'Podcasts category photo', subtitle: 'Unsplash · Flipsnack', url: 'https://unsplash.com/photos/kl6ia5PyWP4?utm_source=crimson_music&utm_medium=referral' },
   { title: 'Events category photo', subtitle: 'Unsplash · Nicolás Flor', url: 'https://unsplash.com/photos/u0eSZmbk-H0?utm_source=crimson_music&utm_medium=referral' },
+  { title: 'Feeling lucky discovery photo', subtitle: 'Unsplash · Mick Haupt', url: 'https://unsplash.com/photos/mH_DxfDAFI0?utm_source=crimson_music&utm_medium=referral' },
+  { title: 'Underground discovery photo', subtitle: 'Unsplash · Valentin Bolder', url: 'https://unsplash.com/photos/BZOtLUdDcoU?utm_source=crimson_music&utm_medium=referral' },
+  { title: 'Most shared discovery photo', subtitle: 'Unsplash · Jonathan Ikemura', url: 'https://unsplash.com/photos/z0R4XB25ozI?utm_source=crimson_music&utm_medium=referral' },
 ];
 
 export default function LicensesScreen() {

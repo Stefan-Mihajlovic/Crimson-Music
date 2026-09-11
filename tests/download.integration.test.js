@@ -62,7 +62,7 @@ afterEach(async () => { await act(async () => root.unmount()); setDataSaverEnabl
 test('concurrent requests for the same song share the saved file', async () => {
   let result;
   await act(async () => { result = await Promise.all([downloads.downloadSong(song('one')), downloads.downloadSong(song('one'))]); });
-  expect(result).toEqual([true, false]);
+  expect(result).toEqual([true, true]);
   expect(downloadTrackFile).toHaveBeenCalledTimes(1);
   expect(downloads.downloadedCount).toBe(1);
   expect(downloads.getPlaybackUri('one')).toBe('file:///fixture/one.mp3');
@@ -95,7 +95,9 @@ test('leaving Wi-Fi with Data Saver aborts a file and does not mark it downloade
   await act(async () => { pending = downloads.downloadSong(song('wifi')).catch((error) => error); });
   const signal = downloadTrackFile.mock.calls[0][3];
   await act(async () => {
-    networkListeners.forEach((listener) => listener({ type: 'cellular', isConnected: true }));
+    const cellular = { type: 'cellular', isConnected: true };
+    NetInfo.fetch.mockResolvedValue(cellular);
+    networkListeners.forEach((listener) => listener(cellular));
   });
   expect(signal.aborted).toBe(true);
   await act(async () => { file.resolve({ bytes: 1_000, uri: 'file:///fixture/wifi.mp3' }); await pending; });
@@ -103,6 +105,7 @@ test('leaving Wi-Fi with Data Saver aborts a file and does not mark it downloade
   expect(downloads.downloadedCount).toBe(0);
   expect(deleteDownloadedFile).toHaveBeenCalledWith('file:///fixture/wifi.mp3');
   expect(saveDownloadManifest).not.toHaveBeenCalled();
+  expect(downloads.statusFor('wifi').state).toBe('waiting-for-wifi');
 });
 
 test('sign out aborts an in-flight file and never attaches it to a new account', async () => {

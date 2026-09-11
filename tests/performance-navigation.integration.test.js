@@ -2,23 +2,13 @@ const React = require('react');
 const TestRenderer = require('react-test-renderer');
 const { act } = TestRenderer;
 
-const mockDispatch = jest.fn();
+const mockNavigate = jest.fn();
 const mockSearchFocus = jest.fn();
-let mockActiveTab = 3;
-const mockTabState = {
-  key: 'existing-native-tabs',
-  index: 3,
-  routes: [
-    { key: 'home', name: '(home)', state: { index: 1, routes: [{ name: 'index' }, { name: 'artist' }] } },
-    { key: 'search', name: '(search)' },
-    { key: 'library', name: '(library)' },
-    { key: 'account', name: '(account)' },
-  ],
-};
+let mockSegments = ['(app)', '(account)', 'account'];
 
 jest.mock('expo-router', () => ({
-  useNavigation: () => ({ dispatch: mockDispatch }),
-  useRootNavigationState: () => ({ routes: [{ name: '(app)', state: { ...mockTabState, index: mockActiveTab } }] }),
+  useRouter: () => ({ navigate: mockNavigate }),
+  useSegments: () => mockSegments,
 }));
 jest.mock('expo-image', () => ({ Image: 'Image' }));
 jest.mock('expo-symbols', () => ({ SymbolView: 'SymbolView' }));
@@ -29,7 +19,7 @@ jest.mock('../src/services/navigation-events', () => ({ requestSearchFocus: () =
 
 const PerformanceTabs = require('../src/components/performance-tabs').default;
 
-beforeEach(() => { mockActiveTab = 3; });
+beforeEach(() => { mockSegments = ['(app)', '(account)', 'account']; });
 
 function tap(tree, name) {
   const button = tree.root.findAllByProps({ accessibilityRole: 'tab' }).find((item) => item.props.accessibilityLabel === name);
@@ -37,24 +27,33 @@ function tap(tree, name) {
   act(() => button.props.onPress());
 }
 
-test('solid tabs select the existing native navigator without replacing nested detail stacks', () => {
+test.each([
+  ['Home', '/(app)/(home)'],
+  ['Search', '/(app)/(search)/search'],
+  ['Library', '/(app)/(library)/library'],
+  ['Account', '/(app)/(account)/account'],
+])('solid %s tab navigates to its route without depending on root navigator state', (label, href) => {
   let tree;
   act(() => { tree = TestRenderer.create(<PerformanceTabs />); });
-  tap(tree, 'Home');
-  expect(mockDispatch).toHaveBeenCalledWith({ type: 'NAVIGATE', target: 'existing-native-tabs', payload: { name: '(home)' } });
-  expect(mockTabState.routes[0].state.routes[1].name).toBe('artist');
+  tap(tree, label);
+  expect(mockNavigate).toHaveBeenCalledWith(href);
+  expect(mockSearchFocus).not.toHaveBeenCalled();
   act(() => tree.unmount());
 });
 
-test('tapping the selected Account tab is stable, and reselecting Search focuses search', () => {
+test('nested Search stays selected, but only reselecting its root focuses the search field', () => {
   let tree;
+  mockSegments = ['(app)', '(search)', 'artist'];
   act(() => { tree = TestRenderer.create(<PerformanceTabs />); });
-  tap(tree, 'Account');
-  expect(mockDispatch).not.toHaveBeenCalled();
-  mockActiveTab = 1;
+  const tab = tree.root.findAllByProps({ accessibilityRole: 'tab' }).find((item) => item.props.accessibilityLabel === 'Search');
+  expect(tab.props.accessibilityState.selected).toBe(true);
+  tap(tree, 'Search');
+  expect(mockNavigate).toHaveBeenLastCalledWith('/(app)/(search)/search');
+  expect(mockSearchFocus).not.toHaveBeenCalled();
+  mockSegments = ['(app)', '(search)', 'search'];
   act(() => tree.update(<PerformanceTabs />));
   tap(tree, 'Search');
   expect(mockSearchFocus).toHaveBeenCalledTimes(1);
-  expect(mockDispatch).not.toHaveBeenCalled();
+  expect(mockNavigate).toHaveBeenCalledTimes(2);
   act(() => tree.unmount());
 });

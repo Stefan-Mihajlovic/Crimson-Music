@@ -1,8 +1,14 @@
+/* eslint-disable react-hooks/immutability */
+
 import { GlassContainer, GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 import { useAppSettings } from '@/providers/settings-provider';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type VaultGlassButtonProps = {
   accessibilityLabel: string;
@@ -24,26 +30,34 @@ export default function VaultGlassButton({
   style,
   contentStyle,
 }: VaultGlassButtonProps) {
-  const { reduceMotion } = useAppSettings();
+  const { performanceMode, reduceMotion } = useAppSettings();
+  const scale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      onPressIn={() => {
+        scale.value = reduceMotion || performanceMode ? 1 : withTiming(0.95, { duration: 80 });
+      }}
+      onPressOut={() => {
+        scale.value = reduceMotion || performanceMode ? 1 : withSpring(1, { damping: 9, stiffness: 300, mass: 0.45 });
+      }}
+      style={[
         styles.button,
         { height, borderRadius: height / 2 },
-        pressed && !reduceMotion && styles.pressed,
         style,
+        pressStyle,
       ]}>
       <VaultGlassSurface interactive radius={height / 2} style={StyleSheet.absoluteFill} />
       {/* Keep the glass and its ancestors opaque, including while disabled. */}
       <View pointerEvents="none" style={[styles.content, contentStyle, disabled && styles.disabledContent]}>
         {children}
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -59,10 +73,18 @@ export function VaultGlassSurface({ radius, interactive = false, style, children
       <GlassView
         pointerEvents="none"
         colorScheme="dark"
-        glassEffectStyle="regular"
+        glassEffectStyle="clear"
         isInteractive={interactive}
-        tintColor="rgba(92,55,145,0.18)"
-        style={[{ borderRadius: radius }, style]}>
+        tintColor="rgba(145,92,235,0.26)"
+        style={[styles.glassEdge, { borderRadius: radius }, style]}>
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.02)', 'rgba(175,130,255,0.12)']}
+          locations={[0, 0.45, 1]}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 0.85, y: 1 }}
+          style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
+        />
         {children}
       </GlassView>
     );
@@ -79,14 +101,14 @@ export function VaultGlassSurface({ radius, interactive = false, style, children
 export function VaultGlassGroup({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const { performanceMode } = useAppSettings();
   return !performanceMode && isLiquidGlassAvailable() && isGlassEffectAPIAvailable()
-    ? <GlassContainer spacing={6} style={style}>{children}</GlassContainer>
+    ? <GlassContainer spacing={12} style={style}>{children}</GlassContainer>
     : <View style={style}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
   button: { alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
-  pressed: { transform: [{ scale: 0.97 }] },
+  glassEdge: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(230,215,255,0.38)' },
   disabledContent: { opacity: 0.5 },
   fallback: { borderWidth: StyleSheet.hairlineWidth },
 });

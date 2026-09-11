@@ -102,7 +102,11 @@ function wait(milliseconds: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function fetchAudius<T>(url: string, init: RequestInit, consume: (response: Response) => Promise<T>): Promise<T> {
+async function fetchAudius<T>(
+  url: string,
+  init: RequestInit,
+  consume: (response: Response) => Promise<T>,
+): Promise<T> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const controller = new AbortController();
     const cancel = () => controller.abort();
@@ -110,12 +114,20 @@ async function fetchAudius<T>(url: string, init: RequestInit, consume: (response
     if (init?.signal?.aborted) controller.abort();
     const timeout = setTimeout(cancel, 8_000);
     try {
-      const response = await audiusFetch(url.replace(API_BASE, ''), { ...init, signal: controller.signal });
+      const response = await audiusFetch(url.replace(API_BASE, ''), {
+        ...init,
+        signal: controller.signal,
+      });
       // Keep the deadline active through body decoding, not just response headers.
-      if ((response.status !== 429 && response.status < 500) || attempt === 2) return await consume(response);
+      if ((response.status !== 429 && response.status < 500) || attempt === 2)
+        return await consume(response);
       const retryAfter = Number(response.headers.get('retry-after') || 0);
       await response.body?.cancel();
-      await wait(retryAfter > 0 ? Math.min(retryAfter * 1_000, 2_000) : 350 * 2 ** attempt);
+      await wait(
+        retryAfter > 0
+          ? Math.min(retryAfter * 1_000, 2_000)
+          : 350 * 2 ** attempt,
+      );
     } finally {
       clearTimeout(timeout);
       init?.signal?.removeEventListener('abort', cancel);
@@ -131,8 +143,10 @@ function safeNumber(value: unknown) {
 
 function formatCount(value: unknown) {
   const count = safeNumber(value);
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 0 : 1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(count >= 100_000 ? 0 : 1)}K`;
+  if (count >= 1_000_000)
+    return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 0 : 1)}M`;
+  if (count >= 1_000)
+    return `${(count / 1_000).toFixed(count >= 100_000 ? 0 : 1)}K`;
   return String(count);
 }
 
@@ -140,7 +154,12 @@ function artworkFrom(value: AudiusArtwork): ArtworkSet {
   return {
     small: value?.['150x150'] || value?.['480x480'] || value?.['640x'] || '',
     medium: value?.['480x480'] || value?.['640x'] || value?.['150x150'] || '',
-    large: value?.['1000x1000'] || value?.['2000x'] || value?.['480x480'] || value?.['640x'] || '',
+    large:
+      value?.['1000x1000'] ||
+      value?.['2000x'] ||
+      value?.['480x480'] ||
+      value?.['640x'] ||
+      '',
     mirrors: Array.isArray(value?.mirrors) ? value.mirrors.filter(Boolean) : [],
   };
 }
@@ -154,7 +173,9 @@ function tagsFrom(value: string | null | undefined) {
 }
 
 function socialHandle(value: string | null | undefined) {
-  return String(value || '').trim().replace(/^@+/, '');
+  return String(value || '')
+    .trim()
+    .replace(/^@+/, '');
 }
 
 export function mapAudiusTrack(record: AudiusTrack): CrimsonSong {
@@ -185,8 +206,10 @@ export function mapAudiusTrack(record: AudiusTrack): CrimsonSong {
     releaseDate: String(record.release_date || ''),
     playCount: safeNumber(record.play_count),
     favoriteCount: safeNumber(record.favorite_count),
-    streamable: record.is_streamable !== false && record.access?.stream !== false,
-    downloadable: record.is_downloadable === true && record.access?.download !== false,
+    streamable:
+      record.is_streamable !== false && record.access?.stream !== false,
+    downloadable:
+      record.is_downloadable === true && record.access?.download !== false,
   };
 }
 
@@ -227,43 +250,69 @@ export function mapAudiusPlaylist(record: AudiusPlaylist): CrimsonPlaylist {
     imageSmall: artwork.small,
     artwork,
     likes: formatCount(record.favorite_count),
-    songs: (record.playlist_contents || []).map((item) => String(item.track_id || '')).filter(Boolean),
+    songs: (record.playlist_contents || [])
+      .map((item) => String(item.track_id || ''))
+      .filter(Boolean),
     category: record.is_album ? 'Album' : '',
   };
 }
 
-async function audiusGet<T>(path: string, params: Record<string, string | number | boolean | undefined> = {}, cacheMs = 0): Promise<T> {
+async function audiusGet<T>(
+  path: string,
+  params: Record<string, string | number | boolean | undefined> = {},
+  cacheMs = 0,
+): Promise<T> {
   const url = new URL(`${API_BASE}${path}`);
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') url.searchParams.set(key, String(value));
+    if (value !== undefined && value !== '')
+      url.searchParams.set(key, String(value));
   });
   const requestUrl = url.toString();
-  const key = `${getCurrentAudiusUserId() || "signed-out"}:${requestUrl}`;
-  return responseCache.get(key, async () => {
-    return fetchAudius(requestUrl, {}, async (response) => {
-      if (!response.ok) throw new Error(`Audius request failed (${response.status}).`);
-      const payload = await response.json() as AudiusResponse<T>;
-      if (payload.data === undefined) throw new Error('Audius returned an empty response.');
-      return payload.data;
-    });
-  }, cacheMs);
+  const key = `${getCurrentAudiusUserId() || 'signed-out'}:${requestUrl}`;
+  return responseCache.get(
+    key,
+    async () => {
+      return fetchAudius(requestUrl, {}, async (response) => {
+        if (!response.ok)
+          throw new Error(`Audius request failed (${response.status}).`);
+        const payload = (await response.json()) as AudiusResponse<T>;
+        if (payload.data === undefined)
+          throw new Error('Audius returned an empty response.');
+        return payload.data;
+      });
+    },
+    cacheMs,
+  );
 }
 
-async function audiusGetPayload<T>(path: string, params: Record<string, string | number | boolean | undefined> = {}, cacheMs = 0): Promise<T> {
+async function audiusGetPayload<T>(
+  path: string,
+  params: Record<string, string | number | boolean | undefined> = {},
+  cacheMs = 0,
+): Promise<T> {
   const url = new URL(`${API_BASE}${path}`);
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') url.searchParams.set(key, String(value));
+    if (value !== undefined && value !== '')
+      url.searchParams.set(key, String(value));
   });
-  const key = `payload:${getCurrentAudiusUserId() || "signed-out"}:${url.toString()}`;
-  return responseCache.get(key, async () => {
-    return fetchAudius(url.toString(), {}, async (response) => {
-      if (!response.ok) throw new Error(`Audius request failed (${response.status}).`);
-      return await response.json() as T;
-    });
-  }, cacheMs);
+  const key = `payload:${getCurrentAudiusUserId() || 'signed-out'}:${url.toString()}`;
+  return responseCache.get(
+    key,
+    async () => {
+      return fetchAudius(url.toString(), {}, async (response) => {
+        if (!response.ok)
+          throw new Error(`Audius request failed (${response.status}).`);
+        return (await response.json()) as T;
+      });
+    },
+    cacheMs,
+  );
 }
 
-export async function searchAudius(query: string, limit = 12): Promise<Pick<DiscoveryCatalog, 'songs' | 'artists' | 'playlists'>> {
+export async function searchAudius(
+  query: string,
+  limit = 12,
+): Promise<Pick<DiscoveryCatalog, 'songs' | 'artists' | 'playlists'>> {
   const normalized = query.trim();
   if (normalized.length < 2) return { songs: [], artists: [], playlists: [] };
   const data = await audiusGet<{
@@ -273,8 +322,12 @@ export async function searchAudius(query: string, limit = 12): Promise<Pick<Disc
     albums?: AudiusPlaylist[];
   }>('/search/full', { query: normalized, limit, kind: 'all' }, 60_000);
   return {
-    songs: (data.tracks || []).map(mapAudiusTrack).filter((track) => track.id && track.streamable),
-    artists: (data.users || []).map(mapAudiusArtist).filter((artist) => artist.id),
+    songs: (data.tracks || [])
+      .map(mapAudiusTrack)
+      .filter((track) => track.id && track.streamable),
+    artists: (data.users || [])
+      .map(mapAudiusArtist)
+      .filter((artist) => artist.id),
     playlists: [...(data.playlists || []), ...(data.albums || [])]
       .map(mapAudiusPlaylist)
       .filter((playlist) => playlist.id),
@@ -282,40 +335,212 @@ export async function searchAudius(query: string, limit = 12): Promise<Pick<Disc
 }
 
 export async function getTrendingAudiusTracks(limit = 20, genre?: string) {
-  const records = await audiusGet<AudiusTrack[]>('/tracks/trending', {
-    limit,
-    genre,
-    time: 'week',
-  }, 5 * 60_000);
-  return records.map(mapAudiusTrack).filter((track) => track.id && track.streamable);
+  const records = await audiusGet<AudiusTrack[]>(
+    '/tracks/trending',
+    {
+      limit,
+      genre,
+      time: 'week',
+    },
+    5 * 60_000,
+  );
+  return records
+    .map(mapAudiusTrack)
+    .filter((track) => track.id && track.streamable);
+}
+
+export type AudiusDiscoveryMix = 'lucky' | 'underground' | 'most-shared';
+
+// Audius smart-playlist endpoints: https://api.audius.co/v1
+export async function getAudiusDiscoveryMix(mix: AudiusDiscoveryMix, limit = 25) {
+  const paths: Record<AudiusDiscoveryMix, string> = {
+    lucky: '/tracks/feeling-lucky',
+    underground: '/tracks/trending/underground',
+    'most-shared': '/tracks/most-shared',
+  };
+  const records = await audiusGet<AudiusTrack[]>(
+    paths[mix],
+    {
+      limit: Math.min(100, Math.max(1, limit)),
+      user_id: getCurrentAudiusUserId() || undefined,
+      ...(mix === 'lucky' ? { with_users: true } : {}),
+      ...(mix === 'most-shared' ? { time_range: 'week' } : {}),
+    },
+    // Feeling Lucky should return a fresh selection on each tap.
+    mix === 'lucky' ? 0 : 5 * 60_000,
+  );
+  return [...new Map(records.map(mapAudiusTrack)
+    .filter((track) => track.id && track.streamable)
+    .map((track) => [track.id, track])).values()];
 }
 
 export async function getRecommendedAudiusTracks(limit = 20) {
-  const records = await audiusGet<AudiusTrack[]>('/tracks/recommended', { limit }, 5 * 60_000);
-  return records.map(mapAudiusTrack).filter((track) => track.id && track.streamable);
+  const records = await audiusGet<AudiusTrack[]>(
+    '/tracks/recommended',
+    { limit },
+    5 * 60_000,
+  );
+  return records
+    .map(mapAudiusTrack)
+    .filter((track) => track.id && track.streamable);
 }
 
 export async function getTopAudiusArtists(limit = 24, genre?: string) {
   const path = genre ? '/users/genre/top' : '/users/top';
-  const records = await audiusGet<AudiusUser[]>(path, { limit, genre }, 10 * 60_000);
+  const records = await audiusGet<AudiusUser[]>(
+    path,
+    { limit, genre },
+    10 * 60_000,
+  );
   return records
     .map(mapAudiusArtist)
-    .filter((artist) => artist.id && artist.imageSmall && artist.trackCount > 0 && artist.handle.toLowerCase() !== 'audius');
+    .filter(
+      (artist) =>
+        artist.id &&
+        artist.imageSmall &&
+        artist.trackCount > 0 &&
+        artist.handle.toLowerCase() !== 'audius',
+    );
 }
 
 export async function getAudiusTrack(trackId: string) {
-  const record = await audiusGet<AudiusTrack>(`/tracks/${encodeURIComponent(trackId)}`, {}, 5 * 60_000);
+  const record = await audiusGet<AudiusTrack>(
+    `/tracks/${encodeURIComponent(trackId)}`,
+    {},
+    5 * 60_000,
+  );
   return mapAudiusTrack(record);
 }
 
 export async function getAudiusArtist(artistId: string) {
-  const record = await audiusGet<AudiusUser>(`/users/${encodeURIComponent(artistId)}`, {}, 5 * 60_000);
+  const record = await audiusGet<AudiusUser>(
+    `/users/${encodeURIComponent(artistId)}`,
+    {},
+    5 * 60_000,
+  );
   return mapAudiusArtist(record);
 }
 
-export async function getAudiusArtistTracks(artistId: string, limit = 50, offset = 0) {
-  const records = await audiusGet<AudiusTrack[]>(`/users/${encodeURIComponent(artistId)}/tracks`, { limit, offset }, 5 * 60_000);
-  return records.map(mapAudiusTrack).filter((track) => track.id && track.streamable);
+export type AudiusPage<T> = {
+  items: T[];
+  nextOffset: number;
+  hasMore: boolean;
+};
+
+export async function getAudiusArtistTracksPage(
+  artistId: string,
+  limit = 30,
+  offset = 0,
+  sort: 'date' | 'plays' | 'title' | 'artist' = 'date',
+  query = '',
+): Promise<AudiusPage<CrimsonSong>> {
+  const records = await audiusGet<AudiusTrack[]>(
+    `/users/${encodeURIComponent(artistId)}/tracks`,
+    {
+      limit,
+      offset,
+      sort_method:
+        sort === 'plays'
+          ? 'plays'
+          : sort === 'title'
+            ? 'title'
+            : sort === 'artist'
+              ? 'artist_name'
+              : 'release_date',
+      sort_direction: sort === 'title' || sort === 'artist' ? 'asc' : 'desc',
+      query,
+    },
+    5 * 60_000,
+  );
+  return {
+    items: records
+      .map(mapAudiusTrack)
+      .filter((track) => track.id && track.streamable),
+    nextOffset: offset + records.length,
+    hasMore: records.length === limit,
+  };
+}
+
+export async function getAudiusArtistTracks(
+  artistId: string,
+  limit = 50,
+  offset = 0,
+) {
+  return (await getAudiusArtistTracksPage(artistId, limit, offset)).items;
+}
+
+export async function getAudiusArtistCollections(artistId: string) {
+  const [albums, playlists] = await Promise.all([
+    audiusGet<AudiusPlaylist[]>(
+      `/users/${encodeURIComponent(artistId)}/albums`,
+      { limit: 30 },
+      5 * 60_000,
+    ),
+    audiusGet<AudiusPlaylist[]>(
+      `/users/${encodeURIComponent(artistId)}/playlists`,
+      { limit: 30, sort_method: 'recent' },
+      5 * 60_000,
+    ),
+  ]);
+  return [
+    ...new Map(
+      [...albums, ...playlists]
+        .map(mapAudiusPlaylist)
+        .filter((playlist) => playlist.id)
+        .map((playlist) => [playlist.id, playlist]),
+    ).values(),
+  ];
+}
+
+export type AudiusSearchKind = 'songs' | 'artists' | 'playlists';
+export type AudiusSearchItem = CrimsonSong | CrimsonArtist | CrimsonPlaylist;
+
+export async function searchAudiusPage(
+  query: string,
+  kind: AudiusSearchKind,
+  offset = 0,
+  limit = 30,
+): Promise<AudiusPage<AudiusSearchItem>> {
+  const normalized = query.trim();
+  if (normalized.length < 2)
+    return { items: [], nextOffset: 0, hasMore: false };
+  const params = { query: normalized, offset, limit, sort_method: 'relevant' };
+  if (kind === 'songs') {
+    const records = await audiusGet<AudiusTrack[]>(
+      '/tracks/search',
+      params,
+      60_000,
+    );
+    return {
+      items: records
+        .map(mapAudiusTrack)
+        .filter((song) => song.id && song.streamable),
+      nextOffset: offset + records.length,
+      hasMore: records.length === limit,
+    };
+  }
+  if (kind === 'artists') {
+    const records = await audiusGet<AudiusUser[]>(
+      '/users/search',
+      params,
+      60_000,
+    );
+    return {
+      items: records.map(mapAudiusArtist).filter((artist) => artist.id),
+      nextOffset: offset + records.length,
+      hasMore: records.length === limit,
+    };
+  }
+  const records = await audiusGet<AudiusPlaylist[]>(
+    '/playlists/search',
+    params,
+    60_000,
+  );
+  return {
+    items: records.map(mapAudiusPlaylist).filter((playlist) => playlist.id),
+    nextOffset: offset + records.length,
+    hasMore: records.length === limit,
+  };
 }
 
 export async function getAudiusRelatedArtists(artistId: string, limit = 12) {
@@ -326,16 +551,29 @@ export async function getAudiusRelatedArtists(artistId: string, limit = 12) {
   );
   return records
     .map(mapAudiusArtist)
-    .filter((artist) => artist.id && artist.id !== artistId && artist.trackCount > 0);
+    .filter(
+      (artist) => artist.id && artist.id !== artistId && artist.trackCount > 0,
+    );
 }
 
 function eventPermalink(event: AudiusEvent, track?: CrimsonSong) {
-  if (event.permalink) return event.permalink.startsWith('http') ? event.permalink : `https://audius.co${event.permalink}`;
-  if (track?.permalink) return track.permalink.startsWith('http') ? track.permalink : `https://audius.co${track.permalink}`;
+  if (event.permalink)
+    return event.permalink.startsWith('http')
+      ? event.permalink
+      : `https://audius.co${event.permalink}`;
+  if (track?.permalink)
+    return track.permalink.startsWith('http')
+      ? track.permalink
+      : `https://audius.co${track.permalink}`;
   return 'https://audius.co/explore';
 }
 
-function mapAudiusEvent(event: AudiusEvent, users: Map<string, CrimsonArtist>, tracks: Map<string, CrimsonSong>, entryCounts: Record<string, number>): CrimsonEvent {
+function mapAudiusEvent(
+  event: AudiusEvent,
+  users: Map<string, CrimsonArtist>,
+  tracks: Map<string, CrimsonSong>,
+  entryCounts: Record<string, number>,
+): CrimsonEvent {
   const host = users.get(String(event.user_id || ''));
   const track = tracks.get(String(event.entity_id || ''));
   return {
@@ -350,7 +588,13 @@ function mapAudiusEvent(event: AudiusEvent, users: Map<string, CrimsonArtist>, t
     hostName: host?.name || track?.creator || 'Audius creator',
     hostImage: host?.imageSmall || '',
     entityId: String(event.entity_id || ''),
-    image: String(event.event_data?.cover_photo_url || track?.image || host?.aboutImage || host?.image || ''),
+    image: String(
+      event.event_data?.cover_photo_url ||
+        track?.image ||
+        host?.aboutImage ||
+        host?.image ||
+        '',
+    ),
     permalink: eventPermalink(event, track),
     entryCount: Number(entryCounts[String(event.entity_id || '')] || 0),
     track,
@@ -358,55 +602,107 @@ function mapAudiusEvent(event: AudiusEvent, users: Map<string, CrimsonArtist>, t
 }
 
 export async function getAudiusEvents(limit = 24, searchQuery = '') {
-  const payload = await audiusGetPayload<AudiusEventsResponse>('/events/remix-contests', {
-    limit: Math.max(limit, 30),
-    status: 'active',
-  }, 5 * 60_000);
-  const users = new Map((payload.related?.users || []).map((item) => {
-    const artist = mapAudiusArtist(item);
-    return [artist.id, artist];
-  }));
-  const tracks = new Map((payload.related?.tracks || []).map((item) => {
-    const track = mapAudiusTrack(item);
-    return [track.id, track];
-  }));
+  const payload = await audiusGetPayload<AudiusEventsResponse>(
+    '/events/remix-contests',
+    {
+      limit: Math.max(limit, 30),
+      status: 'active',
+    },
+    5 * 60_000,
+  );
+  const users = new Map(
+    (payload.related?.users || []).map((item) => {
+      const artist = mapAudiusArtist(item);
+      return [artist.id, artist];
+    }),
+  );
+  const tracks = new Map(
+    (payload.related?.tracks || []).map((item) => {
+      const track = mapAudiusTrack(item);
+      return [track.id, track];
+    }),
+  );
   const normalized = searchQuery.trim().toLowerCase();
   return (payload.data || [])
-    .map((event) => mapAudiusEvent(event, users, tracks, payload.related?.entry_counts || {}))
-    .filter((event) => event.id && (!normalized || `${event.title} ${event.description} ${event.hostName}`.toLowerCase().includes(normalized)))
+    .map((event) =>
+      mapAudiusEvent(event, users, tracks, payload.related?.entry_counts || {}),
+    )
+    .filter(
+      (event) =>
+        event.id &&
+        (!normalized ||
+          `${event.title} ${event.description} ${event.hostName}`
+            .toLowerCase()
+            .includes(normalized)),
+    )
     .slice(0, limit);
 }
 
 export async function getAudiusEvent(eventId: string) {
-  const payload = await audiusGetPayload<AudiusEventsResponse>('/events', { id: eventId }, 5 * 60_000);
+  const payload = await audiusGetPayload<AudiusEventsResponse>(
+    '/events',
+    { id: eventId },
+    5 * 60_000,
+  );
   const event = payload.data?.[0];
   if (!event) throw new Error('Event was not found.');
-  const users = new Map((payload.related?.users || []).map((item) => {
-    const artist = mapAudiusArtist(item);
-    return [artist.id, artist];
-  }));
-  const tracks = new Map((payload.related?.tracks || []).map((item) => {
-    const track = mapAudiusTrack(item);
-    return [track.id, track];
-  }));
-  let mapped = mapAudiusEvent(event, users, tracks, payload.related?.entry_counts || {});
+  const users = new Map(
+    (payload.related?.users || []).map((item) => {
+      const artist = mapAudiusArtist(item);
+      return [artist.id, artist];
+    }),
+  );
+  const tracks = new Map(
+    (payload.related?.tracks || []).map((item) => {
+      const track = mapAudiusTrack(item);
+      return [track.id, track];
+    }),
+  );
+  let mapped = mapAudiusEvent(
+    event,
+    users,
+    tracks,
+    payload.related?.entry_counts || {},
+  );
   if (!mapped.track && mapped.entityId) {
     const track = await getAudiusTrack(mapped.entityId).catch(() => undefined);
-    if (track) mapped = { ...mapped, track, image: mapped.image || track.image, permalink: eventPermalink(event, track), hostName: mapped.hostName === 'Audius creator' ? track.creator : mapped.hostName };
+    if (track)
+      mapped = {
+        ...mapped,
+        track,
+        image: mapped.image || track.image,
+        permalink: eventPermalink(event, track),
+        hostName:
+          mapped.hostName === 'Audius creator'
+            ? track.creator
+            : mapped.hostName,
+      };
   }
   return mapped;
 }
 
 export async function getAudiusPlaylist(playlistId: string) {
-  const records = await audiusGet<AudiusPlaylist[]>(`/playlists/${encodeURIComponent(playlistId)}`, {}, 5 * 60_000);
+  const records = await audiusGet<AudiusPlaylist[]>(
+    `/playlists/${encodeURIComponent(playlistId)}`,
+    {},
+    5 * 60_000,
+  );
   const record = Array.isArray(records) ? records[0] : records;
   if (!record) throw new Error('Playlist was not found.');
   return mapAudiusPlaylist(record);
 }
 
-export async function getAudiusPlaylistTracks(playlistId: string, limit = 100) {
-  const records = await audiusGet<AudiusTrack[]>(`/playlists/${encodeURIComponent(playlistId)}/tracks`, { limit }, 5 * 60_000);
-  return records.map(mapAudiusTrack).filter((track) => track.id && track.streamable);
+export async function getAudiusPlaylistTracks(playlistId: string) {
+  // This endpoint returns the full ordered collection; its documented contract has
+  // no limit/offset. Do not pass an invented 100-track cap or paginate it blindly.
+  const records = await audiusGet<AudiusTrack[]>(
+    `/playlists/${encodeURIComponent(playlistId)}/tracks`,
+    {},
+    5 * 60_000,
+  );
+  return records
+    .map(mapAudiusTrack)
+    .filter((track) => track.id && track.streamable);
 }
 
 export async function getAudiusGenreCatalog(genre: string) {
@@ -418,7 +714,9 @@ export async function getAudiusGenreCatalog(genre: string) {
 }
 
 export function audiusStreamUrl(trackId: string) {
-  const url = new URL(`${API_BASE}/tracks/${encodeURIComponent(trackId)}/stream`);
+  const url = new URL(
+    `${API_BASE}/tracks/${encodeURIComponent(trackId)}/stream`,
+  );
   const uid = getCurrentAudiusUserId();
   if (uid) url.searchParams.set('user_id', uid);
   return url.toString();
@@ -427,26 +725,38 @@ export function audiusStreamUrl(trackId: string) {
 export async function resolveAudiusStreamUrl(trackId: string) {
   const fallback = audiusStreamUrl(trackId);
   try {
-    return await resolvedStreamCache.get(`${getCurrentAudiusUserId()}:${trackId}`, async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 7_000);
-      try {
-        // Ask for the URL as JSON: don't open a second audio transfer just to
-        // discover the CDN URL (some native fetch stacks buffer range probes).
-        const lookup = new URL(fallback);
-        lookup.searchParams.set('no_redirect', 'true');
-        return await fetchAudius(lookup.toString(), { signal: controller.signal }, async (response) => {
-          if (!response.ok) throw new Error(`Audius stream failed (${response.status}).`);
-          const payload = await response.json() as { data?: unknown };
-          if (typeof payload.data !== 'string' || new URL(payload.data).protocol !== 'https:') {
-            throw new Error('Audius did not return a valid stream URL.');
-          }
-          return payload.data;
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
-    }, 10 * 60_000);
+    return await resolvedStreamCache.get(
+      `${getCurrentAudiusUserId()}:${trackId}`,
+      async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 7_000);
+        try {
+          // Ask for the URL as JSON: don't open a second audio transfer just to
+          // discover the CDN URL (some native fetch stacks buffer range probes).
+          const lookup = new URL(fallback);
+          lookup.searchParams.set('no_redirect', 'true');
+          return await fetchAudius(
+            lookup.toString(),
+            { signal: controller.signal },
+            async (response) => {
+              if (!response.ok)
+                throw new Error(`Audius stream failed (${response.status}).`);
+              const payload = (await response.json()) as { data?: unknown };
+              if (
+                typeof payload.data !== 'string' ||
+                new URL(payload.data).protocol !== 'https:'
+              ) {
+                throw new Error('Audius did not return a valid stream URL.');
+              }
+              return payload.data;
+            },
+          );
+        } finally {
+          clearTimeout(timeout);
+        }
+      },
+      10 * 60_000,
+    );
   } catch {
     return fallback;
   }

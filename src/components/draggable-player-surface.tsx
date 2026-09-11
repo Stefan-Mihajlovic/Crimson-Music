@@ -53,10 +53,17 @@ export default function DraggablePlayerSurface({
   const [artworkLoaded, setArtworkLoaded] = useState(0);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const fullArtwork = getPlayerArtworkLayout(width, height, insets.top, insets.bottom);
+  const expansionHandleBottom = fullArtwork.y + fullArtwork.size;
+  const expansionHandleRight = width > height ? fullArtwork.x + fullArtwork.size : width;
+  const expansionHeaderBottom = Math.max(insets.top, 18) + 52;
   const safeCollapsedTop = Math.max(1, collapsedTop);
   const dragStartPosition = useSharedValue(expanded ? 0 : collapsedTop);
   const gestureActive = useSharedValue(false);
+  const expandedGesture = useSharedValue(expanded);
   const entranceProgress = useSharedValue(currentSong ? 1 : 0);
+
+  useEffect(() => { expandedGesture.set(expanded); }, [expanded, expandedGesture]);
 
   useEffect(() => {
     cancelAnimation(entranceProgress);
@@ -75,6 +82,13 @@ export default function DraggablePlayerSurface({
   const gesture = useMemo(() => Gesture.Pan()
     .activeOffsetY([-4, 4])
     .failOffsetX([-12, 12])
+    .onTouchesDown((event, manager) => {
+      // Transport/large-text content owns its scrolling and scrubbing gestures.
+      // The header and cover remain the direct manipulation handle.
+      const touch = event.allTouches[0];
+      if (expandedGesture.get() && touch && touch.y > expansionHeaderBottom
+        && (touch.y > expansionHandleBottom || touch.x > expansionHandleRight)) manager.fail();
+    })
     .onStart(() => {
       cancelAnimation(position);
       gestureActive.value = true;
@@ -98,7 +112,7 @@ export default function DraggablePlayerSurface({
       gestureActive.value = false;
       if (position.value > safeCollapsedTop * 0.5) scheduleOnRN(onCollapse, 0);
       else scheduleOnRN(onExpand, 0);
-    }), [dragStartPosition, gestureActive, onBeginExpand, onCollapse, onExpand, position, safeCollapsedTop]);
+    }), [dragStartPosition, expandedGesture, expansionHandleBottom, expansionHandleRight, expansionHeaderBottom, gestureActive, onBeginExpand, onCollapse, onExpand, position, safeCollapsedTop]);
 
   // UIKit does not expose the physical display radius to apps. The top safe
   // area tracks the rounded-display generations closely, while continuous
@@ -106,14 +120,12 @@ export default function DraggablePlayerSurface({
   const deviceCornerRadius = insets.top > 24
     ? Math.max(36, Math.min(56, insets.top - 6))
     : 0;
-  const fullArtwork = getPlayerArtworkLayout(width, height, insets.top, insets.bottom);
   const miniArtworkSize = 34;
   const fullArtworkRadius = 28;
   const miniArtworkRadius = 8;
   const miniArtworkX = miniPlayerHorizontalInset + 14;
   const miniArtworkY = (MINI_PLAYER_HEIGHT - miniArtworkSize) / 2;
   const collapsedScaleX = Math.max(0.01, (width - miniPlayerHorizontalInset * 2) / width);
-  const collapsedScaleY = Math.max(0.01, MINI_PLAYER_HEIGHT / height);
   // Keep the native GlassView fully opaque while it mounts. Animating an
   // ancestor from opacity 0 can prevent iOS from establishing glass compositing.
   const surfaceAnimatedStyle = useAnimatedStyle(() => ({
@@ -126,19 +138,30 @@ export default function DraggablePlayerSurface({
       ),
     }],
   }));
+  // Intersect two full-size rounded clips. Moving the lower clip upward
+  // reveals a shorter surface without flattening its corners or animating layout.
+  // The content translates back by the same amount, so it stays anchored at the top.
+  const clipRadiusStyle = useAnimatedStyle(() => {
+    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
+    const radius = interpolate(position.value, [0, safeCollapsedTop], [deviceCornerRadius, MINI_PLAYER_HEIGHT / 2], Extrapolation.CLAMP);
+    return { borderRadius: radius / scale };
+  });
   const playerClipAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scaleX: interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP) },
-      { scaleY: interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleY], Extrapolation.CLAMP) },
-    ],
+    transform: [{ scale: interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP) }],
   }));
+  const bottomClipAnimatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
+    const visibleHeight = interpolate(position.value, [0, safeCollapsedTop], [height, MINI_PLAYER_HEIGHT], Extrapolation.CLAMP);
+    return { transform: [{ translateY: visibleHeight / scale - height }] };
+  });
+  const clipContentAnimatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
+    const visibleHeight = interpolate(position.value, [0, safeCollapsedTop], [height, MINI_PLAYER_HEIGHT], Extrapolation.CLAMP);
+    return { transform: [{ translateY: height - visibleHeight / scale }] };
+  });
   const fullAnimatedStyle = useAnimatedStyle(() => {
-    // Once the body is fully transparent there is no reason to keep growing
-    // the inverse scale toward the very small mini-player height.
-    const visiblePosition = Math.min(position.value, safeCollapsedTop * 0.92);
-    const scaleX = interpolate(visiblePosition, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
-    const scaleY = interpolate(visiblePosition, [0, safeCollapsedTop], [1, collapsedScaleY], Extrapolation.CLAMP);
-    return { transform: [{ scaleX: 1 / scaleX }, { scaleY: 1 / scaleY }] };
+    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
+    return { transform: [{ scale: 1 / scale }] };
   });
   const colorLayerAnimatedStyle = useAnimatedStyle(() => ({
     opacity: interpolate(position.value, [0, safeCollapsedTop * 0.955, safeCollapsedTop], [1, 1, 0], Extrapolation.CLAMP),
@@ -202,30 +225,35 @@ export default function DraggablePlayerSurface({
           pointerEvents={expanded ? 'auto' : 'none'}
           style={[
             styles.playerClip,
-            { height, borderRadius: deviceCornerRadius },
+            { height },
+            clipRadiusStyle,
             playerClipAnimatedStyle,
           ]}>
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.colorLayer,
-              colorLayerAnimatedStyle,
-              {
-                height,
-              },
-            ]}>
-            <PlayerArtworkBackground active={expanded} artworkLoaded={artworkLoaded} song={currentSong} />
-          </Animated.View>
+          <Animated.View style={[styles.bottomClip, { height }, clipRadiusStyle, bottomClipAnimatedStyle]}>
+          <Animated.View style={[styles.clipContent, { height }, clipContentAnimatedStyle]}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.colorLayer,
+                  colorLayerAnimatedStyle,
+                  {
+                    height,
+                  },
+                ]}>
+                <PlayerArtworkBackground active={expanded} artworkLoaded={artworkLoaded} song={currentSong} />
+              </Animated.View>
 
-          <Animated.View style={[styles.full, { height }, fullAnimatedStyle]}>
-            {expanded ? (
-              <PlayerContent
-                artworkHidden
-                bodyAnimatedStyle={bodyAnimatedStyle}
-                onClose={() => onCollapse()}
-                topBarAnimatedStyle={topBarAnimatedStyle}
-              />
-            ) : null}
+              <Animated.View style={[styles.full, { height }, fullAnimatedStyle]}>
+                {expanded ? (
+                  <PlayerContent
+                    artworkHidden
+                    bodyAnimatedStyle={bodyAnimatedStyle}
+                    onClose={() => onCollapse()}
+                    topBarAnimatedStyle={topBarAnimatedStyle}
+                  />
+                ) : null}
+              </Animated.View>
+          </Animated.View>
           </Animated.View>
         </Animated.View>
 
@@ -266,7 +294,7 @@ export default function DraggablePlayerSurface({
             },
             pagerAnimatedStyle,
           ]}>
-          {expanded ? <SwipeableArtwork pageGap={fullArtwork.x + 8} size={fullArtwork.size} /> : null}
+          {expanded ? <SwipeableArtwork pageGap={width > height ? width - fullArtwork.size : fullArtwork.x + 8} size={fullArtwork.size} /> : null}
         </Animated.View>
 
         <CompactPlayer compactAnimatedStyle={compactAnimatedStyle} expanded={expanded} onExpand={onExpand} />
@@ -303,7 +331,7 @@ function CompactPlayer({
       <BouncyPressable accessibilityLabel={isLiked ? 'Remove from favorites' : 'Add to favorites'} hitSlop={6} onPress={() => void toggleLike()} style={styles.control}>
         <SymbolView name={isLiked ? 'heart.fill' : 'heart'} size={21} style={styles.symbol} tintColor={isLiked ? colors.accent : colors.text} weight="semibold" />
       </BouncyPressable>
-      <BouncyPressable accessibilityLabel={status.isBuffering ? 'Loading song' : status.playing ? 'Pause' : 'Play'} disabled={status.isBuffering} hitSlop={6} onPress={togglePlay} style={styles.control}>
+      <BouncyPressable accessibilityLabel={status.isBuffering ? 'Cancel loading' : status.playing ? 'Pause' : 'Play'} hitSlop={6} onPress={togglePlay} style={styles.control}>
         {status.isBuffering
           ? <ActivityIndicator color={isDark ? '#FFFFFF' : colors.text} size="small" />
           : <SymbolView name={status.playing ? 'pause.fill' : 'play.fill'} size={20} style={styles.symbol} tintColor={isDark ? '#FFFFFF' : colors.text} weight="bold" />}
@@ -331,6 +359,8 @@ function CompactPlayer({
 const styles = StyleSheet.create({
   surface: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000 },
   playerClip: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 6, overflow: 'hidden', borderCurve: 'continuous', transformOrigin: 'top center' },
+  bottomClip: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', borderCurve: 'continuous' },
+  clipContent: { position: 'absolute', top: 0, left: 0, right: 0 },
   colorLayer: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#17171B' },
   full: { position: 'absolute', inset: 0, transformOrigin: 'top center' },
   compact: { position: 'absolute', top: 0, left: miniPlayerHorizontalInset, right: miniPlayerHorizontalInset, zIndex: 4, height: MINI_PLAYER_HEIGHT, borderRadius: 26, borderCurve: 'continuous', transformOrigin: 'center', shadowColor: '#000000', shadowOpacity: 0.34, shadowRadius: 18, shadowOffset: { width: 0, height: -5 } },

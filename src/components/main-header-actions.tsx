@@ -9,7 +9,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { useAuth } from '@/providers/auth-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { useDetailRoutes } from '@/services/action-sheet';
-import { getNotificationUnreadCount, loadNotificationsPage, subscribeNotificationUnreadCount } from '@/services/notifications';
+import { getNotificationUnseenCount, loadNotificationsPage, subscribeNotificationUnreadCount } from '@/services/notifications';
 import { expandedHeaderOpacity } from '@/services/main-header-transition';
 
 export default function MainHeaderActions({ visible = true, offset }: { visible?: boolean; offset?: SharedValue<number> }) {
@@ -18,7 +18,7 @@ export default function MainHeaderActions({ visible = true, offset }: { visible?
   const { user } = useAuth();
   const { colors, dataSaver } = useAppSettings();
   const uid = user?.uid;
-  const unreadCount = useSyncExternalStore(subscribeNotificationUnreadCount, () => getNotificationUnreadCount(uid), () => 0);
+  const unreadCount = useSyncExternalStore(subscribeNotificationUnreadCount, () => getNotificationUnseenCount(uid), () => 0);
   const [materialVisible, setMaterialVisible] = useState(false);
   useAnimatedReaction(
     () => visible && (!offset || expandedHeaderOpacity(offset.value) > 0),
@@ -33,7 +33,7 @@ export default function MainHeaderActions({ visible = true, offset }: { visible?
     if (uid) void loadNotificationsPage(uid, null, { dataSaver }).catch(() => undefined);
   }, [dataSaver, uid]));
 
-  const accessibilityLabel = unreadCount > 0 ? `Notifications, ${unreadCount} unread in Audius` : 'Open notifications';
+  const accessibilityLabel = unreadCount > 0 ? `Notifications, ${unreadCount} new in Crimson` : 'Open notifications';
   const icon = (
     <View style={styles.icon}>
       <SymbolView name="bell" size={21} tintColor={colors.text} weight="semibold" />
@@ -79,6 +79,7 @@ function HeaderGlassButton({ accessibilityLabel, children, materialVisible, offs
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      hitSlop={4}
       onPress={onPress}
       style={({ pressed }) => [styles.button, pressed && !reduceMotion && styles.pressed]}>
       {glassAvailable ? (

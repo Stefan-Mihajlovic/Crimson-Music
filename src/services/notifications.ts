@@ -1,4 +1,6 @@
 import { audiusRequest, AudiusSessionError, getCurrentAudiusUserId, subscribeAudiusSession } from '@/services/audius-session';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isAccountDeleted, registerAccountCleanup } from '@/services/account-lifecycle';
 
 type RecordValue = Record<string, unknown>;
 type Entity = { id?: string; name?: string; handle?: string; title?: string; playlist_name?: string; user?: Entity; artwork?: Record<string, unknown>; profile_picture?: Record<string, unknown> };
@@ -26,13 +28,72 @@ let revision = 0;
 let firstPage: { uid: string; page: NotificationsPage; loadedAt: number } | null = null;
 let pending: { uid: string; promise: Promise<NotificationsPage> } | null = null;
 let lastFailure: { uid: string; error: unknown; failedAt: number } | null = null;
+const seenKey = (uid: string) => `crimson.notifications.seen.v1:${uid}`;
+const seenRecords = new Map<string, Record<string, number>>();
+const seenLoads = new Map<string, Promise<void>>();
+const seenWrites = new Map<string, Promise<void>>();
+let stateVersion = 0;
+const notify = () => { stateVersion += 1; listeners.forEach((listener) => listener()); };
+export const getNotificationsStateVersion = () => stateVersion;
+
+async function restoreSeen(uid: string) {
+  if (seenRecords.has(uid)) return;
+  const existing = seenLoads.get(uid);
+  if (existing) return existing;
+  const requestRevision = revision;
+  const operation = AsyncStorage.getItem(seenKey(uid)).then((stored) => {
+    let parsed: Record<string, number> = {};
+    try {
+      const value = JSON.parse(stored || '{}');
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        parsed = Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1])));
+      }
+    } catch { /* Treat an invalid local marker as unseen, never as read in Audius. */ }
+    if (revision === requestRevision && uid === getCurrentAudiusUserId() && !isAccountDeleted(uid)) {
+      seenRecords.set(uid, parsed);
+      notify();
+    }
+  }).catch(() => undefined).finally(() => { if (seenLoads.get(uid) === operation) seenLoads.delete(uid); });
+  seenLoads.set(uid, operation);
+  return operation;
+}
+
+export const isNotificationSeenInCrimson = (uid: string | undefined, item: AudiusNotification) => Boolean(uid && (seenRecords.get(uid)?.[item.id] || 0) >= item.timestamp);
+export function getNotificationUnseenCount(uid?: string) {
+  if (!uid || uid !== getCurrentAudiusUserId() || firstPage?.uid !== uid) return 0;
+  return firstPage.page.items.filter((item) => item.unread && !isNotificationSeenInCrimson(uid, item)).length;
+}
+export async function markNotificationsSeen(uid: string, items: AudiusNotification[]) {
+  const requestRevision = revision;
+  await restoreSeen(uid);
+  if (requestRevision !== revision || uid !== getCurrentAudiusUserId() || isAccountDeleted(uid)) return;
+  const next = { ...seenRecords.get(uid) };
+  items.forEach((item) => { next[item.id] = Math.max(next[item.id] || 0, item.timestamp); });
+  const bounded = Object.fromEntries(Object.entries(next).sort((a, b) => b[1] - a[1]).slice(0, 500));
+  seenRecords.set(uid, bounded);
+  notify();
+  const previous = seenWrites.get(uid) || Promise.resolve();
+  const operation = previous.catch(() => undefined).then(() => AsyncStorage.setItem(seenKey(uid), JSON.stringify(bounded)));
+  seenWrites.set(uid, operation);
+  try { await operation; }
+  finally { if (seenWrites.get(uid) === operation) seenWrites.delete(uid); }
+}
+
+registerAccountCleanup(async (uid) => {
+  await seenWrites.get(uid)?.catch(() => undefined);
+  seenRecords.delete(uid);
+  if (firstPage?.uid === uid) firstPage = null;
+  notify();
+});
 
 subscribeAudiusSession(() => {
   revision += 1;
   firstPage = null;
   pending = null;
   lastFailure = null;
-  listeners.forEach((listener) => listener());
+  seenRecords.clear();
+  seenLoads.clear();
+  notify();
 });
 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
@@ -121,6 +182,8 @@ export function getNotificationUnreadCount(uid?: string) { return uid && uid ===
 
 export async function loadNotificationsPage(uid: string, cursor: NotificationsCursor | null = null, options: { force?: boolean; dataSaver?: boolean } = {}): Promise<NotificationsPage> {
   if (!uid || uid !== getCurrentAudiusUserId()) throw new AudiusSessionError('Log in with Audius to view your notifications.', 'unauthenticated');
+  await restoreSeen(uid);
+  if (uid !== getCurrentAudiusUserId() || isAccountDeleted(uid)) throw new AudiusSessionError('The Audius account changed. Please try again.', 'cancelled');
   if (!cursor && pending?.uid === uid) return pending.promise;
   const cacheDuration = options.dataSaver ? 5 * 60_000 : 2 * 60_000;
   if (!cursor && !options.force && lastFailure?.uid === uid && Date.now() - lastFailure.failedAt < cacheDuration) throw lastFailure.error;
@@ -130,7 +193,7 @@ export async function loadNotificationsPage(uid: string, cursor: NotificationsCu
   if (cursor) { params.set('timestamp', String(cursor.timestamp)); params.set('group_id', cursor.groupId); }
   const operation = (async () => {
     const response = await audiusRequest<NotificationResponse>(`/notifications/${encodeURIComponent(uid)}?${params}`);
-    if (requestRevision !== revision || uid !== getCurrentAudiusUserId()) throw new AudiusSessionError('The Audius account changed. Please try again.', 'cancelled');
+    if (requestRevision !== revision || uid !== getCurrentAudiusUserId() || isAccountDeleted(uid)) throw new AudiusSessionError('The Audius account changed. Please try again.', 'cancelled');
     if (!Array.isArray(response.data?.notifications)) throw new Error('Audius returned an incomplete notifications response. Please try again.');
     const rawItems = response.data.notifications;
     const items = rawItems.map((notification) => mapAudiusNotification(notification, response.related)).filter((item): item is AudiusNotification => item !== null);
@@ -142,7 +205,7 @@ export async function loadNotificationsPage(uid: string, cursor: NotificationsCu
       items, unreadCount: Math.max(0, Number(response.data.unread_count) || 0), cursor: nextCursor,
       hasMore: rawItems.length >= pageSize && !!nextCursor && (nextCursor.groupId !== cursor?.groupId || nextCursor.timestamp !== cursor?.timestamp),
     };
-    if (!cursor) { firstPage = { uid, page, loadedAt: Date.now() }; lastFailure = null; listeners.forEach((listener) => listener()); }
+    if (!cursor) { firstPage = { uid, page, loadedAt: Date.now() }; lastFailure = null; notify(); }
     return page;
   })();
   if (!cursor) pending = { uid, promise: operation };

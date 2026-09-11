@@ -9,14 +9,16 @@ Crimson uses Expo 57 and React Native. iOS is the primary development target. An
 | Audius login, catalog, streaming, library actions | Primary implementation | Shared implementation; experimental | Shared implementation; experimental |
 | Session storage | SecureStore | SecureStore | Tab-scoped `sessionStorage` |
 | Native glass and SwiftUI controls | iOS-specific implementation | Fallback controls | Fallback controls |
-| Crimson custom previous/next/like lock-screen commands | Native integration | Not implemented | Not implemented |
-| Cover-pixel palette extraction and native circular tab artwork | Native integration | No equivalent native module | No equivalent native module |
+| Crimson previous/next/like remote controls | Native integration | Expo Audio service adapter (experimental) | Browser Media Session previous/next; favorite in player |
+| Cover-pixel palette extraction | Native integration | Native bitmap sampling | Canvas sampling when image CORS permits |
+| Circular tab artwork | Native integration | Shared image control | Shared image control |
+| Persistent desktop player and keyboard shortcuts | — | — | Responsive sidebar, bottom player, seek and volume |
 | Offline downloads | Native implementation | Shared native implementation; needs platform validation | Unsupported |
 | Voice search | OS speech recognition | Device/service dependent | Browser dependent |
 
 Basic audio functionality comes from `expo-audio`; the custom remote-control row above describes Crimson's additional native integration. Browser autoplay rules and tab suspension can limit web playback. The web navigation layout also differs from the native app.
 
-Notifications are loaded from Audius inside the app. This repository does not implement push notification delivery. Some notification destinations and marking notifications read require the Audius interface.
+Notifications are loaded from Audius inside the app. This repository does not implement push notification delivery. Reading notifications in Crimson updates a device-local seen cursor; it does not mark the notifications read in the Audius app. Unsupported destinations open Audius.
 
 ## Prerequisites
 
@@ -79,6 +81,16 @@ npx expo export --platform web
 ```
 
 Host the generated `dist/` output with HTTPS and ensure a direct request to `/oauth/callback` resolves correctly. Register the hosted origin's exact callback in Audius and set public build-time configuration before export. A static export is not a deployment or evidence of a successful browser OAuth/playback session.
+
+## Native adapter maintenance
+
+Android's adapter extends the existing Expo Audio foreground service and MediaSession. It does not create a second player. The plugin validates its source anchors and pins the supported `expo-audio` version; dependency upgrades need an adapter review before native generation succeeds. See [Android media adapter](../plugins/crimson-android-media/README.md).
+
+Browser media controls are owned by the web player. Space toggles playback, arrows seek ten seconds, and Shift+arrows change tracks when focus is outside another interactive control. Palette extraction uses already loaded artwork in Data Saver mode and falls back when a browser blocks cross-origin pixel access.
+
+## CI builds
+
+The Quality workflow keeps its required `checks` job and adds static web export, Android arm64 debug compilation, and unsigned iOS release compilation. Build jobs require no listener tokens or signing secrets. Web and Android outputs are short-lived CI artifacts; a compile job does not log in, play audio, or install on a device.
 
 ## Release validation
 
