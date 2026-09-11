@@ -1,6 +1,7 @@
-import { GlassView } from 'expo-glass-effect';
+import { FrostedBackdrop } from '@/components/frosted-surface';
+import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import {
   ActivityIndicator,
   PanResponder,
@@ -27,6 +28,7 @@ export type MiniPlayerGestureProps = {
 
 export default function MiniPlayer({ disabled, onBeginExpand, onExpand, onExpandDrag, onExpandRelease }: MiniPlayerGestureProps) {
   const { colors, isDark, performanceMode } = useAppSettings();
+  const glassAvailable = !performanceMode && isGlassEffectAPIAvailable() && isLiquidGlassAvailable();
   const {
     currentSong,
     isLiked,
@@ -57,8 +59,8 @@ export default function MiniPlayer({ disabled, onBeginExpand, onExpand, onExpand
       {...panResponder.panHandlers}
       pointerEvents={disabled ? 'none' : 'auto'}
       style={styles.shell}>
-      <View style={[styles.glass, performanceMode && { backgroundColor: colors.elevated, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
-        {!performanceMode ? <GlassView glassEffectStyle="regular" isInteractive style={StyleSheet.absoluteFill} /> : null}
+      <View style={styles.glass}>
+        {glassAvailable ? <GlassView glassEffectStyle="regular" isInteractive style={StyleSheet.absoluteFill} /> : <FrostedBackdrop radius={23} />}
         <View style={styles.content}>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />

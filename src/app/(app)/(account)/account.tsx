@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { Href, useRouter } from 'expo-router';
-import { SymbolView, SymbolViewProps } from 'expo-symbols';
+import { SymbolView, SymbolViewProps } from '@/components/app-symbol';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -73,7 +73,7 @@ export default function AccountScreen() {
   };
 
   return (
-    <MainScreenBackground>
+    <MainScreenBackground overlay={<MainHeaderOverlay title="Account" offset={headerScroll.offset} />}>
       <MainNativeHeader title="Account" offset={headerScroll.offset} />
       <Reanimated.ScrollView
         contentInsetAdjustmentBehavior="never"
@@ -224,7 +224,7 @@ export default function AccountScreen() {
           <Text style={[styles.versionText, { color: colors.mutedText }]}>Version {Constants.expoConfig?.version || '1.0.0'} · Copyright © {new Date().getFullYear()}</Text>
         </View>
       </Reanimated.ScrollView>
-      <MainHeaderOverlay title="Account" offset={headerScroll.offset} />
+
     </MainScreenBackground>
   );
 }

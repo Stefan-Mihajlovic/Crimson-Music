@@ -1,3 +1,4 @@
+import { FrostedBackdrop } from '@/components/frosted-surface';
 import { GlassView } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
 import { LayoutChangeEvent, Platform, Pressable, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
@@ -63,7 +64,7 @@ export default function PillSegmentedControl<T extends string>({
           style={[
             styles.thumb,
             {
-              backgroundColor: performanceMode ? colors.accent : isDark ? 'rgba(143,89,245,0.68)' : 'rgba(125,63,209,0.62)',
+              backgroundColor: Platform.OS !== 'ios' ? 'transparent' : performanceMode ? colors.accent : isDark ? 'rgba(143,89,245,0.68)' : 'rgba(125,63,209,0.62)',
               width: segmentWidth,
             },
             performanceMode && { shadowOpacity: 0 },
@@ -77,7 +78,7 @@ export default function PillSegmentedControl<T extends string>({
               tintColor={colors.accent}
               style={StyleSheet.absoluteFill}
             />
-          ) : null}
+          ) : <FrostedBackdrop radius={999} accent solidColor={colors.accent} />}
         </Animated.View>
       ) : null}
 

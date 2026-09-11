@@ -13,10 +13,10 @@ export default function AccountLayout() {
       fullScreenGestureEnabled: true,
       headerLargeTitleEnabled: false,
       headerShadowVisible: false,
-      headerStyle: { backgroundColor: performanceMode ? colors.background : 'transparent' },
-      headerTransparent: !performanceMode,
+      headerStyle: { backgroundColor: performanceMode || Platform.OS !== 'ios' ? colors.background : 'transparent' },
+      headerTransparent: Platform.OS === 'ios' && !performanceMode,
       headerBlurEffect: 'none',
-        header: performanceMode ? (props) => <PerformanceStackHeader {...props} /> : undefined,
+        header: performanceMode || Platform.OS !== 'ios' ? (props) => <PerformanceStackHeader {...props} /> : undefined,
         scrollEdgeEffects: performanceMode ? { top: 'hidden', bottom: 'hidden', left: 'hidden', right: 'hidden' } : undefined,
       headerTintColor: colors.text,
     }}>

@@ -1,16 +1,18 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
+  Platform,
+  useWindowDimensions,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Alert } from '@/services/alert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import CollectionTools, {
@@ -51,6 +53,9 @@ export default function PlaylistDetailScreen() {
     title?: string;
   }>();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
+  const coverSize = width >= 1200 ? 208 : 180;
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const downloads = useDownloads();
@@ -278,7 +283,7 @@ export default function PlaylistDetailScreen() {
         maxToRenderPerBatch={10}
         windowSize={7}
         renderItem={({ item: song }) => (
-          <View style={{ paddingHorizontal: 12 }}>
+          <View style={{ paddingHorizontal: desktop ? 22 : 12 }}>
             <DetailSongRow
               expectedOffline={downloadRequested}
               song={song}
@@ -302,40 +307,41 @@ export default function PlaylistDetailScreen() {
         }
         showsVerticalScrollIndicator={false}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
+        contentContainerStyle={[{ paddingBottom: insets.bottom + 120 }, desktop && styles.desktopContent]}
         onScroll={headerPlayback.onScroll}
         scrollsToTop={false}
         scrollEventThrottle={16}
         ListHeaderComponent={
           <>
-            <View style={styles.hero}>
+            <View style={[styles.hero, desktop && [styles.desktopHero, { backgroundColor: colors.elevated }]]}>
               <PlaylistCover
-                borderRadius={0}
+                borderRadius={desktop ? 10 : 0}
                 playlist={playlist}
                 preferLarge
                 showPlayingIndicator={false}
-                style={StyleSheet.absoluteFill}
+                style={desktop ? [styles.desktopCover, { width: coverSize, height: coverSize }] : StyleSheet.absoluteFill}
               />
               <LinearGradient
-                colors={[
+                colors={desktop ? [colors.accentSoft, colors.background] : [
                   'transparent',
                   'rgba(14,13,19,0.62)',
                   colors.background,
                 ]}
                 style={StyleSheet.absoluteFill}
               />
-              <View style={styles.heroCopy}>
-                <Text style={styles.name}>{playlist.title}</Text>
-                <Text style={styles.metadata}>
+              <View style={[styles.heroCopy, desktop && styles.desktopHeroCopy]}>
+                {desktop ? <Text style={[styles.desktopEyebrow, { color: colors.secondaryText }]}>Playlist</Text> : null}
+                <Text numberOfLines={desktop ? 2 : undefined} style={[styles.name, desktop && [styles.desktopName, { color: colors.text, fontSize: width >= 1200 ? 48 : 36 }]]}>{playlist.title}</Text>
+                <Text style={[styles.metadata, desktop && { color: colors.secondaryText }]}>
                   {playlist.artists} · {songs.length} songs ·{' '}
                   {collectionDuration(songs)}
                 </Text>
                 {playlist.description ? (
-                  <Text numberOfLines={2} style={styles.metadata}>
+                  <Text numberOfLines={2} style={[styles.metadata, desktop && { color: colors.secondaryText }]}>
                     {playlist.description}
                   </Text>
                 ) : null}
-                <View style={styles.actions}>
+                <View style={[styles.actions, desktop && styles.desktopActions]}>
                   {isOwned && !isOffline ? (
                     <BouncyPressable
                       accessibilityRole="button"
@@ -380,38 +386,40 @@ export default function PlaylistDetailScreen() {
                       />
                     </BouncyPressable>
                   ) : null}
-                  <BouncyPressable
-                    accessibilityLabel={
-                      allDownloaded
-                        ? `${playlist.title} is available offline`
-                        : `Make ${playlist.title} available offline`
-                    }
-                    disabled={!songs.length || downloading || allDownloaded}
-                    onPress={() => void savePlaylistOffline()}
-                    style={[
-                      styles.iconButton,
-                      {
-                        backgroundColor: colors.controlSurface,
-                        borderColor: allDownloaded
-                          ? colors.accent
-                          : colors.border,
-                      },
-                    ]}
-                  >
-                    {downloading ? (
-                      <ActivityIndicator color={colors.text} size="small" />
-                    ) : (
-                      <SymbolView
-                        name={
-                          allDownloaded
-                            ? 'checkmark.circle.fill'
-                            : 'icloud.and.arrow.down'
-                        }
-                        size={21}
-                        tintColor={allDownloaded ? colors.accent : colors.text}
-                      />
-                    )}
-                  </BouncyPressable>
+                  {downloads.supported ? (
+                    <BouncyPressable
+                      accessibilityLabel={
+                        allDownloaded
+                          ? `${playlist.title} is available offline`
+                          : `Make ${playlist.title} available offline`
+                      }
+                      disabled={!songs.length || downloading || allDownloaded}
+                      onPress={() => void savePlaylistOffline()}
+                      style={[
+                        styles.iconButton,
+                        {
+                          backgroundColor: colors.controlSurface,
+                          borderColor: allDownloaded
+                            ? colors.accent
+                            : colors.border,
+                        },
+                      ]}
+                    >
+                      {downloading ? (
+                        <ActivityIndicator color={colors.text} size="small" />
+                      ) : (
+                        <SymbolView
+                          name={
+                            allDownloaded
+                              ? 'checkmark.circle.fill'
+                              : 'icloud.and.arrow.down'
+                          }
+                          size={21}
+                          tintColor={allDownloaded ? colors.accent : colors.text}
+                        />
+                      )}
+                    </BouncyPressable>
+                  ) : null}
                   <BouncyPressable
                     accessibilityLabel={
                       collectionPlayback.playing
@@ -426,6 +434,7 @@ export default function PlaylistDetailScreen() {
                     pressedScale={0.9}
                     style={[
                       styles.playButton,
+                      desktop ? styles.desktopPlayButton : styles.mobilePlayButton,
                       { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
                     ]}
                   >
@@ -517,6 +526,16 @@ export default function PlaylistDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  desktopContent: { width: '100%', maxWidth: 1440, alignSelf: 'center' },
+  desktopHero: { height: 'auto', minHeight: 252, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', padding: 28, gap: 28 },
+  desktopCover: { borderRadius: 10, flexShrink: 0, zIndex: 1, boxShadow: '0 12px 32px rgba(0,0,0,0.2)' },
+  desktopHeroCopy: { flex: 1, minWidth: 0, paddingHorizontal: 0, paddingBottom: 0, zIndex: 1 },
+  desktopEyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, marginBottom: 8 },
+  desktopName: { letterSpacing: -1.4, fontWeight: '800' },
+  desktopActions: { flexWrap: 'wrap', marginTop: 20 },
+  desktopPlayButton: { flexGrow: 0, flexShrink: 0, flexBasis: 132, width: 132 },
+  mobilePlayButton: { flex: 1 },
+
   screen: { flex: 1, backgroundColor: '#0E0D13' },
   loading: {
     flex: 1,
@@ -544,7 +563,6 @@ const styles = StyleSheet.create({
   },
   playButton: {
     height: 48,
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

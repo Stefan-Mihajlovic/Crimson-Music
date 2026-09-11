@@ -3,12 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image, ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -49,6 +50,8 @@ import {
   loadDiscoveryCatalog,
 } from '@/services/music';
 import {
+  getSearchQuery,
+  requestSearchQuery,
   subscribeToSearchFocus,
   subscribeToSearchQuery,
 } from '@/services/navigation-events';
@@ -85,13 +88,19 @@ const AnimatedList = Reanimated.createAnimatedComponent(
 
 export default function SearchScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
   const routes = useDetailRoutes();
   const insets = useSafeAreaInsets();
   const headerScroll = useMainHeaderScroll();
   const { playSong } = usePlayer();
   const { colors } = useAppSettings();
   const { user } = useAuth();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(getSearchQuery);
+  const changeQuery = (value: string) => {
+    if (Platform.OS === 'web') requestSearchQuery(value);
+    else setQuery(value);
+  };
   const [filter, setFilter] = useState<SearchFilter>('all');
   const [catalog, setCatalog] = useState<DiscoveryCatalog>(emptyCatalog);
   const [resolvedQuery, setResolvedQuery] = useState('');
@@ -362,7 +371,7 @@ export default function SearchScreen() {
     );
   };
   return (
-    <MainScreenBackground>
+    <MainScreenBackground overlay={<MainHeaderOverlay title="Search" offset={headerScroll.offset} />}>
       <MainNativeHeader offset={headerScroll.offset} title="Search" />
       <AnimatedList
         data={loading || awaitingQuery ? [] : results}
@@ -376,19 +385,20 @@ export default function SearchScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
+          desktop && styles.desktopContent,
           { paddingTop: insets.top, paddingBottom: insets.bottom + 150 },
         ]}
         ListHeaderComponent={
           <>
-            <MainHeaderSpacer />
-            <View style={styles.searchField}>
+            <MainHeaderSpacer title="Search" />
+            {!desktop && <View style={styles.searchField}>
               <LiquidSearchField
                 ref={searchFieldRef}
                 placeholder="Songs, artists and playlists"
                 value={query}
-                onChangeText={setQuery}
+                onChangeText={changeQuery}
               />
-            </View>
+            </View>}
             {!query.trim() ? <SearchDiscovery /> : null}
             {query.trim() ? (
               <ScrollView
@@ -430,7 +440,7 @@ export default function SearchScreen() {
                 ))}
               </ScrollView>
             ) : recent.length ? (
-              <View style={{ marginTop: 22, gap: 6 }}>
+              <View style={[{ marginTop: 22, gap: 6 }, desktop && styles.desktopRecent]}>
                 <View
                   style={{
                     flexDirection: 'row',
@@ -462,7 +472,7 @@ export default function SearchScreen() {
                     accessibilityRole="button"
                     onPress={() => {
                       setFilter('all');
-                      setQuery(item);
+                      changeQuery(item);
                     }}
                     style={{
                       minHeight: 44,
@@ -560,7 +570,7 @@ export default function SearchScreen() {
         }}
         onEndReachedThreshold={0.4}
       />
-      <MainHeaderOverlay title="Search" offset={headerScroll.offset} />
+
     </MainScreenBackground>
   );
 }
@@ -649,6 +659,11 @@ function CategoryGrid({
 }) {
   const { colors, reduceMotion } = useAppSettings();
   const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
+  const [contentWidth, setContentWidth] = useState(0);
+  const columns = Math.max(3, Math.min(6, Math.floor((contentWidth || width - 360) / 190)));
+  const cardWidth = desktop ? Math.floor(((contentWidth || width - 360) - 16 * (columns - 1)) / columns) : browseTileWidth(width);
+  const [hovered, setHovered] = useState('');
   const eventCategory = categories.find((category) => category.id === 'events');
   const browseCategories = categories.filter(
     (category) => category.id !== 'events',
@@ -658,16 +673,20 @@ function CategoryGrid({
       <Text style={[styles.sectionTitle, styles.browseTitle, { color: colors.text }]}>
         Browse categories
       </Text>
-      <View style={styles.categoryGrid}>
+      <View onLayout={({ nativeEvent: { layout } }) => setContentWidth(layout.width)} style={[styles.categoryGrid, desktop && styles.desktopCategoryGrid]}>
         {browseCategories.map((category) => (
           <Pressable
             key={category.id}
+            onHoverIn={() => setHovered(category.id)}
+            onHoverOut={() => setHovered('')}
             accessibilityRole="button"
             accessibilityLabel={`Browse ${category.name}`}
             onPress={() => onChoose(category)}
             style={({ pressed }) => [
               styles.categoryCard,
-              { width: browseTileWidth(width) },
+              { width: cardWidth },
+              desktop && styles.desktopCategoryCard,
+              desktop && hovered === category.id && { transform: [{ translateY: -3 }] },
               { backgroundColor: category.color },
               pressed && styles.categoryPressed,
               pressed && !reduceMotion && styles.categoryPressedScale,
@@ -709,6 +728,7 @@ function CategoryGrid({
             style={({ pressed }) => [
               styles.categoryCard,
               styles.eventCard,
+              desktop && { maxWidth: 580, height: 150, borderRadius: 12 },
               { backgroundColor: eventCategory.color },
               pressed && styles.categoryPressed,
               pressed && !reduceMotion && styles.categoryPressedScale,
@@ -861,6 +881,10 @@ function EmptySearch({ title, body }: { title: string; body: string }) {
 }
 
 const styles = StyleSheet.create({
+  desktopContent: { paddingHorizontal: 28, width: '100%', maxWidth: 1440, alignSelf: 'center' },
+  desktopRecent: { maxWidth: 600 },
+  desktopCategoryGrid: { gap: 16 },
+  desktopCategoryCard: { height: 136, borderRadius: 12, padding: 16 },
   screen: { flex: 1, backgroundColor: '#0E0D13' },
   content: { paddingHorizontal: 20 },
   searchField: { marginTop: 4 },

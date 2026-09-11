@@ -1,6 +1,6 @@
-import { Image } from 'expo-image';
+import ArtworkImage from '@/components/artwork-image';
 import { useEffect, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Platform, StyleSheet, View } from 'react-native';
 
 import { usePlayer, usePlayerSpectrum, usePlayerStatus } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
@@ -21,7 +21,7 @@ function PlaybackSpectrum({ size }: { size: number }) {
     Animated.parallel(bars.map((bar, index) => Animated.timing(bar, {
       duration: performanceMode || reduceMotion ? 0 : playing ? 65 : 160,
       toValue: playing && !performanceMode && !reduceMotion ? levels[index] : pausedBars[index],
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }))).start();
   }, [bars, levels, performanceMode, playing, reduceMotion]);
 
@@ -88,7 +88,7 @@ export default function NowPlayingArtwork({
 }: {
   borderRadius?: number;
   size: number;
-  song: Pick<CrimsonSong, 'id' | 'image' | 'imageSmall' | 'title'>;
+  song: Pick<CrimsonSong, 'id' | 'image' | 'imageSmall' | 'title'> & { artwork?: CrimsonSong['artwork'] };
 }) {
   const { currentSong } = usePlayer();
   const active = currentSong?.id === song.id;
@@ -96,7 +96,9 @@ export default function NowPlayingArtwork({
 
   return (
     <View style={[styles.artwork, { width: size, height: size, borderRadius }]}>
-      <Image
+      <ArtworkImage
+        artwork={song.artwork}
+        fallbackSource={fallbackArtwork}
         cachePolicy="memory-disk"
         contentFit="cover"
         recyclingKey={song.id}

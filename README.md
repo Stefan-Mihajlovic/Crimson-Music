@@ -2,7 +2,7 @@
 
 An open-source Audius music player built with Expo 57, React Native, and TypeScript. Sign in with **Log in with Audius** to listen and manage your Audius library. Crimson uses Audius accounts directly; it has no Firebase dependency or separate account server.
 
-**iOS is the primary development platform. Android and web are experimental**, with incomplete native feature parity. See [platform support and build instructions](docs/PLATFORMS.md) before choosing a target.
+**iOS, Android, and web are supported targets.** Platform-specific features and the devices/browsers used for validation are listed in [platform support and build instructions](docs/PLATFORMS.md). iPhone uses Liquid Glass; Android and web use translucent frosted glass with backdrop blur. Offline downloads are available in the mobile apps.
 
 ## Features
 

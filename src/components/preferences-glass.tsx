@@ -1,3 +1,4 @@
+import FrostedSurface from '@/components/frosted-surface';
 import { GlassContainer, GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -37,7 +38,7 @@ export function PreferencesGlassSurface({
   tintColor,
   effect = 'regular',
 }: PreferencesGlassSurfaceProps) {
-  const { colors, performanceMode } = useAppSettings();
+  const { performanceMode } = useAppSettings();
   if (!performanceMode && isLiquidGlassAvailable() && isGlassEffectAPIAvailable()) {
     return (
       <NativePreferencesGlassSurface radius={radius} selected={selected} interactive={interactive} style={style} tintColor={tintColor} effect={effect}>
@@ -46,14 +47,7 @@ export function PreferencesGlassSurface({
     );
   }
   return (
-    <View style={[
-      styles.surface,
-      { borderRadius: radius, backgroundColor: '#251B36', borderColor: selected ? colors.accent : 'rgba(235,218,255,0.2)' },
-      style,
-      styles.opaque,
-    ]}>
-      {children}
-    </View>
+    <FrostedSurface tone="dark" radius={radius} style={style}>{children}</FrostedSurface>
   );
 }
 

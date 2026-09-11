@@ -20,7 +20,7 @@ function patchAndroidMedia(projectRoot) {
   }
   const packagePath = require.resolve('expo-audio/package.json', { paths: [projectRoot] });
   const version = JSON.parse(fs.readFileSync(packagePath, 'utf8')).version;
-  if (version !== '57.0.4') throw new Error(`Crimson Android media adapter supports expo-audio 57.0.4; review it before upgrading from ${version}.`);
+  if (version !== '57.0.5') throw new Error(`Crimson Android media adapter supports expo-audio 57.0.5; review it before upgrading from ${version}.`);
   const sourceRoot = path.join(path.dirname(packagePath), 'android/src/main/java/expo/modules/audio');
   const changes = new Map();
   function patch(relative, transform) {

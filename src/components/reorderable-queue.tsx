@@ -1,4 +1,4 @@
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { FlatList, type FlatListProps, type ViewProps, StyleSheet, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -37,13 +37,14 @@ function QueueCell({ children, index, style, onLayout }: ViewProps & { index: nu
       : 0;
     return {
       transform: [{ translateY: active ? drag.offset.get() : from < 0 || drag.reduceMotion ? shifted : withTiming(shifted, { duration: 160 }) }],
+      backgroundColor: active ? drag.backgroundColor : 'transparent',
       zIndex: active ? 10 : 0,
       elevation: active ? 8 : 0,
       shadowOpacity: active ? 0.24 : 0,
     };
   });
   return <Animated.View onLayout={onLayout}
-    style={[style, styles.cell, { height: drag.rowHeight, backgroundColor: drag.backgroundColor }, animatedStyle]}>
+    style={[style, styles.cell, { height: drag.rowHeight }, animatedStyle]}>
     {children}
   </Animated.View>;
 }

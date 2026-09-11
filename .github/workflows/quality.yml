@@ -36,6 +36,8 @@ jobs:
         run: npm run test:unit
       - name: Integration tests
         run: npm run test:integration
+      - name: Android and web behavior tests
+        run: npm run test:platforms
       - name: Expo compatibility
         run: npx expo-doctor
 
@@ -77,15 +79,15 @@ jobs:
       - run: npm ci
       - name: Generate native Android project and media adapter
         run: npx expo prebuild --platform android --no-install
-      - name: Compile Android debug application
+      - name: Compile standalone Android application (32-bit and 64-bit ARM)
         working-directory: android
-        run: ./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+        run: ./gradlew :app:assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a --no-daemon
         env:
           SENTRY_DISABLE_AUTO_UPLOAD: 'true'
       - uses: actions/upload-artifact@v4
         with:
-          name: crimson-android-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: crimson-android-device
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 7
 
   ios-build:

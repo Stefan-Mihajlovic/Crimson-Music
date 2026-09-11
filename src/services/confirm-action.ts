@@ -1,4 +1,5 @@
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { Alert } from '@/services/alert';
 
 /** Native confirmations and browser confirmations share the same explicit action. */
 export function confirmAction(title: string, message: string, confirmLabel: string, destructive = true): Promise<boolean> {

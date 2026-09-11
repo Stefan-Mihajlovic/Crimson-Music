@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSettings } from '@/providers/settings-provider';
 import { confirmAction } from '@/services/confirm-action';

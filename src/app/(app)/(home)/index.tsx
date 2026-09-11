@@ -1,3 +1,4 @@
+import { FrostedLayer } from '@/components/frosted-surface';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HomeQuickAccess from '@/components/home-quick-access';
 import {
@@ -7,16 +8,18 @@ import {
 import { useNetwork } from '@/providers/network-provider';
 import { requestLibraryRefresh } from '@/services/navigation-events';
 import { Image } from 'expo-image';
+import ArtworkImage from '@/components/artwork-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   Pressable,
+  Platform,
+  useWindowDimensions,
   RefreshControl,
   ScrollView,
   StyleProp,
@@ -25,6 +28,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { Alert } from '@/services/alert';
 import Reanimated from 'react-native-reanimated';
 import { useMainHeaderScroll } from '@/hooks/use-main-header-scroll';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -164,6 +168,12 @@ export default function HomeScreen({
   personalizationOverride,
 }: HomeScreenProps = {}) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
+  const [contentWidth, setContentWidth] = useState(0);
+  const [hoveredCard, setHoveredCard] = useState('');
+  const desktopColumns = Math.max(3, Math.min(7, Math.floor((contentWidth || width - 320) / 176)));
+  const desktopCardWidth = Math.min(196, Math.floor(((contentWidth || width - 320) - 16 * (desktopColumns - 1)) / desktopColumns));
   const { artistHref, playlistHref } = useDetailRoutes();
   const insets = useSafeAreaInsets();
   const headerScroll = useMainHeaderScroll();
@@ -356,7 +366,7 @@ export default function HomeScreen({
         toValue: 1,
         duration: 1250,
         easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     );
     animation.start();
@@ -398,14 +408,14 @@ export default function HomeScreen({
       });
     const exit = (value: Animated.Value, toValue: number) =>
       Animated.timing(value, {
-        toValue, duration: 140, easing: Easing.inOut(Easing.quad), useNativeDriver: true,
+        toValue, duration: 140, easing: Easing.inOut(Easing.quad), useNativeDriver: Platform.OS !== 'web',
       });
     const spring = (value: Animated.Value, toValue: number, useNativeDriver: boolean) =>
       Animated.spring(value, {
         toValue, stiffness: 260, damping: 21, mass: 0.9,
         restDisplacementThreshold: useNativeDriver ? 0.5 : 0.005,
         restSpeedThreshold: useNativeDriver ? 3 : 0.05,
-        useNativeDriver,
+        useNativeDriver: useNativeDriver && Platform.OS !== 'web',
       });
 
     // Keep native glass mounted and opaque. Each group slides behind a fixed
@@ -524,7 +534,7 @@ export default function HomeScreen({
 
   const vaultHeight = vaultExpansion.interpolate({
     inputRange: [0, 1],
-    outputRange: [Math.max(154, vaultCopyBottom + 80), Math.max(336, vaultCopyBottom + 262)],
+    outputRange: desktop ? [190, 222] : [Math.max(154, vaultCopyBottom + 80), Math.max(336, vaultCopyBottom + 262)],
   });
   const vaultBackgroundScale = vaultExpansion.interpolate({
     inputRange: [0, 1],
@@ -540,7 +550,11 @@ export default function HomeScreen({
   });
 
   return (
-    <MainScreenBackground>
+    <MainScreenBackground overlay={<MainHeaderOverlay
+        compact={!personalizationOverride}
+        title="Home"
+        offset={headerScroll.offset}
+      />}>
       <MainNativeHeader
         offset={headerScroll.offset}
         title="Home"
@@ -563,10 +577,12 @@ export default function HomeScreen({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
+          desktop && styles.desktopContent,
           { paddingTop: insets.top, paddingBottom: insets.bottom + 150 },
         ]}
       >
-        <MainHeaderSpacer />
+        <MainHeaderSpacer title="Home" />
+        <View onLayout={({ nativeEvent: { layout } }) => setContentWidth(layout.width)} />
 
         <Animated.View
           onLayout={(event) => {
@@ -581,6 +597,7 @@ export default function HomeScreen({
             },
           ]}
         >
+          <FrostedLayer style={StyleSheet.absoluteFill} background={<>
           <Animated.View
             style={[
               StyleSheet.absoluteFill,
@@ -598,6 +615,42 @@ export default function HomeScreen({
             colors={['rgba(17,10,27,0.10)', 'rgba(17,10,27,0.48)']}
             style={StyleSheet.absoluteFill}
           />
+          </>}>
+          {desktop ? (
+            <View style={styles.desktopVaultContent}>
+              <View style={styles.desktopVaultCopy}>
+                <Text style={styles.desktopVaultTitle}>The Vault</Text>
+                <Text style={styles.desktopVaultDescription}>A fresh mix from Audius, tuned to your mood.</Text>
+              </View>
+              <View style={styles.desktopVaultActions}>
+                {vaultOpen ? (
+                  <>
+                    <View style={styles.desktopMoods}>
+                      {vaultMoods.map(({ mood, icon }) => (
+                        <VaultGlassButton key={mood} accessibilityLabel={`Play ${mood} from The Vault`}
+                          disabled={Boolean(vaultLoadingMood)} height={42}
+                          onPress={() => void chooseVaultMood(mood)} style={styles.desktopMood} contentStyle={styles.moodContent}>
+                          {vaultLoadingMood === mood ? <ActivityIndicator color="#E7E0FF" size="small" /> : <>
+                            <SymbolView name={icon} size={15} tintColor="#E7E0FF" />
+                            <Text style={styles.moodText}>{mood}</Text>
+                          </>}
+                        </VaultGlassButton>
+                      ))}
+                    </View>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Close Vault moods" onPress={() => void transitionVault(false)}>
+                      <Text style={styles.desktopVaultClose}>Close moods</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <VaultGlassButton accessibilityLabel="Open Vault" height={52} onPress={() => void transitionVault(true)}
+                    style={styles.desktopVaultButton} contentStyle={styles.moodContent}>
+                    <SymbolView name="play.fill" size={18} tintColor="#FFFFFF" />
+                    <Text style={styles.moodText}>Find my mix</Text>
+                  </VaultGlassButton>
+                )}
+              </View>
+            </View>
+          ) : <>
           <View onLayout={({ nativeEvent: { layout } }) => setVaultCopyBottom(Math.ceil(layout.y + layout.height))} style={styles.vaultPrimary}>
             <Text style={styles.vaultTitle}>VAULT</Text>
             <Text style={styles.vaultDescription}>
@@ -684,6 +737,8 @@ export default function HomeScreen({
               </VaultGlassGroup>
             </Animated.View>
           </View>
+          </>}
+          </FrostedLayer>
         </Animated.View>
 
         {lastMood ? (
@@ -733,8 +788,9 @@ export default function HomeScreen({
               title="From artists you follow"
               subtitle="Their latest tracks on Audius"
             />
-            <View style={styles.songList}>
-              {newReleases.slice(0, 3).map((song) => (
+            <View style={[styles.songList, desktop && styles.desktopSongGrid]}>
+              {newReleases.slice(0, desktop ? 6 : 3).map((song) => (
+                <View key={song.id} style={desktop && [styles.desktopSongCell, { width: ((contentWidth || width - 360) - 24) / 2 }]}>
                 <SongListRow
                   key={song.id}
                   song={song}
@@ -743,6 +799,7 @@ export default function HomeScreen({
                   }
                   onMenuPress={() => openSongActions(song)}
                 />
+                </View>
               ))}
             </View>
           </>
@@ -754,7 +811,7 @@ export default function HomeScreen({
           bounces
           showsHorizontalScrollIndicator={false}
           style={styles.fullBleedCarousel}
-          contentContainerStyle={styles.artistList}
+          contentContainerStyle={[styles.artistList, desktop && styles.desktopCarousel]}
         >
           {loading ? (
             <ArtistListSkeleton shimmer={skeletonShimmer} />
@@ -762,19 +819,25 @@ export default function HomeScreen({
             artists.map((artist) => (
               <Pressable
                 key={artist.id}
+                onHoverIn={() => setHoveredCard(`artist:${artist.id}`)}
+                onHoverOut={() => setHoveredCard('')}
                 accessibilityRole="button"
                 onPress={() => router.push(artistHref(artist.id))}
                 onLongPress={() => openArtistActions(artist)}
                 delayLongPress={350}
                 style={({ pressed }) => [
                   styles.artist,
+                  desktop && [styles.desktopCard, { width: desktopCardWidth }],
+                  desktop && hoveredCard === `artist:${artist.id}` && { backgroundColor: colors.controlSurface },
                   pressed && styles.artistPressed,
                   pressed && !reduceMotion && styles.artistPressedScale,
                 ]}
               >
-                <View style={styles.artistHalo}>
-                  <View style={styles.artistImageWrap}>
-                    <Image
+                <View style={[styles.artistHalo, desktop && { width: desktopCardWidth - 16, height: desktopCardWidth - 16, borderRadius: 999, borderWidth: 0 }]}>
+                  <View style={[styles.artistImageWrap, desktop && { width: desktopCardWidth - 16, height: desktopCardWidth - 16, borderRadius: 999 }]}>
+                    <ArtworkImage
+                      artwork={artist.artwork}
+                      fallbackSource={defaultArtistImage}
                       contentFit="cover"
                       source={
                         artist.imageSmall
@@ -824,17 +887,19 @@ export default function HomeScreen({
           </Pressable>
         </View>
 
-        <View style={styles.songList}>
+        <View style={[styles.songList, desktop && !songsLoading && styles.desktopSongGrid]}>
           {songsLoading ? (
             <SongListSkeleton shimmer={skeletonShimmer} />
           ) : (
             songs.map((song) => (
+              <View key={song.id} style={desktop && [styles.desktopSongCell, { width: ((contentWidth || width - 360) - 24) / 2 }]}>
               <SongListRow
                 key={song.id}
                 song={song}
                 onPress={() => openSong(song)}
                 onMenuPress={() => openSongActions(song)}
               />
+              </View>
             ))
           )}
         </View>
@@ -853,33 +918,38 @@ export default function HomeScreen({
           bounces
           showsHorizontalScrollIndicator={false}
           style={styles.fullBleedCarousel}
-          contentContainerStyle={styles.playlistList}
+          contentContainerStyle={[styles.playlistList, desktop && styles.desktopCarousel]}
         >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open The Vault"
+            onHoverIn={() => setHoveredCard('vault')}
+            onHoverOut={() => setHoveredCard('')}
             disabled={Boolean(vaultLoadingMood)}
             onPress={openVaultFromPlaylist}
             style={({ pressed }) => [
               styles.playlistCard,
+              desktop && [styles.desktopCard, { width: desktopCardWidth }],
+              desktop && hoveredCard === 'vault' && { backgroundColor: colors.controlSurface },
               pressed && !reduceMotion && styles.artistPressedScale,
             ]}
           >
-            <View style={styles.playlistArtworkWrap}>
+            <FrostedLayer style={[styles.playlistArtworkWrap, desktop && { width: desktopCardWidth - 16, height: desktopCardWidth - 16 }]} background={<>
               <Image
                 autoplay={!reduceMotion && !performanceMode}
                 contentFit="cover"
                 source={require('@/assets/images/onboarding/vault-banner.gif')}
-                style={styles.playlistArtwork}
+                style={[styles.playlistArtwork, desktop && { width: desktopCardWidth - 16, height: desktopCardWidth - 16 }]}
               />
+ </>}>
               <VaultGlassSurface
                 interactive
                 radius={26}
-                style={styles.vaultCardPlay}
+                style={[styles.vaultCardPlay, desktop && { top: (desktopCardWidth - 68) / 2, left: (desktopCardWidth - 68) / 2 }]}
               >
                 <SymbolView name="play.fill" size={25} tintColor="#F0E9FF" />
               </VaultGlassSurface>
-            </View>
+            </FrostedLayer>
             <Text
               numberOfLines={1}
               style={[styles.playlistTitle, { color: colors.text }]}
@@ -899,6 +969,8 @@ export default function HomeScreen({
             playlists.map((playlist) => (
               <Pressable
                 key={playlist.id}
+                onHoverIn={() => setHoveredCard(`playlist:${playlist.id}`)}
+                onHoverOut={() => setHoveredCard('')}
                 accessibilityRole="button"
                 onPress={() =>
                   router.push(
@@ -914,13 +986,15 @@ export default function HomeScreen({
                 delayLongPress={350}
                 style={({ pressed }) => [
                   styles.playlistCard,
+                  desktop && [styles.desktopCard, { width: desktopCardWidth }],
+                  desktop && hoveredCard === `playlist:${playlist.id}` && { backgroundColor: colors.controlSurface },
                   pressed && styles.artistPressed,
                   pressed && !reduceMotion && styles.artistPressedScale,
                 ]}
               >
                 <PlaylistCover
                   playlist={playlist}
-                  style={styles.playlistArtwork}
+                  style={[styles.playlistArtwork, desktop && { width: desktopCardWidth - 16, height: desktopCardWidth - 16 }]}
                 />
                 <Text
                   numberOfLines={1}
@@ -957,12 +1031,15 @@ export default function HomeScreen({
               delayLongPress={350}
               style={({ pressed }) => [
                 styles.featureCard,
+                desktop && styles.desktopFeatureCard,
                 pressed && styles.artistPressed,
                 pressed && !reduceMotion && styles.artistPressedScale,
               ]}
             >
               <View style={styles.featureImageWrap}>
-                <Image
+                <ArtworkImage
+                  artwork={featuredArtist.artwork}
+                  fallbackSource={defaultArtistImage}
                   contentFit="cover"
                   source={
                     featuredArtist.image
@@ -996,11 +1073,7 @@ export default function HomeScreen({
           </View>
         ) : null}
       </Reanimated.ScrollView>
-      <MainHeaderOverlay
-        compact={!personalizationOverride}
-        title="Home"
-        offset={headerScroll.offset}
-      />
+
     </MainScreenBackground>
   );
 }
@@ -1187,6 +1260,21 @@ function SkeletonBlock({
 }
 
 const styles = StyleSheet.create({
+  desktopContent: { paddingHorizontal: 28, width: '100%', maxWidth: 1440, alignSelf: 'center' },
+  desktopVaultContent: { flex: 1, width: '100%', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, gap: 24 },
+  desktopVaultCopy: { flex: 1, gap: 9 },
+  desktopVaultTitle: { color: '#FFFFFF', fontSize: 42, lineHeight: 48, letterSpacing: -1.5, fontWeight: '800' },
+  desktopVaultDescription: { color: '#D4C4E8', fontSize: 14, lineHeight: 21, maxWidth: 310 },
+  desktopVaultActions: { width: '48%', alignItems: 'flex-end', gap: 12 },
+  desktopVaultButton: { width: 178 },
+  desktopMoods: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' },
+  desktopMood: { width: '48%' },
+  desktopVaultClose: { color: '#E7E0FF', fontSize: 12, padding: 4 },
+  desktopSongGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 24, rowGap: 4 },
+  desktopSongCell: { minWidth: 0 },
+  desktopCarousel: { gap: 16, paddingBottom: 6 },
+  desktopCard: { padding: 8, borderRadius: 12, alignItems: 'stretch', gap: 0 },
+  desktopFeatureCard: { maxWidth: 700, height: 228 },
   screen: { flex: 1, backgroundColor: '#0E0D13' },
   scrollContent: { paddingHorizontal: 20 },
   vault: {

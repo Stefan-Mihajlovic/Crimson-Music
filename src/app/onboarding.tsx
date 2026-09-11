@@ -1,14 +1,16 @@
+import { FrostedLayer } from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
 import { Image, ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -37,6 +39,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import BouncyPressable from '@/components/bouncy-pressable';
 import BrandLogo from '@/components/brand-logo';
+import DesktopMusicPreferences from '@/components/desktop-music-preferences';
 import { PreferencesGlassButton, PreferencesGlassSurface } from '@/components/preferences-glass';
 import { useAuth } from '@/providers/auth-provider';
 import { useAppSettings } from '@/providers/settings-provider';
@@ -85,7 +88,8 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
   const systemReduceMotion = useReducedMotion();
   const reduceMotion = performanceMode || reduceMotionSetting || systemReduceMotion;
   const insets = useSafeAreaInsets();
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && screenWidth >= 960;
   const isEditing = editing || mode === 'edit';
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
@@ -192,7 +196,7 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
     try {
       await Promise.all([
         completeOnboarding(selectedCategories, recommendationStyle),
-        new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : 620)),
+        new Promise((resolve) => setTimeout(resolve, reduceMotion || desktop ? 0 : 620)),
       ]);
       if (!mounted.current) return;
       if (isEditing && router.canGoBack()) {
@@ -203,7 +207,7 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
     } catch {
       if (!mounted.current) return;
       saving.current = false;
-      setError('We could not save your personalization. Check your connection and pull up again.');
+      setError(desktop ? 'We could not save your preferences. Check your connection and try again.' : 'We could not save your personalization. Check your connection and pull up again.');
       setFinishing(false);
       pullProgress.value = reduceMotion
         ? 0
@@ -211,6 +215,7 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
     }
   }, [
     completeOnboarding,
+    desktop,
     isEditing,
     pullInteraction,
     pullProgress,
@@ -322,16 +327,25 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
     return <Redirect href="/(app)/(home)" />;
   }
 
+  if (desktop) return <DesktopMusicPreferences
+    categories={categories} recommendationOptions={recommendationOptions}
+    selectedCategories={selectedCategories} recommendationStyle={recommendationStyle}
+    onToggleCategory={toggleCategory}
+    onSelectRecommendation={(value) => { if (!saving.current) { setError(''); setRecommendationStyle(value); } }}
+    onSave={() => void finishOnboarding()} onClose={isEditing ? close : undefined}
+    saving={finishing} error={error} editing={isEditing}
+  />;
+
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <FrostedLayer style={{ flex: 1 }} background={<View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <LinearGradient
           colors={['#1D0B35', '#150D25', '#0A080F', '#09070D']}
           locations={[0, 0.38, 0.7, 1]}
           style={StyleSheet.absoluteFill}
         />
-      </View>
+      </View>}>
       <View
         style={[
           styles.safeArea,
@@ -425,6 +439,7 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
           </Animated.View>
         ) : null}
       </View>
+      </FrostedLayer>
     </View>
   );
 }
@@ -563,7 +578,7 @@ function CategoryStep({
         <Animated.View
           entering={reduceMotion
             ? undefined
-            : FadeInDown.delay(70).duration(360).easing(Easing.out(Easing.cubic)).withInitialValues({ opacity: 1 })}
+            : FadeInDown.delay(70).duration(360).easing(Platform.OS === 'web' ? Easing.bezier(0.22, 1, 0.36, 1) : Easing.out(Easing.cubic)).withInitialValues({ opacity: 1 })}
           style={styles.stepBack}>
           <PreferencesGlassButton
             accessibilityLabel="Close music preferences"
@@ -640,7 +655,7 @@ function RecommendationStep({
       <Animated.View
         entering={reduceMotion
           ? undefined
-          : FadeInDown.delay(70).duration(360).easing(Easing.out(Easing.cubic)).withInitialValues({ opacity: 1 })}
+          : FadeInDown.delay(70).duration(360).easing(Platform.OS === 'web' ? Easing.bezier(0.22, 1, 0.36, 1) : Easing.out(Easing.cubic)).withInitialValues({ opacity: 1 })}
         style={styles.stepBack}>
         <PreferencesGlassButton
           accessibilityLabel="Back to categories"
@@ -694,7 +709,7 @@ function OnboardingHeader({
     <Animated.View
       entering={reduceMotion
         ? undefined
-        : FadeInDown.delay(30).duration(420).easing(Easing.out(Easing.cubic))}
+        : FadeInDown.delay(30).duration(420).easing(Platform.OS === 'web' ? Easing.bezier(0.22, 1, 0.36, 1) : Easing.out(Easing.cubic))}
       style={styles.header}>
       <Text style={styles.title}>Let’s personalize</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
@@ -744,7 +759,7 @@ function CategoryCard({
         : FadeInDown
           .delay(90 + index * 55)
           .duration(390)
-          .easing(Easing.out(Easing.cubic))}
+          .easing(Platform.OS === 'web' ? Easing.bezier(0.22, 1, 0.36, 1) : Easing.out(Easing.cubic))}
       style={styles.categoryCell}>
       <Animated.View style={[styles.categoryCard, cardStyle]}>
         <Image contentFit="cover" source={category.image} style={StyleSheet.absoluteFill} />
@@ -816,7 +831,7 @@ function RecommendationCard({
         : FadeInDown
           .delay(100 + index * 85)
           .duration(420)
-          .easing(Easing.out(Easing.cubic))
+          .easing(Platform.OS === 'web' ? Easing.bezier(0.22, 1, 0.36, 1) : Easing.out(Easing.cubic))
           .withInitialValues({ opacity: 1 })}
       style={styles.recommendationShell}>
       <PreferencesGlassButton

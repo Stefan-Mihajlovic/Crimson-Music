@@ -1,8 +1,8 @@
+import { FrostedBackdrop } from '@/components/frosted-surface';
 import { Image } from 'expo-image';
 import { type Href, useRouter, useSegments } from 'expo-router';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { profileImageSource } from '@/components/profile-images';
 import { BOTTOM_BAR_HORIZONTAL_INSET } from '@/components/player-layout';
@@ -18,16 +18,16 @@ const tabs: { name: AppRouteGroup; href: Href; label: string; icon: SymbolViewPr
   { name: '(account)', href: '/(app)/(account)/account', label: 'Account', icon: { ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' } },
 ];
 
-/** iOS 26 ignores native tab blur overrides. Hide that bar and control the same navigator. */
-export default function PerformanceTabs() {
+/** Shared navigation for Android and Performance Mode, backed by the same tab navigator. */
+export default function PerformanceTabs({ bottom }: { bottom: number }) {
   const { colors } = useAppSettings();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const segments = useSegments();
   const activeGroup = segments.find((segment) => tabs.some((tab) => tab.name === segment));
   return (
-    <View style={[styles.bar, { bottom: Math.max(8, insets.bottom - 8), backgroundColor: colors.elevated, borderColor: colors.border }]}>
+    <View style={[styles.bar, { bottom, borderColor: colors.border }]}>
+      <FrostedBackdrop radius={31} />
       {tabs.map((tab) => {
         const selected = activeGroup === tab.name;
         const color = selected ? colors.accent : colors.secondaryText;

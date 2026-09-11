@@ -7,7 +7,7 @@ const searchFocusListeners = new Set<SearchFocusListener>();
 const searchQueryListeners = new Set<SearchQueryListener>();
 const libraryRefreshListeners = new Set<LibraryRefreshListener>();
 const playerCollapseListeners = new Set<PlayerCollapseListener>();
-let pendingSearchQuery = '';
+let searchQuery = '';
 let libraryRefreshScheduled = false;
 
 /** Root sheets sit outside the tab overlay's context, but can reveal its detail pages. */
@@ -34,16 +34,18 @@ export function subscribeToSearchFocus(listener: SearchFocusListener) {
 }
 
 export function requestSearchQuery(query: string) {
-  pendingSearchQuery = query;
+  searchQuery = query;
   searchQueryListeners.forEach((listener) => listener(query));
+}
+
+export function getSearchQuery() {
+  return searchQuery;
 }
 
 export function subscribeToSearchQuery(listener: SearchQueryListener) {
   searchQueryListeners.add(listener);
-  if (pendingSearchQuery) {
-    listener(pendingSearchQuery);
-    pendingSearchQuery = '';
-  }
+  // Both the persistent toolbar and the route need the latest value, including a clear.
+  listener(searchQuery);
   return () => {
     searchQueryListeners.delete(listener);
   };

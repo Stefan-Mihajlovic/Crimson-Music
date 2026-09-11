@@ -241,6 +241,48 @@ test('preview and web headers stay in their own screen instead of creating a win
   act(() => tree.unmount());
 });
 
+test('desktop main pages omit both title layers and reserve only their content inset', () => {
+  Platform.OS = 'web';
+  ReactNative.useWindowDimensions.mockReturnValue({ width: 1440, height: 900, scale: 1, fontScale: 1 });
+  for (const title of ['Home', 'Library', 'Search']) {
+    let tree;
+    const screen = () => <><MainHeaderOverlay title={title} offset={mockOffset} /><MainHeaderSpacer title={title} /></>;
+    act(() => { tree = TestRenderer.create(screen()); });
+    expect(tree.root.findAllByType(MainScreenHeader)).toHaveLength(0);
+    expect(tree.root.findAllByType(MainCompactHeader)).toHaveLength(0);
+    expect(StyleSheet.flatten(tree.root.findByType(View).props.style).height).toBe(24);
+    mockOffset.value = 100;
+    act(() => tree.update(screen()));
+    expect(tree.root.findAllByType(MainCompactHeader)).toHaveLength(0);
+    act(() => tree.unmount());
+  }
+});
+
+test('resizing a main page into the mobile web layout restores its heading and space', () => {
+  Platform.OS = 'web';
+  ReactNative.useWindowDimensions.mockReturnValue({ width: 960, height: 900, scale: 1, fontScale: 1 });
+  let tree;
+  const screen = () => <><MainHeaderOverlay title="Home" offset={mockOffset} /><MainHeaderSpacer title="Home" /></>;
+  act(() => { tree = TestRenderer.create(screen()); });
+  expect(tree.root.findAllByType(MainScreenHeader)).toHaveLength(0);
+  ReactNative.useWindowDimensions.mockReturnValue({ width: 959, height: 900, scale: 1, fontScale: 1 });
+  act(() => tree.update(screen()));
+  expect(tree.root.findAllByType(MainScreenHeader)).toHaveLength(1);
+  expect(tree.root.findAllByType(MainCompactHeader)).toHaveLength(1);
+  expect(StyleSheet.flatten(tree.root.findByType(MainHeaderSpacer).findByType(View).props.style).height).toBe(80);
+  act(() => tree.unmount());
+});
+
+test('desktop Account keeps its existing heading and header spacing', () => {
+  Platform.OS = 'web';
+  ReactNative.useWindowDimensions.mockReturnValue({ width: 1440, height: 900, scale: 1, fontScale: 1 });
+  let tree;
+  act(() => { tree = TestRenderer.create(<><MainHeaderOverlay title="Account" offset={mockOffset} /><MainHeaderSpacer /></>); });
+  expect(tree.root.findAllByType(MainScreenHeader)).toHaveLength(1);
+  expect(StyleSheet.flatten(tree.root.findByType(MainHeaderSpacer).findByType(View).props.style).height).toBe(80);
+  act(() => tree.unmount());
+});
+
 test('Performance Mode hides the UIKit bar and uses a solid compact header', () => {
   mockPerformanceMode = true;
   mockOffset.value = 80;

@@ -29,6 +29,7 @@ export default function BouncyPressable({
   return (
     <Animated.View style={[styles.container, style, disabled && styles.disabled, animatedStyle]}>
       <Pressable
+        accessibilityRole="button"
         {...props}
         disabled={disabled}
         onPressIn={(event) => {

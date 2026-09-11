@@ -1,19 +1,21 @@
-import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
-import { Image } from 'expo-image';
+import SocialIcon from '@/components/social-icon';
+import ArtworkImage from '@/components/artwork-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Pressable,
   ScrollView,
+  Platform,
+  useWindowDimensions,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Alert } from '@/services/alert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import DetailSongRow from '@/components/detail-song-row';
@@ -52,6 +54,8 @@ function websiteUrl(value: string) {
 export default function ArtistDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
   const { artistHref, artistTracksHref, playlistHref } = useDetailRoutes();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -204,24 +208,27 @@ export default function ArtistDetailScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
+        contentContainerStyle={[{ paddingBottom: insets.bottom + 120 }, desktop && styles.desktopContent]}
         onScroll={headerPlayback.onScroll}
         scrollsToTop={false}
         scrollEventThrottle={16}
       >
-        <View style={styles.hero}>
-          <Image
+        <View style={[styles.hero, desktop && styles.desktopHero]}>
+          <ArtworkImage
+            artwork={artist.artwork}
+            fallbackSource={fallbackArtist}
             cachePolicy="memory-disk"
             source={heroArtwork ? { uri: heroArtwork } : fallbackArtist}
             contentFit="cover"
+            contentPosition={desktop ? { top: '30%', left: '50%' } : undefined}
             style={StyleSheet.absoluteFill}
           />
           <LinearGradient
-            colors={['transparent', 'rgba(14,13,19,0.58)', colors.background]}
+            colors={['transparent', 'rgba(14,13,19,0.58)', desktop ? 'rgba(14,13,19,0.90)' : colors.background]}
             style={StyleSheet.absoluteFill}
           />
-          <View style={styles.heroCopy}>
-            <Text style={styles.name}>{artist.name}</Text>
+          <View style={[styles.heroCopy, desktop && styles.desktopHeroCopy]}>
+            <Text numberOfLines={desktop ? 2 : undefined} style={[styles.name, desktop && styles.desktopName]}>{artist.name}</Text>
             <View style={styles.metadataRow}>
               <Text style={styles.metadata}>
                 <Text style={styles.metadataNumber}>
@@ -234,7 +241,7 @@ export default function ArtistDetailScreen() {
                 Followers
               </Text>
             </View>
-            <View style={styles.actions}>
+            <View style={[styles.actions, desktop && styles.desktopActions]}>
               <BouncyPressable
                 accessibilityRole="button"
                 accessibilityLabel={
@@ -312,7 +319,7 @@ export default function ArtistDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.body}>
+        <View style={[styles.body, desktop && styles.desktopBody]}>
           {socialLinks.length ? (
             <ScrollView
               horizontal
@@ -335,7 +342,7 @@ export default function ArtistDetailScreen() {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <FontAwesome6
+                  <SocialIcon
                     color={colors.accent}
                     name={social.icon}
                     size={16}
@@ -453,7 +460,9 @@ export default function ArtistDetailScreen() {
                         },
                       ]}
                     >
-                      <Image
+                      <ArtworkImage
+                        artwork={relatedArtist.artwork}
+                        fallbackSource={fallbackArtist}
                         source={
                           relatedArtist.imageSmall
                             ? { uri: relatedArtist.imageSmall }
@@ -489,7 +498,8 @@ export default function ArtistDetailScreen() {
           >
             {artist.aboutImage && !dataSaver ? (
               <>
-                <Image
+                <ArtworkImage
+                  fallbackSource={fallbackArtist}
                   source={{ uri: artist.aboutImage }}
                   contentFit="cover"
                   style={StyleSheet.absoluteFill}
@@ -574,6 +584,13 @@ export default function ArtistDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  desktopContent: { width: '100%', maxWidth: 1440, alignSelf: 'center' },
+  desktopHero: { height: 300 },
+  desktopHeroCopy: { paddingHorizontal: 32, paddingBottom: 24 },
+  desktopName: { fontSize: 52, letterSpacing: -1.5, fontWeight: '800' },
+  desktopActions: { maxWidth: 340 },
+  desktopBody: { paddingHorizontal: 22 },
+
   screen: { flex: 1, backgroundColor: '#0E0D13' },
   loading: {
     flex: 1,

@@ -1,4 +1,5 @@
-import { SymbolView } from 'expo-symbols';
+import { FrostedBackdrop } from '@/components/frosted-surface';
+import { SymbolView } from '@/components/app-symbol';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { useAppSettings } from '@/providers/settings-provider';
@@ -11,7 +12,8 @@ export default function NativeBackButton({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Go back"
       hitSlop={12}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && (reduceMotion ? styles.pressedStill : styles.pressed)]}>
+      style={({ pressed }) => [styles.button, { backgroundColor: 'transparent', borderColor: colors.border }, pressed && (reduceMotion ? styles.pressedStill : styles.pressed)]}>
+      <FrostedBackdrop radius={20} />
       <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={20} tintColor={colors.text} />
     </Pressable>
   );

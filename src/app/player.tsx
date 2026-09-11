@@ -1,9 +1,9 @@
 /* eslint-disable react-hooks/immutability */
 
-import { useIsFocused, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
+import { SymbolView } from '@/components/app-symbol';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, PixelRatio, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from 'react-native';
 import Animated, {
   AnimatedStyle,
   cancelAnimation,
@@ -18,11 +18,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlayer, usePlayerStatus } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
-import { actionSheetHref, useDetailRoutes } from '@/services/action-sheet';
+import { actionSheetHref, releaseWebNavigationFocus, useDetailRoutes } from '@/services/action-sheet';
 import { SwipeableArtwork } from '@/components/song-swipe-pager';
 import BouncyPressable from '@/components/bouncy-pressable';
 import PlayerArtworkBackground from '@/components/player-artwork-background';
 import MarqueeText from '@/components/marquee-text';
+import DesktopPlayer from '@/components/desktop-player';
+import WebPlayerSeek from '@/components/web-player-seek';
+import MobilePlayerSurface from '@/components/mobile-player-surface';
 
 const playerPalette = {
   accent: '#A66BFF',
@@ -41,6 +44,10 @@ function formatTime(value: number) {
 export default function PlayerScreen() {
   const { currentSong } = usePlayer();
   const focused = useIsFocused();
+  const { width } = useWindowDimensions();
+  const params = useLocalSearchParams<{ tab?: 'queue' | 'lyrics' | 'related' }>();
+  if (Platform.OS === 'web' && width >= 960) return <DesktopPlayer initialTab={params.tab || 'queue'} />;
+  if (Platform.OS === 'web') return <MobilePlayerSurface />;
   return (
     <View style={styles.screen}>
       <PlayerArtworkBackground active={focused} song={currentSong} />
@@ -74,6 +81,8 @@ type PlayerContentProps = {
   bodyAnimatedStyle?: AnimatedStyle<ViewStyle>;
   onClose?: () => void;
   topBarAnimatedStyle?: AnimatedStyle<ViewStyle>;
+  playerPresentation?: 'overlay' | 'modal';
+  onOpenArtist?: (id: string) => void;
 };
 
 export function PlayerContent({
@@ -81,6 +90,8 @@ export function PlayerContent({
   bodyAnimatedStyle,
   onClose,
   topBarAnimatedStyle,
+  playerPresentation,
+  onOpenArtist,
 }: PlayerContentProps = {}) {
   const router = useRouter();
   const focused = useIsFocused();
@@ -103,7 +114,7 @@ export function PlayerContent({
     () => getPlayerArtworkLayout(width, height, insets.top, insets.bottom).size,
     [height, insets.bottom, insets.top, width],
   );
-  const openPlayerDetails = () => router.push('/player-details');
+  const openPlayerDetails = () => { releaseWebNavigationFocus(); router.push('/player-details'); };
   const landscape = width > height;
 
   if (!currentSong) {
@@ -123,18 +134,18 @@ export function PlayerContent({
     subtitle: currentSong.creator,
     image: currentSong.imageSmall || currentSong.image,
     artistId: currentSong.artistId,
-    playerPresentation: onClose ? 'overlay' : 'modal',
+    playerPresentation: playerPresentation || (onClose ? 'overlay' : 'modal'),
   }));
 
   return (
     <View style={styles.screen}>
       <View style={[styles.content, { paddingTop: Math.max(insets.top, 18), paddingBottom: Math.max(insets.bottom, 18) }]}>
-        <Animated.View style={[styles.topBar, topBarAnimatedStyle]}>
+        <Animated.View testID="player-drag-header" style={[styles.topBar, Platform.OS === 'web' && { touchAction: 'none' }, topBarAnimatedStyle]}>
           <BouncyPressable accessibilityLabel="Minimize player" accessibilityRole="button" onPress={onClose || (() => router.dismiss())} style={styles.topButton}>
             <SymbolView name="chevron.down" size={20} tintColor={playerPalette.text} weight="bold" />
           </BouncyPressable>
           <View style={styles.sourceGlass}>
-            <Text numberOfLines={1} style={styles.sourceLabel}>PLAYING FROM</Text>
+            <Text numberOfLines={1} style={styles.sourceLabel}>{Platform.OS === 'web' ? 'Playing from' : 'PLAYING FROM'}</Text>
             <Text numberOfLines={1} style={styles.sourceName}>{source}</Text>
           </View>
           <BouncyPressable
@@ -147,7 +158,7 @@ export function PlayerContent({
         </Animated.View>
 
         <Animated.View style={[styles.playerBody, landscape && styles.landscapeBody, bodyAnimatedStyle]}>
-          <View style={[styles.artworkArea, { height: artworkSize + (landscape ? 32 : 54) }, landscape && { width: artworkSize }]}>
+          <View testID="player-drag-artwork" style={[styles.artworkArea, { height: artworkSize + (landscape ? 32 : 54) }, landscape && { width: artworkSize }, Platform.OS === 'web' && { touchAction: 'none' }, Platform.OS === 'web' && landscape && { overflow: 'hidden' }]}>
             <View style={[styles.artworkFrame, { width: artworkSize, height: artworkSize }, artworkHidden && styles.artworkPlaceholder]}>
               {!artworkHidden ? (
                 <SwipeableArtwork pageGap={(width - artworkSize) / 2 + 8} size={artworkSize} />
@@ -160,7 +171,7 @@ export function PlayerContent({
               <Pressable accessibilityRole="button" accessibilityLabel={`Song information for ${currentSong.title}`} onPress={openActions}>
                 <MarqueeText key={`${currentSong.id}:${currentSong.title}`} text={currentSong.title} textStyle={styles.title} active={focused} />
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Open ${currentSong.creator}`} disabled={!currentSong.artistId} onPress={() => { if (onClose) onClose(); else router.dismiss(); router.push(artistHref(currentSong.artistId)); }}><Text numberOfLines={2} style={styles.artist}>{currentSong.creator}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Open ${currentSong.creator}`} disabled={!currentSong.artistId} onPress={() => { if (onOpenArtist) { onOpenArtist(currentSong.artistId); return; } if (onClose) onClose(); else router.dismiss(); router.push(artistHref(currentSong.artistId)); }}><Text numberOfLines={2} style={styles.artist}>{currentSong.creator}</Text></Pressable>
             </View>
             <View style={styles.songActions}>
               <BouncyPressable
@@ -192,7 +203,7 @@ export function PlayerContent({
           <View style={styles.footerActions}>
             <BouncyPressable accessibilityLabel="Show queue" accessibilityRole="button" contentStyle={[styles.footerButtonContent, styles.footerButtonLeft]} onPress={openPlayerDetails} pressedScale={0.92} style={styles.footerButton}>
               <SymbolView name="list.bullet" size={20} tintColor={playerPalette.secondary} />
-              <Text style={styles.footerText}>UP NEXT</Text>
+              <Text style={styles.footerText}>{Platform.OS === 'web' ? 'Up next' : 'UP NEXT'}</Text>
             </BouncyPressable>
             <BouncyPressable
               accessibilityLabel={`Turn autoplay ${autoplayEnabled ? 'off' : 'on'}`}
@@ -201,7 +212,7 @@ export function PlayerContent({
               onPress={toggleAutoplay}
               pressedScale={0.92}
               style={styles.footerButton}>
-              <Text style={[styles.footerText, autoplayEnabled && styles.footerTextActive]}>AUTOPLAY {autoplayEnabled ? 'ON' : 'OFF'}</Text>
+              <Text style={[styles.footerText, autoplayEnabled && styles.footerTextActive]}>{Platform.OS === 'web' ? `Autoplay ${autoplayEnabled ? 'on' : 'off'}` : `AUTOPLAY ${autoplayEnabled ? 'ON' : 'OFF'}`}</Text>
               <SymbolView name="infinity" size={20} tintColor={autoplayEnabled ? playerPalette.accent : playerPalette.muted} weight="bold" />
             </BouncyPressable>
           </View>
@@ -257,7 +268,7 @@ function PlaybackControls() {
   return (
     <>
       <View style={styles.seekArea}>
-        <View
+        {Platform.OS === 'web' ? <WebPlayerSeek value={status.currentTime} duration={status.duration} onSeek={seekTo} /> : <View
           accessibilityActions={[{ name: 'increment', label: 'Forward 10 seconds' }, { name: 'decrement', label: 'Back 10 seconds' }]}
           accessibilityLabel="Playback position"
           accessibilityRole="adjustable"
@@ -275,7 +286,7 @@ function PlaybackControls() {
           <View style={styles.seekTrack}>
             <View style={[styles.seekFill, { width: `${status.duration > 0 ? Math.min(1, scrubValue / status.duration) * 100 : 0}%` }]} />
           </View>
-        </View>
+        </View>}
         <View style={styles.times}>
           <Text style={styles.time}>{formatTime(scrubValue)}</Text>
           <BouncyPressable

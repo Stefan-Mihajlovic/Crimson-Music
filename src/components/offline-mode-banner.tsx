@@ -1,5 +1,5 @@
-import { Href, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { Href, useRouter, useSegments } from 'expo-router';
+import { SymbolView } from '@/components/app-symbol';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,12 +10,14 @@ import { useNetwork } from '@/providers/network-provider';
 
 export default function OfflineModeBanner() {
   const router = useRouter();
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { downloadedCount, ready } = useDownloads();
   const { isOffline } = useNetwork();
 
-  if (!isOffline || !user) return null;
+  // This screen already explains offline mode; a floating banner would cover its header.
+  if (!isOffline || !user || segments.at(-1) === 'offline-listening') return null;
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>

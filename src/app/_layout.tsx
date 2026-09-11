@@ -1,12 +1,14 @@
+import { ModalBackdropProvider, ModalBackdropScene } from '@/components/modal-backdrop';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import OfflineModeBanner from '@/components/offline-mode-banner';
 import PerformanceStackHeader from '@/components/performance-stack-header';
+import WebAppShell from '@/components/web-app-shell';
 import { AuthProvider, useAuth } from '@/providers/auth-provider';
 import { DownloadProvider } from '@/providers/download-provider';
 import { NetworkProvider, useNetwork } from '@/providers/network-provider';
@@ -62,7 +64,7 @@ function ThemedApp() {
     <PlayerProvider>
       <ThemeProvider value={navigationTheme}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <RootNavigator />
+        <ModalBackdropProvider><WebAppShell><RootNavigator /></WebAppShell></ModalBackdropProvider>
         <OfflineModeBanner />
       </ThemeProvider>
     </PlayerProvider>
@@ -86,8 +88,10 @@ function RootNavigator() {
 
   return (
     <Stack
+      screenLayout={({ children, route }) => ['action-sheet', 'player-details'].includes(route.name)
+        ? children : <ModalBackdropScene>{children}</ModalBackdropScene>}
       screenOptions={{
-        header: performanceMode ? (props) => <PerformanceStackHeader {...props} /> : undefined,
+        header: performanceMode || Platform.OS !== 'ios' ? (props) => <PerformanceStackHeader {...props} /> : undefined,
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
         animation: reduceMotion ? 'none' : 'fade_from_bottom',
@@ -123,7 +127,8 @@ function RootNavigator() {
           gestureDirection: 'horizontal',
           fullScreenGestureEnabled: true,
           headerShown: true,
-          headerTransparent: true,
+          headerTransparent: Platform.OS === 'ios',
+          headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background },
           headerTintColor: colors.text,
           headerBackButtonDisplayMode: 'minimal',
           headerLargeTitleEnabled: false,
@@ -138,7 +143,8 @@ function RootNavigator() {
           gestureDirection: 'horizontal',
           fullScreenGestureEnabled: true,
           headerShown: true,
-          headerTransparent: true,
+          headerTransparent: Platform.OS === 'ios',
+          headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background },
           headerTintColor: colors.text,
           headerBackButtonDisplayMode: 'minimal',
           headerLargeTitleEnabled: false,
@@ -155,7 +161,8 @@ function RootNavigator() {
             gestureDirection: 'horizontal',
             fullScreenGestureEnabled: true,
             headerShown: true,
-            headerTransparent: true,
+            headerTransparent: Platform.OS === 'ios',
+            headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background },
             headerTintColor: colors.text,
             headerBackButtonDisplayMode: 'minimal',
             headerLargeTitleEnabled: false,
@@ -166,9 +173,9 @@ function RootNavigator() {
       <Stack.Screen
         name="action-sheet"
         options={{
-          presentation: 'formSheet',
-          animation: reduceMotion ? 'none' : 'slide_from_bottom',
-          contentStyle: { backgroundColor: colors.elevated },
+          presentation: Platform.OS === 'web' ? 'transparentModal' : 'formSheet',
+          animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
+          contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : Platform.OS === 'ios' || performanceMode ? colors.elevated : 'transparent' },
           sheetAllowedDetents: [0.5, 1.0],
           sheetInitialDetentIndex: 0,
           sheetGrabberVisible: true,
@@ -178,9 +185,9 @@ function RootNavigator() {
       <Stack.Screen
         name="player-details"
         options={{
-          presentation: 'formSheet',
-          animation: reduceMotion ? 'none' : 'slide_from_bottom',
-          contentStyle: { backgroundColor: colors.elevated },
+          presentation: Platform.OS === 'web' ? 'transparentModal' : 'formSheet',
+          animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
+          contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : Platform.OS === 'ios' || performanceMode ? colors.elevated : 'transparent' },
           sheetAllowedDetents: [0.62, 1.0],
           sheetInitialDetentIndex: 0,
           sheetGrabberVisible: true,
@@ -190,9 +197,9 @@ function RootNavigator() {
       <Stack.Screen
         name="player"
         options={{
-          presentation: 'fullScreenModal',
-          animation: reduceMotion ? 'none' : 'slide_from_bottom',
-          contentStyle: { backgroundColor: colors.background },
+          presentation: Platform.OS === 'web' ? 'transparentModal' : 'fullScreenModal',
+          animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
+          contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : colors.background },
           gestureEnabled: true,
         }}
       />

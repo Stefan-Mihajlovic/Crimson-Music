@@ -1,13 +1,13 @@
 import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
 import {
-  Alert,
   FlatList,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Alert } from '@/services/alert';
 import { useDownloads } from '@/providers/download-provider';
 import { usePlayer } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
