@@ -35,7 +35,7 @@ import {
   setSongInOwnedPlaylist,
   toggleUserCollectionItem,
 } from '@/services/music';
-import { requestLibraryRefresh } from '@/services/navigation-events';
+import { requestLibraryRefresh, requestPlayerCollapse } from '@/services/navigation-events';
 
 type SheetType = 'song' | 'artist' | 'playlist';
 
@@ -56,6 +56,7 @@ export default function ActionSheetScreen() {
     artistId?: string;
     source?: string;
     coverImages?: string;
+    playerPresentation?: string;
   }>();
   const type = (params.type || 'song') as SheetType;
   const id = String(params.id || '');
@@ -198,7 +199,10 @@ export default function ActionSheetScreen() {
       }
     }
     if (!targetArtistId) return;
-    router.dismiss();
+    requestPlayerCollapse();
+    // On web the full player is a root modal underneath this sheet; on
+    // native it is an in-place overlay controlled by the tab layout.
+    router.dismiss(params.playerPresentation === 'modal' ? 2 : 1);
     setTimeout(
       () => router.push(artistHref(targetArtistId)),
       reduceMotion ? 0 : 120,

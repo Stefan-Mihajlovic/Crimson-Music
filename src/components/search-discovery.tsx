@@ -87,8 +87,8 @@ function AccountSearchDiscovery({ uid }: { uid: string | null }) {
             contentStyle={styles.cardContent}>
             <Image source={mix.image} contentFit="cover" style={StyleSheet.absoluteFill} />
             <LinearGradient colors={['rgba(9,5,17,0.05)', 'rgba(9,5,17,0.82)']} locations={[0.15, 1]} style={StyleSheet.absoluteFill} />
-            <View style={styles.playButton}>
-              {loading === mix.id ? <ActivityIndicator color="#251B36" size="small" /> : <SymbolView name="play.fill" size={13} tintColor="#251B36" style={styles.playSymbol} />}
+            <View pointerEvents="none" style={styles.playButton}>
+              {loading === mix.id ? <ActivityIndicator color="#251B36" size="small" /> : <SymbolView name="play.fill" size={13} resizeMode="scaleAspectFit" tintColor="#251B36" style={styles.playSymbol} />}
             </View>
             <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.title}>{mix.title}</Text>
           </BouncyPressable>
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   card: { height: BROWSE_TILE_HEIGHT, borderRadius: BROWSE_TILE_RADIUS, overflow: 'hidden' },
   cardContent: { alignItems: 'stretch', justifyContent: 'flex-end', padding: 13 },
   playButton: { position: 'absolute', top: 10, right: 10, width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  playSymbol: { marginLeft: 2 },
+  playSymbol: { width: 13, height: 13 },
   title: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   error: { fontSize: 13, marginTop: 12 },
 });

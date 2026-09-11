@@ -1,12 +1,26 @@
 type SearchFocusListener = () => void;
 type SearchQueryListener = (query: string) => void;
 type LibraryRefreshListener = () => void;
+type PlayerCollapseListener = () => void;
 
 const searchFocusListeners = new Set<SearchFocusListener>();
 const searchQueryListeners = new Set<SearchQueryListener>();
 const libraryRefreshListeners = new Set<LibraryRefreshListener>();
+const playerCollapseListeners = new Set<PlayerCollapseListener>();
 let pendingSearchQuery = '';
 let libraryRefreshScheduled = false;
+
+/** Root sheets sit outside the tab overlay's context, but can reveal its detail pages. */
+export function requestPlayerCollapse() {
+  playerCollapseListeners.forEach((listener) => listener());
+}
+
+export function subscribeToPlayerCollapse(listener: PlayerCollapseListener) {
+  playerCollapseListeners.add(listener);
+  return () => {
+    playerCollapseListeners.delete(listener);
+  };
+}
 
 export function requestSearchFocus() {
   searchFocusListeners.forEach((listener) => listener());
