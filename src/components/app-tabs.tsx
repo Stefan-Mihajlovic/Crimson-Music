@@ -12,7 +12,7 @@ import DraggablePlayerSurface from '@/components/draggable-player-surface';
 import PerformanceTabs from '@/components/performance-tabs';
 import { useAccountTabIcon } from '@/hooks/use-account-tab-icon';
 import { MINI_PLAYER_HEIGHT } from '@/components/player-layout';
-import { requestSearchFocus } from '@/services/navigation-events';
+import { requestSearchFocus, subscribeToPlayerCollapse } from '@/services/navigation-events';
 import { AppRouteGroup } from '@/services/action-sheet';
 import { useAppSettings } from '@/providers/settings-provider';
 import { PlayerOverlayVisibilityProvider } from '@/providers/player-overlay-visibility-provider';
@@ -77,6 +77,8 @@ export default function AppTabs() {
   const collapse = useCallback((velocity = 300) => {
     animatePlayerTo(collapsedTopRef.current, Math.max(0, velocity), true, () => setExpanded(false));
   }, [animatePlayerTo]);
+
+  useEffect(() => subscribeToPlayerCollapse(collapse), [collapse]);
 
   const handleSearchTap = () => {
     if (routeGroup === '(search)') requestSearchFocus();

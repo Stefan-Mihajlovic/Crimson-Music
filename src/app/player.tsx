@@ -22,6 +22,7 @@ import { actionSheetHref, useDetailRoutes } from '@/services/action-sheet';
 import { SwipeableArtwork } from '@/components/song-swipe-pager';
 import BouncyPressable from '@/components/bouncy-pressable';
 import PlayerArtworkBackground from '@/components/player-artwork-background';
+import MarqueeText from '@/components/marquee-text';
 
 const playerPalette = {
   accent: '#A66BFF',
@@ -82,6 +83,7 @@ export function PlayerContent({
   topBarAnimatedStyle,
 }: PlayerContentProps = {}) {
   const router = useRouter();
+  const focused = useIsFocused();
   const { artistHref } = useDetailRoutes();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -121,6 +123,7 @@ export function PlayerContent({
     subtitle: currentSong.creator,
     image: currentSong.imageSmall || currentSong.image,
     artistId: currentSong.artistId,
+    playerPresentation: onClose ? 'overlay' : 'modal',
   }));
 
   return (
@@ -154,8 +157,10 @@ export function PlayerContent({
           <ScrollView style={[styles.controlsScroll, landscape && styles.landscapeControls]} contentContainerStyle={styles.controlsContent} showsVerticalScrollIndicator={false} bounces={false}>
           <View style={styles.songLine}>
             <View style={styles.songCopy}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Song information for ${currentSong.title}`} onPress={openActions}><Text numberOfLines={2} style={styles.title}>{currentSong.title}</Text></Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Open ${currentSong.creator}`} disabled={!currentSong.artistId} onPress={() => { onClose?.(); router.push(artistHref(currentSong.artistId)); }}><Text numberOfLines={2} style={styles.artist}>{currentSong.creator}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Song information for ${currentSong.title}`} onPress={openActions}>
+                <MarqueeText key={`${currentSong.id}:${currentSong.title}`} text={currentSong.title} textStyle={styles.title} active={focused} />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Open ${currentSong.creator}`} disabled={!currentSong.artistId} onPress={() => { if (onClose) onClose(); else router.dismiss(); router.push(artistHref(currentSong.artistId)); }}><Text numberOfLines={2} style={styles.artist}>{currentSong.creator}</Text></Pressable>
             </View>
             <View style={styles.songActions}>
               <BouncyPressable

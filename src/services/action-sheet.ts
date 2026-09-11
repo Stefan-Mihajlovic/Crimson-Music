@@ -11,6 +11,7 @@ export type ActionSheetItem = {
   artistId?: string;
   coverImages?: string[];
   source?: 'audius' | 'crimson';
+  playerPresentation?: 'overlay' | 'modal';
 };
 
 export function actionSheetHref(item: ActionSheetItem) {
