@@ -50,7 +50,9 @@ export class AudiusSessionClient {
   private storage: SessionStorage;
   private transport: typeof fetch;
 
-  constructor(storage: SessionStorage, transport: typeof fetch = fetch) { this.storage = storage; this.transport = transport; }
+  // Browser fetch requires its Window receiver. Storing the bare function on
+  // this client invokes it with the client as `this` and breaks OAuth on web.
+  constructor(storage: SessionStorage, transport: typeof fetch = fetch.bind(globalThis)) { this.storage = storage; this.transport = transport; }
   current() { return this.session; }
   version() { return this.revision; }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }

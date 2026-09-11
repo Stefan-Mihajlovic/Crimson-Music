@@ -1,8 +1,7 @@
 import { Href, Stack, useRouter, useSegments } from 'expo-router';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
 import { useMemo, useState } from 'react';
 import {
-  Alert,
   PanResponder,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Alert } from '@/services/alert';
 
 import { useDownloads } from '@/providers/download-provider';
 import { useAppSettings } from '@/providers/settings-provider';

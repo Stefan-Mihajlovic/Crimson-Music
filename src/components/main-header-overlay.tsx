@@ -11,9 +11,12 @@ import { usePlayerOverlayPosition, usePlayerOverlayVisible } from '@/providers/p
 import { useAppSettings } from '@/providers/settings-provider';
 
 const expandedHeaderHeight = 80;
+const desktopMainTitles = new Set(['Home', 'Library', 'Search']);
 
-export function MainHeaderSpacer() {
-  return <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.spacer} />;
+export function MainHeaderSpacer({ title }: { title?: string }) {
+  const { width } = useWindowDimensions();
+  const desktopMainPage = Platform.OS === 'web' && width >= 960 && desktopMainTitles.has(title ?? '');
+  return <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={desktopMainPage ? styles.desktopInset : styles.spacer} />;
 }
 
 /**
@@ -30,7 +33,7 @@ export default function MainHeaderOverlay({ title, offset, horizontalInset = 20,
   const focused = useIsFocused();
   const playerVisible = usePlayerOverlayVisible();
   const playerPosition = usePlayerOverlayPosition();
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const { performanceMode } = useAppSettings();
   const active = !compact || focused;
   const style = useAnimatedStyle(() => ({
@@ -42,6 +45,7 @@ export default function MainHeaderOverlay({ title, offset, horizontalInset = 20,
   const coverageStyle = useAnimatedStyle(() => ({
     height: active ? Math.max(0, Math.min(height, playerPosition?.value ?? height) - insets.top) : 0,
   }));
+  if (Platform.OS === 'web' && width >= 960 && desktopMainTitles.has(title)) return null;
   // Keep the window and glass views mounted at alpha 1. Hide through clipping
   // on blur/scroll instead of reattaching glass under a fading ancestor.
   const expandedRow = (
@@ -78,4 +82,5 @@ const styles = StyleSheet.create({
   windowClip: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden' },
   overlay: { position: 'absolute', top: 0, height: expandedHeaderHeight },
   spacer: { height: expandedHeaderHeight },
+  desktopInset: { height: 24 },
 });

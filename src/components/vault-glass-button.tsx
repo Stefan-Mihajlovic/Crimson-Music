@@ -1,3 +1,4 @@
+import FrostedSurface from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
 import { GlassContainer, GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -90,11 +91,7 @@ export function VaultGlassSurface({ radius, interactive = false, style, children
     );
   }
   return (
-    <View pointerEvents="none" style={[
-      styles.fallback,
-      { borderRadius: radius, backgroundColor: isDark ? colors.elevated : '#30263E', borderColor: colors.border },
-      style,
-    ]}>{children}</View>
+    <FrostedSurface tone="dark" solidColor={isDark ? colors.elevated : '#30263E'} radius={radius} style={style}>{children}</FrostedSurface>
   );
 }
 

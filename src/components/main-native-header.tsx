@@ -1,3 +1,4 @@
+import { FrostedBackdrop } from '@/components/frosted-surface';
 import { Stack } from 'expo-router';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
@@ -43,11 +44,12 @@ export function MainCompactTitle({ offset, title }: { offset: SharedValue<number
 
 /** Solid fallback for Performance Mode and platforms without the UIKit bar. */
 export function MainCompactHeader({ offset, title }: { offset: SharedValue<number>; title: string }) {
-  const { colors } = useAppSettings();
+  const { colors, performanceMode } = useAppSettings();
   const insets = useSafeAreaInsets();
   const style = useAnimatedStyle(() => ({ opacity: compactHeaderProgress(offset.value) }));
   return (
-    <Animated.View pointerEvents="none" style={[styles.overlay, { height: insets.top + 44, backgroundColor: colors.background }, style]}>
+    <Animated.View pointerEvents="none" style={[styles.overlay, { height: insets.top + 44, backgroundColor: performanceMode ? colors.background : 'transparent' }, style]}>
+      {!performanceMode ? <FrostedBackdrop radius={0} solidColor={colors.background} /> : null}
       <View style={[styles.bar, { marginTop: insets.top }]}>
         <Text accessibilityRole="header" numberOfLines={1} style={[styles.title, { color: colors.text }]}>{title}</Text>
       </View>

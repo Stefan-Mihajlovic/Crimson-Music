@@ -1,9 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import BouncyPressable from '@/components/bouncy-pressable';
 import { useAuth } from '@/providers/auth-provider';
@@ -32,6 +32,9 @@ export default function SearchDiscovery() {
 
 function AccountSearchDiscovery({ uid }: { uid: string | null }) {
   const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
+  const [contentWidth, setContentWidth] = useState(0);
+  const cardWidth = desktop ? Math.max(180, ((contentWidth || width - 360) - 32) / 3) : browseTileWidth(width);
   const { colors } = useAppSettings();
   const { playSong } = usePlayer();
   const [loading, setLoading] = useState<AudiusDiscoveryMix | null>(null);
@@ -71,9 +74,9 @@ function AccountSearchDiscovery({ uid }: { uid: string | null }) {
   };
 
   return (
-    <View style={styles.section}>
+    <View onLayout={({ nativeEvent: { layout } }) => setContentWidth(layout.width)} style={[styles.section, desktop && { marginTop: 0 }]}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>Discover something new</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carousel} contentContainerStyle={styles.cards}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.carousel, desktop && styles.desktopCarousel]} contentContainerStyle={[styles.cards, desktop && styles.desktopCards]}>
         {mixes.map((mix) => (
           <BouncyPressable
             key={mix.id}
@@ -83,13 +86,14 @@ function AccountSearchDiscovery({ uid }: { uid: string | null }) {
             disabled={loading !== null}
             onPress={() => void startMix(mix)}
             pressedScale={0.96}
-            style={[styles.card, { width: browseTileWidth(width) }]}
+            style={[styles.card, { width: cardWidth }, desktop && styles.desktopCard]}
             contentStyle={styles.cardContent}>
             <Image source={mix.image} contentFit="cover" style={StyleSheet.absoluteFill} />
             <LinearGradient colors={['rgba(9,5,17,0.05)', 'rgba(9,5,17,0.82)']} locations={[0.15, 1]} style={StyleSheet.absoluteFill} />
             <View pointerEvents="none" style={styles.playButton}>
               {loading === mix.id ? <ActivityIndicator color="#251B36" size="small" /> : <SymbolView name="play.fill" size={13} resizeMode="scaleAspectFit" tintColor="#251B36" style={styles.playSymbol} />}
             </View>
+            {desktop ? <Text style={styles.desktopSubtitle}>{mix.subtitle}</Text> : null}
             <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.title}>{mix.title}</Text>
           </BouncyPressable>
         ))}
@@ -100,6 +104,10 @@ function AccountSearchDiscovery({ uid }: { uid: string | null }) {
 }
 
 const styles = StyleSheet.create({
+  desktopCarousel: { marginHorizontal: 0 },
+  desktopCards: { paddingHorizontal: 0, gap: 16 },
+  desktopCard: { height: 154, borderRadius: 12 },
+  desktopSubtitle: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginBottom: 5 },
   section: { marginTop: 24 },
   heading: { fontSize: 23, fontWeight: '700', marginBottom: 14 },
   carousel: { marginHorizontal: -BROWSE_PAGE_INSET },

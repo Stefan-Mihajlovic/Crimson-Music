@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAppSettings } from '@/providers/settings-provider';

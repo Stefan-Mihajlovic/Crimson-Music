@@ -1,6 +1,6 @@
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AuthFieldHandle } from '@/components/auth-field.types';
 import { useVoiceSearch } from '@/hooks/use-voice-search';
@@ -11,10 +11,11 @@ type LiquidSearchFieldProps = {
   onFocusChange?: (focused: boolean) => void;
   placeholder: string;
   value: string;
+  stableLayout?: boolean;
 };
 
 const LiquidSearchField = forwardRef<AuthFieldHandle, LiquidSearchFieldProps>(function LiquidSearchField(
-  { onChangeText, onFocusChange, placeholder, value },
+  { onChangeText, onFocusChange, placeholder, value, stableLayout = false },
   ref,
 ) {
   const { colors } = useAppSettings();
@@ -34,9 +35,31 @@ const LiquidSearchField = forwardRef<AuthFieldHandle, LiquidSearchFieldProps>(fu
     },
   }), [onChangeText]);
 
+  const cancelHidden = stableLayout && !focused && !value;
+  const cancelButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Cancel search"
+      disabled={cancelHidden}
+      onPress={() => {
+        voiceSearch.stop();
+        inputRef.current?.clear();
+        onChangeText('');
+        inputRef.current?.blur();
+      }}
+      style={[styles.cancel, { backgroundColor: colors.controlSurface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
+      <SymbolView name="xmark" size={18} tintColor={colors.text} />
+    </Pressable>
+  );
+
   return (
     <View style={styles.row}>
-      <View style={[styles.field, { backgroundColor: colors.controlSurface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
+      <View
+        onPointerDown={Platform.OS === 'web' ? (event) => {
+          const target = event.target as unknown as HTMLElement;
+          if (!target.closest?.('button, [role="button"]')) inputRef.current?.focus();
+        } : undefined}
+        style={[styles.field, { backgroundColor: colors.controlSurface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
         <SymbolView name="magnifyingglass" size={18} tintColor={colors.text} />
         <TextInput
           ref={inputRef}
@@ -57,22 +80,20 @@ const LiquidSearchField = forwardRef<AuthFieldHandle, LiquidSearchFieldProps>(fu
           style={[styles.input, { color: colors.text }]}
           value={value}
         />
-        <Pressable accessibilityLabel={voiceSearch.listening ? 'Stop voice search' : 'Start voice search'} onPress={() => void voiceSearch.toggle()} style={styles.micButton}>
+        <Pressable accessibilityRole="button" accessibilityLabel={voiceSearch.listening ? 'Stop voice search' : 'Start voice search'} onPress={() => void voiceSearch.toggle()} style={styles.micButton}>
           <SymbolView name={voiceSearch.listening ? 'waveform' : 'mic.fill'} size={voiceSearch.listening ? 19 : 17} tintColor={voiceSearch.listening ? colors.accent : colors.text} />
         </Pressable>
       </View>
-      {focused ? (
-        <Pressable
-          accessibilityLabel="Cancel search"
-          onPress={() => {
-            voiceSearch.stop();
-            inputRef.current?.clear();
-            onChangeText('');
-            inputRef.current?.blur();
-          }}
-          style={[styles.cancel, { backgroundColor: colors.controlSurface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
-          <SymbolView name="xmark" size={18} tintColor={colors.text} />
-        </Pressable>
+      {focused || stableLayout ? (
+        stableLayout ? (
+          <View
+            aria-hidden={cancelHidden}
+            accessibilityElementsHidden={cancelHidden}
+            importantForAccessibility={cancelHidden ? 'no-hide-descendants' : 'auto'}
+            style={[styles.cancelSlot, cancelHidden && styles.hiddenCancel]}>
+            {cancelButton}
+          </View>
+        ) : cancelButton
       ) : null}
     </View>
   );
@@ -86,4 +107,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, height: 46, fontSize: 15 },
   micButton: { width: 32, height: 42, alignItems: 'center', justifyContent: 'center' },
   cancel: { width: 46, height: 46, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderRadius: 23 },
+  cancelSlot: { width: 46, height: 46, flexShrink: 0 },
+  hiddenCancel: { opacity: 0 },
 });

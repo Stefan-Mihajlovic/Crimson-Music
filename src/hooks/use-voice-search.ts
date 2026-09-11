@@ -2,8 +2,9 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
-import { useCallback, useEffect, useId, useState } from 'react';
-import { Alert } from 'react-native';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Platform } from 'react-native';
+import { Alert } from '@/services/alert';
 
 let activeVoiceSession: string | null = null;
 
@@ -16,6 +17,8 @@ export function useVoiceSearch({
 }) {
   const sessionId = useId();
   const [listening, setListening] = useState(false);
+  const mounted = useRef(true);
+  const requesting = useRef(false);
 
   useSpeechRecognitionEvent('start', () => {
     if (activeVoiceSession === sessionId) setListening(true);
@@ -39,10 +42,14 @@ export function useVoiceSearch({
     activeVoiceSession = null;
   });
 
-  useEffect(() => () => {
-    if (activeVoiceSession !== sessionId) return;
-    activeVoiceSession = null;
-    ExpoSpeechRecognitionModule.abort();
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (activeVoiceSession !== sessionId) return;
+      activeVoiceSession = null;
+      ExpoSpeechRecognitionModule.abort();
+    };
   }, [sessionId]);
 
   const stop = useCallback(() => {
@@ -55,19 +62,29 @@ export function useVoiceSearch({
       stop();
       return;
     }
-    if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
-      Alert.alert('Voice search is unavailable', 'Enable Siri & Dictation in Settings and try again.');
-      return;
-    }
-    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Voice search needs permission', 'Allow microphone and speech recognition access in Settings.');
-      return;
-    }
-    activeVoiceSession = sessionId;
-    setListening(true);
-    onBegin?.();
+    if (requesting.current) return;
+    requesting.current = true;
     try {
+      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        Alert.alert('Voice search is unavailable', Platform.select({
+          ios: 'Enable Siri & Dictation in Settings and try again.',
+          android: 'Enable a speech recognition service, such as the Google app, in your device settings. You can also type your search.',
+          default: 'This browser does not support speech recognition. Try a supported browser or type your search.',
+        }));
+        return;
+      }
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!mounted.current) return;
+      if (!permission.granted) {
+        Alert.alert('Voice search needs permission', Platform.OS === 'web'
+          ? 'Allow microphone access for this site in your browser settings.'
+          : 'Allow microphone and speech recognition access in Settings.');
+        return;
+      }
+      if (activeVoiceSession && activeVoiceSession !== sessionId) ExpoSpeechRecognitionModule.abort();
+      activeVoiceSession = sessionId;
+      setListening(true);
+      onBegin?.();
       ExpoSpeechRecognitionModule.start({
         addsPunctuation: false,
         continuous: false,
@@ -75,9 +92,12 @@ export function useVoiceSearch({
         iosTaskHint: 'search',
       });
     } catch {
-      activeVoiceSession = null;
+      if (activeVoiceSession === sessionId) activeVoiceSession = null;
+      if (!mounted.current) return;
       setListening(false);
       Alert.alert('Voice search is unavailable', 'Please try again.');
+    } finally {
+      requesting.current = false;
     }
   }, [listening, onBegin, sessionId, stop]);
 

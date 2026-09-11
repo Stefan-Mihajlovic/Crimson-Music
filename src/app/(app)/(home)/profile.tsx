@@ -1,11 +1,10 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { SymbolView, SymbolViewProps } from 'expo-symbols';
+import { SymbolView, SymbolViewProps } from '@/components/app-symbol';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Pressable,
   RefreshControl,
@@ -15,6 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Alert } from '@/services/alert';
 import Animated, {
   Extrapolation,
   FadeIn,

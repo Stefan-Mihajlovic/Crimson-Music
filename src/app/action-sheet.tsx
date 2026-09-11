@@ -1,19 +1,23 @@
+import ResponsivePopup from '@/components/responsive-popup';
+import { POPUP_CLOSE_CLEARANCE, POPUP_DESKTOP_INSET, POPUP_MOBILE_INSET } from '@/components/popup-layout';
 import { Image } from 'expo-image';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { SFSymbol } from 'sf-symbols-typescript';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   InteractionManager,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { Alert } from '@/services/alert';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/providers/auth-provider';
@@ -21,7 +25,7 @@ import PlaylistCover from '@/components/playlist-cover';
 import { DownloadError, useDownloads } from '@/providers/download-provider';
 import { usePlayer } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
-import { useDetailRoutes } from '@/services/action-sheet';
+import { getActionSheetAnchor, releaseWebNavigationFocus, useDetailRoutes } from '@/services/action-sheet';
 import { getAudiusTrack } from '@/services/audius';
 import {
   CrimsonCollectionField,
@@ -38,10 +42,19 @@ import {
 import { requestLibraryRefresh, requestPlayerCollapse } from '@/services/navigation-events';
 
 type SheetType = 'song' | 'artist' | 'playlist';
+const DesktopActionsContext = createContext(false);
 
 export default function ActionSheetScreen() {
   const router = useRouter();
+  const dismissSheet = (count = 1) => {
+    releaseWebNavigationFocus();
+    if (router.canGoBack()) router.dismiss(count);
+    else router.replace('/');
+  };
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
+  const popupInset = desktop ? POPUP_DESKTOP_INSET : POPUP_MOBILE_INSET;
   const { artistHref, playlistHref } = useDetailRoutes();
   const { user } = useAuth();
   const downloads = useDownloads();
@@ -60,6 +73,7 @@ export default function ActionSheetScreen() {
   }>();
   const type = (params.type || 'song') as SheetType;
   const id = String(params.id || '');
+  const [anchor] = useState(() => Platform.OS === 'web' ? getActionSheetAnchor(id) : null);
   const title = String(params.title || 'Crimson Music');
   const subtitle = String(params.subtitle || '');
   // Expo Router decodes escaped separators inside artwork URLs.
@@ -80,6 +94,7 @@ export default function ActionSheetScreen() {
   const [queueFeedback, setQueueFeedback] = useState('');
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [playlists, setPlaylists] = useState<CrimsonPlaylist[]>([]);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false);
   const [playlistSelections, setPlaylistSelections] = useState<
     Record<string, boolean>
   >({});
@@ -202,7 +217,7 @@ export default function ActionSheetScreen() {
     requestPlayerCollapse();
     // On web the full player is a root modal underneath this sheet; on
     // native it is an in-place overlay controlled by the tab layout.
-    router.dismiss(params.playerPresentation === 'modal' ? 2 : 1);
+    dismissSheet(params.playerPresentation === 'modal' ? 2 : 1);
     setTimeout(
       () => router.push(artistHref(targetArtistId)),
       reduceMotion ? 0 : 120,
@@ -219,7 +234,7 @@ export default function ActionSheetScreen() {
           : (await loadPlaylistDetail(id, user?.uid, false, source)).songs;
       if (!songs.length) throw new Error('There are no songs to play.');
       playSong(songs[0], songs, title, type === 'playlist' ? id : '');
-      router.dismiss();
+      dismissSheet();
     } catch {
       Alert.alert(
         'Nothing to play',
@@ -231,7 +246,7 @@ export default function ActionSheetScreen() {
   };
 
   const openDetail = () => {
-    router.dismiss();
+    dismissSheet();
     setTimeout(
       () =>
         router.push(
@@ -246,6 +261,7 @@ export default function ActionSheetScreen() {
   const openPlaylistPicker = async () => {
     if (!user?.uid) return;
     setShowPlaylists(true);
+    setLoadingPlaylists(true);
     try {
       const library = await loadLibraryFeed(user.uid, { selectedTrackId: id });
       setPlaylists(library.playlists);
@@ -259,11 +275,13 @@ export default function ActionSheetScreen() {
       );
     } catch {
       Alert.alert('Could not load playlists', 'Please try again.');
+    } finally {
+      setLoadingPlaylists(false);
     }
   };
 
   const openCreatePlaylist = () => {
-    router.dismiss();
+    dismissSheet();
     setTimeout(
       () => {
         router.navigate(
@@ -334,7 +352,7 @@ export default function ActionSheetScreen() {
     try {
       const detail = await loadPlaylistDetail(id, user?.uid, false, source);
       if (!detail.songs.length) throw new Error('This playlist has no songs.');
-      router.dismiss();
+      dismissSheet();
       void downloads
         .downloadSongs(detail.songs, 'manual', `playlist:${detail.playlist.id}`)
         .then((result) => {
@@ -377,13 +395,19 @@ export default function ActionSheetScreen() {
   );
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.elevated }]}>
+    <ResponsivePopup
+      label={showPlaylists ? 'Add to playlist' : `${type} actions`}
+      anchor={anchor}
+      expanded={showPlaylists}
+      onDismiss={() => dismissSheet()}>
+    <DesktopActionsContext.Provider value={desktop}>
+    <View style={[styles.screen, Platform.OS === 'web' && styles.webScreen, showPlaylists && styles.flex, { backgroundColor: Platform.OS === 'ios' ? colors.elevated : 'transparent' }]}>
       {showPlaylists ? (
         <View style={styles.flex}>
-          <View style={styles.pickerHeader}>
+          <View style={[styles.pickerHeader, Platform.OS === 'web' && [styles.webPickerHeader, { paddingVertical: popupInset, paddingHorizontal: popupInset, paddingRight: popupInset + POPUP_CLOSE_CLEARANCE }]]}>
             <Pressable
               onPress={() => setShowPlaylists(false)}
-              style={styles.headerButton}
+              style={[styles.headerButton, Platform.OS === 'web' && styles.webHeaderButton]}
             >
               <SymbolView
                 name="chevron.left"
@@ -399,17 +423,17 @@ export default function ActionSheetScreen() {
                 Back
               </Text>
             </Pressable>
-            <Text style={[styles.pickerTitle, { color: colors.text }]}>
+            <Text style={[styles.pickerTitle, Platform.OS === 'web' && styles.webPickerTitle, { color: colors.text }]}>
               Add to playlist
             </Text>
-            <Pressable
-              onPress={() => router.dismiss()}
+            {Platform.OS !== 'web' ? <Pressable
+              onPress={() => dismissSheet()}
               style={styles.headerButton}
             >
               <Text style={[styles.doneText, { color: colors.accent }]}>
                 Done
               </Text>
-            </Pressable>
+            </Pressable> : null}
           </View>
           <FlatList
             contentContainerStyle={styles.playlistList}
@@ -424,7 +448,7 @@ export default function ActionSheetScreen() {
               />
             }
             ListEmptyComponent={
-              <Text style={[styles.empty, { color: colors.secondaryText }]}>
+              loadingPlaylists ? <ActivityIndicator color={colors.accent} style={styles.empty} /> : <Text style={[styles.empty, { color: colors.secondaryText }]}>
                 You don&apos;t have a playlist yet.
               </Text>
             }
@@ -442,18 +466,21 @@ export default function ActionSheetScreen() {
         </View>
       ) : (
         <ScrollView
-          style={styles.flex}
+          style={Platform.OS === 'web' ? styles.webScroll : styles.flex}
           contentContainerStyle={[
             styles.actions,
-            { paddingBottom: insets.bottom + 20 },
+            Platform.OS === 'web' && styles.webActions,
+            desktop && styles.desktopActions,
+            { paddingBottom: desktop ? 8 : insets.bottom + 20 },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.itemHeader}>
+          <View style={[styles.itemHeader, desktop && styles.desktopItemHeader, Platform.OS === 'web' && { minHeight: 0, padding: popupInset, paddingHorizontal: popupInset, paddingRight: popupInset + POPUP_CLOSE_CLEARANCE }]}>
             <View
               style={[
                 styles.itemArtwork,
+                desktop && styles.desktopItemArtwork,
                 type === 'artist' && styles.roundArtwork,
               ]}
             >
@@ -485,7 +512,7 @@ export default function ActionSheetScreen() {
             <View style={styles.itemCopy}>
               <Text
                 numberOfLines={1}
-                style={[styles.itemTitle, { color: colors.text }]}
+                style={[styles.itemTitle, desktop && styles.desktopItemTitle, { color: colors.text }]}
               >
                 {title}
               </Text>
@@ -562,7 +589,7 @@ export default function ActionSheetScreen() {
               onPress={() => void openPlaylistPicker()}
             />
           ) : null}
-          {type === 'song' ? (
+          {type === 'song' && downloads.supported ? (
             <ActionRow
               disabled={downloadStatus.disabled}
               icon={downloadStatus.icon}
@@ -573,7 +600,7 @@ export default function ActionSheetScreen() {
               onPress={() => void toggleSongOffline()}
             />
           ) : null}
-          {type === 'playlist' ? (
+          {type === 'playlist' && downloads.supported ? (
             <ActionRow
               disabled={working}
               icon="icloud.and.arrow.down"
@@ -584,6 +611,8 @@ export default function ActionSheetScreen() {
         </ScrollView>
       )}
     </View>
+    </DesktopActionsContext.Provider>
+    </ResponsivePopup>
   );
 }
 
@@ -655,6 +684,8 @@ const ActionRow = memo(function ActionRow({
   selected?: boolean;
 }) {
   const { colors } = useAppSettings();
+  const desktop = useContext(DesktopActionsContext);
+  const [hovered, setHovered] = useState(false);
   const contentColor = selected
     ? colors.accent
     : muted
@@ -662,11 +693,18 @@ const ActionRow = memo(function ActionRow({
       : colors.text;
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
       style={({ pressed }) => [
         styles.row,
+        Platform.OS === 'web' && !desktop && styles.webMobileRow,
+        desktop && styles.desktopRow,
         pressed && styles.rowPressed,
+        desktop && (pressed || hovered) && { backgroundColor: colors.controlSurface },
         disabled && styles.disabled,
       ]}
     >
@@ -679,18 +717,18 @@ const ActionRow = memo(function ActionRow({
       ) : (
         <SymbolView
           name={icon}
-          size={23}
-          style={styles.rowIcon}
+          size={desktop ? 19 : 23}
+          style={desktop ? styles.desktopRowIcon : styles.rowIcon}
           tintColor={contentColor}
         />
       )}
       <Text
         numberOfLines={1}
-        style={[styles.rowLabel, { color: contentColor }]}
+        style={[styles.rowLabel, desktop && styles.desktopRowLabel, { color: contentColor }]}
       >
         {label}
       </Text>
-      <SymbolView name="chevron.right" size={13} tintColor={colors.mutedText} />
+      {!desktop ? <SymbolView name="chevron.right" size={13} tintColor={colors.mutedText} /> : null}
     </Pressable>
   );
 });
@@ -707,6 +745,7 @@ const PlaylistPickerRow = memo(function PlaylistPickerRow({
   selected?: boolean;
 }) {
   const { colors } = useAppSettings();
+  const desktop = useContext(DesktopActionsContext);
   const contentColor = selected ? colors.accent : colors.text;
   return (
     <Pressable
@@ -716,6 +755,8 @@ const PlaylistPickerRow = memo(function PlaylistPickerRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
+        Platform.OS === 'web' && !desktop && styles.webMobileRow,
+        desktop && styles.desktopPlaylistRow,
         pressed && styles.rowPressed,
         disabled && styles.disabled,
       ]}
@@ -728,7 +769,7 @@ const PlaylistPickerRow = memo(function PlaylistPickerRow({
       />
       <Text
         numberOfLines={1}
-        style={[styles.rowLabel, { color: contentColor }]}
+        style={[styles.rowLabel, desktop && styles.desktopRowLabel, { color: contentColor }]}
       >
         {playlist.title}
       </Text>
@@ -743,6 +784,21 @@ const PlaylistPickerRow = memo(function PlaylistPickerRow({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, overflow: 'hidden' },
+  webScreen: { flexGrow: 0, flexShrink: 1, flexBasis: 'auto', minHeight: 0 },
+  webScroll: { flexGrow: 0, flexShrink: 1, flexBasis: 'auto', minHeight: 0 },
+  webActions: { paddingTop: 0 },
+  webMobileRow: { paddingHorizontal: POPUP_MOBILE_INSET },
+  webPickerHeader: { height: 'auto', minHeight: 0, gap: 10 },
+  webHeaderButton: { minWidth: 54, height: 27 },
+  webPickerTitle: { flex: 1, fontSize: 15 },
+  desktopActions: { flexGrow: 0, paddingTop: 0 },
+  desktopItemHeader: { gap: 11 },
+  desktopItemArtwork: { width: 42, height: 42, borderRadius: 9 },
+  desktopItemTitle: { fontSize: 14, fontWeight: '700' },
+  desktopRow: { minHeight: 40, marginHorizontal: 5, borderRadius: 8, gap: 10, paddingHorizontal: 11, borderBottomWidth: 0 },
+  desktopPlaylistRow: { minHeight: 60, marginHorizontal: 5, paddingHorizontal: 11, borderBottomWidth: 0, borderRadius: 8 },
+  desktopRowIcon: { width: 23, height: 23 },
+  desktopRowLabel: { fontSize: 13, fontWeight: '500' },
   flex: { flex: 1 },
   actions: { flexGrow: 1, paddingTop: 8 },
   itemHeader: {

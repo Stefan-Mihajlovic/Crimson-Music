@@ -1,10 +1,11 @@
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useRouter } from 'expo-router';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import PlayerDetailsTabs from '@/components/player-details-tabs';
+import { POPUP_CLOSE_CLEARANCE, POPUP_MOBILE_INSET } from '@/components/popup-layout';
 import ReorderableQueue, { type QueueEntry } from '@/components/reorderable-queue';
 import { PlayerDetailsTab } from '@/components/player-details-tabs.types';
 import NowPlayingArtwork from '@/components/now-playing-artwork';
@@ -52,7 +53,7 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
     }).slice(queueIndex + 1);
   }, [queue, queueIndex]);
 
-  if (!currentSong) return <ScrollView style={styles.list}><Text style={[styles.empty, { color: colors.secondaryText }]}>Choose a song to start your queue.</Text></ScrollView>;
+  if (!currentSong) return <ScrollView style={styles.list}><Text style={[styles.empty, Platform.OS === 'web' && { paddingRight: POPUP_MOBILE_INSET + POPUP_CLOSE_CLEARANCE }, { color: colors.secondaryText }]}>Choose a song to start your queue.</Text></ScrollView>;
 
   // iOS sizes a direct ScrollView child of its native sheet content wrapper.
   // Keep all header content inside that list and avoid native View ancestors.
@@ -155,14 +156,14 @@ function SongRowContent({ song, onPlay, subtitle, active = false, playing = fals
   </Pressable>;
 }
 const styles = StyleSheet.create({
-  list: { flex: 1 }, sourceBlock: { paddingHorizontal: 22, paddingTop: 12, paddingBottom: 13, flexDirection: 'row', alignItems: 'center' },
+  list: { flex: 1 }, sourceBlock: { paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 22, paddingTop: 12, paddingBottom: 13, flexDirection: 'row', alignItems: 'center' },
   overline: { fontSize: 13 }, source: { marginTop: 3, fontSize: 20, fontWeight: '800' },
-  section: { fontSize: 11, fontWeight: '700', letterSpacing: 1, paddingHorizontal: 22, paddingTop: 14, paddingBottom: 8 },
-  row: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 10 },
+  section: { fontSize: 11, fontWeight: '700', letterSpacing: 1, paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 22, paddingTop: 14, paddingBottom: 8 },
+  row: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 18, paddingVertical: 10 },
   rowCopy: { flex: 1, minWidth: 0 }, rowTitle: { fontSize: 15, fontWeight: '700' }, rowSubtitle: { marginTop: 2, fontSize: 13 },
   queueRow: { flex: 1, flexDirection: 'row', alignItems: 'center' }, rowControl: { width: 42, minHeight: 60, alignItems: 'center', justifyContent: 'center' },
-  textButton: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }, relatedRow: { paddingHorizontal: 22, paddingVertical: 7 },
+  textButton: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }, relatedRow: { paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 22, paddingVertical: 7 },
   queueFooter: { paddingHorizontal: 20, paddingTop: 16, gap: 8 }, footerRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  emptyQueue: { fontSize: 14, paddingVertical: 14 }, editHint: { fontSize: 12, lineHeight: 17, paddingHorizontal: 22, paddingBottom: 10 },
-  loader: { marginTop: 70 }, empty: { padding: 24, fontSize: 15 }, error: { padding: 24, alignItems: 'center' },
+  emptyQueue: { fontSize: 14, paddingVertical: 14 }, editHint: { fontSize: 12, lineHeight: 17, paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 22, paddingBottom: 10 },
+  loader: { marginTop: 70 }, empty: { padding: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 24, fontSize: 15 }, error: { padding: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 24, alignItems: 'center' },
 });

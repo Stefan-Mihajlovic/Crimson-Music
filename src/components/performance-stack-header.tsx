@@ -1,22 +1,27 @@
+import { FrostedBackdrop, FrostedLayer } from '@/components/frosted-surface';
 import type { NativeStackHeaderProps } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SymbolView } from '@/components/app-symbol';
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppSettings } from '@/providers/settings-provider';
+import { releaseWebNavigationFocus } from '@/services/navigation-focus';
 
 // iOS 26 system navigation controls keep their glass even with blurEffect="none".
-// This header is only mounted in Performance Mode; normal navigation stays native.
+// Android/web share this header with frosted controls; Performance Mode is opaque.
 export default function PerformanceStackHeader({ back, navigation, options, route }: NativeStackHeaderProps) {
   const { colors } = useAppSettings();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const canGoBack = Boolean(back);
   const tintColor = options.headerTintColor || colors.text;
   const title = typeof options.headerTitle === 'string' ? options.headerTitle : options.title || route.name;
 
   return (
-    <View style={{ paddingTop: insets.top, backgroundColor: colors.background }}>
-      <View style={styles.bar}>
+    <FrostedLayer style={{ paddingTop: insets.top }} background={<View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />}>
+
+      <FrostedBackdrop radius={0} solidColor={colors.background} />
+      <View style={[styles.bar, Platform.OS === 'web' && { minHeight: 64, paddingVertical: 12, paddingHorizontal: width >= 960 ? 24 : 20 }]}>
         <View style={styles.action}>
           {options.headerLeft
             ? options.headerLeft({ canGoBack, tintColor, label: back?.title })
@@ -25,8 +30,9 @@ export default function PerformanceStackHeader({ back, navigation, options, rout
                 accessibilityLabel="Go back"
                 accessibilityRole="button"
                 hitSlop={8}
-                onPress={() => navigation.goBack()}
-                style={({ pressed }) => [styles.back, { backgroundColor: colors.surface }, pressed && styles.pressed]}>
+                onPress={() => { releaseWebNavigationFocus(); navigation.goBack(); }}
+                style={({ pressed }) => [styles.back, { backgroundColor: 'transparent' }, pressed && styles.pressed]}>
+                <FrostedBackdrop radius={20} solidColor={colors.surface} />
                 <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} size={20} tintColor={tintColor} />
               </Pressable>
             ) : null}
@@ -38,7 +44,7 @@ export default function PerformanceStackHeader({ back, navigation, options, rout
         </View>
         <View style={[styles.action, styles.right]}>{options.headerRight?.({ canGoBack, tintColor })}</View>
       </View>
-    </View>
+    </FrostedLayer>
   );
 }
 

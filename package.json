@@ -25,33 +25,34 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
-    "@expo/ui": "~57.0.17",
+    "@expo/ui": "~57.0.18",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@sentry/react-native": "~7.11.0",
-    "expo": "~57.0.21",
+    "expo": "~57.0.22",
     "expo-asset": "~57.0.16",
-    "expo-audio": "~57.0.4",
-    "expo-auth-session": "~57.0.11",
+    "expo-audio": "~57.0.5",
+    "expo-auth-session": "~57.0.12",
+    "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.6",
-    "expo-device": "~57.0.1",
+    "expo-device": "~57.0.2",
     "expo-file-system": "~57.0.1",
     "expo-font": "~57.0.1",
-    "expo-glass-effect": "~57.0.2",
-    "expo-image": "~57.0.4",
-    "expo-image-picker": "~57.0.16",
-    "expo-linear-gradient": "~57.0.1",
-    "expo-linking": "~57.0.9",
-    "expo-router": "~57.0.20",
-    "expo-secure-store": "~57.0.3",
+    "expo-glass-effect": "~57.0.3",
+    "expo-image": "~57.0.5",
+    "expo-image-picker": "~57.0.17",
+    "expo-linear-gradient": "~57.0.2",
+    "expo-linking": "~57.0.10",
+    "expo-router": "~57.0.21",
+    "expo-secure-store": "~57.0.4",
     "expo-speech-recognition": "^56.0.1",
-    "expo-splash-screen": "~57.0.8",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
-    "expo-symbols": "~57.0.2",
-    "expo-system-ui": "~57.0.3",
-    "expo-web-browser": "~57.0.2",
+    "expo-symbols": "~57.0.3",
+    "expo-system-ui": "~57.0.4",
+    "expo-web-browser": "~57.0.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -65,6 +66,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.0",
     "@types/react-test-renderer": "^19.1.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
@@ -74,7 +76,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "test": "npm run test:unit && npm run test:integration",
+    "test": "npm run test:unit && npm run test:integration && npm run test:platforms",
     "test:integration": "jest --runInBand",
     "test:unit": "node --test tests/*.test.mjs",
     "postinstall": "node scripts/fix-expo-ios-paths.js",
@@ -86,7 +88,10 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint"
+    "check": "npm run typecheck && npm run lint",
+    "test:platforms": "jest --config jest.platforms.config.js --runInBand",
+    "android:device": "expo run:android --device --variant release",
+    "android:device:dev": "expo run:android --device"
   },
   "overrides": {
     "qs": "^6.16.0",
@@ -97,7 +102,10 @@
   "expo": {
     "autolinking": {
       "android": {
-        "buildFromSource": ["expo-audio"]
+        "buildFromSource": [
+          "expo-audio",
+          "expo-blur"
+        ]
       }
     }
   },

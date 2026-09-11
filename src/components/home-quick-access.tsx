@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
+import ArtworkImage from '@/components/artwork-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import PlaylistCover from '@/components/playlist-cover';
 import { useAuth } from '@/providers/auth-provider';
 import { useDownloads } from '@/providers/download-provider';
@@ -26,9 +27,13 @@ export default function HomeQuickAccess() {
 
 function AccountQuickAccess({ uid }: { uid?: string }) {
   const { colors } = useAppSettings();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
+  const [contentWidth, setContentWidth] = useState(0);
+  const [hovered, setHovered] = useState('');
   const { isOffline } = useNetwork();
   const { playSong } = usePlayer();
-  const { downloadedSongs } = useDownloads();
+  const { downloadedSongs, supported: downloadsSupported } = useDownloads();
   const routes = useDetailRoutes();
   const router = useRouter();
   const [recent, setRecent] = useState<CrimsonSong[]>([]);
@@ -56,16 +61,20 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
     ...available,
   ].slice(0, 3);
   const fallbackShortcuts = [
-    { title: 'Downloads', icon: 'arrow.down.circle' as const, onPress: () => router.push('/downloads') },
+    downloadsSupported
+      ? { title: 'Downloads', icon: 'arrow.down.circle' as const, onPress: () => router.push('/downloads') }
+      : { title: 'Search', icon: 'magnifyingglass' as const, onPress: () => router.push('/(app)/(search)/search') },
     { title: 'Recently played', icon: 'clock' as const, onPress: () => router.push(routes.historyHref()) },
     { title: 'Your library', icon: 'square.stack' as const, onPress: () => router.push('/(app)/(library)/library') },
   ];
-  const tileStyle = [styles.tile, { backgroundColor: colors.controlSurface, borderColor: colors.border }];
+  const tileStyle = (key: string) => [styles.tile, { backgroundColor: colors.controlSurface, borderColor: colors.border },
+    desktop && [styles.desktopTile, { width: contentWidth >= 780 ? '24.1%' as const : '48.6%' as const }],
+    desktop && hovered === key && { backgroundColor: colors.accentSoft }];
 
   return (
-    <View style={styles.section}>
+    <View onLayout={({ nativeEvent: { layout } }) => setContentWidth(layout.width)} style={styles.section}>
       <View style={styles.grid}>
-        <Pressable accessibilityRole="button" onPress={() => router.push(routes.favoritesHref())} style={tileStyle}>
+        <Pressable accessibilityRole="button" onPress={() => router.push(routes.favoritesHref())} onHoverIn={() => setHovered('favorites')} onHoverOut={() => setHovered('')} style={tileStyle('favorites')}>
           <Image contentFit="cover" source={require('@/assets/images/onboarding/favorites.webp')} style={styles.smallCover} />
           <Text numberOfLines={2} style={[styles.tileTitle, { color: colors.text }]}>Favorites</Text>
         </Pressable>
@@ -75,11 +84,11 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
             const artist = item.kind === 'artist';
             const title = artist ? item.artist.name : item.playlist.title;
             return (
-              <Pressable key={item.key} accessibilityRole="button" style={tileStyle}
+              <Pressable key={item.key} accessibilityRole="button" onHoverIn={() => setHovered(item.key)} onHoverOut={() => setHovered('')} style={tileStyle(item.key)}
                 onPress={() => router.push(artist
                   ? routes.artistHref(item.artist.id)
                   : routes.playlistHref(item.playlist.id, item.owned, item.playlist.source, item.playlist.title))}>
-                {artist ? <Image contentFit="cover" source={item.artist.imageSmall || item.artist.image
+                {artist ? <ArtworkImage artwork={item.artist.artwork} fallbackSource={require('@/assets/images/home/default-artist.webp')} contentFit="cover" source={item.artist.imageSmall || item.artist.image
                   ? { uri: item.artist.imageSmall || item.artist.image }
                   : require('@/assets/images/home/default-artist.webp')}
                   style={[styles.smallCover, styles.artistCover]} />
@@ -89,15 +98,15 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
             );
           }
           return (
-            <Pressable key={`song:${item.id}`} accessibilityRole="button" style={tileStyle}
+            <Pressable key={`song:${item.id}`} accessibilityRole="button" onHoverIn={() => setHovered(item.id)} onHoverOut={() => setHovered('')} style={tileStyle(item.id)}
               onPress={() => playSong(item, available, isOffline ? 'Downloads' : 'Recently played')}>
-              <Image contentFit="cover" source={{ uri: item.imageSmall || item.image }} style={styles.smallCover} />
+              <ArtworkImage artwork={item.artwork} contentFit="cover" source={{ uri: item.imageSmall || item.image }} style={styles.smallCover} />
               <Text numberOfLines={2} style={[styles.tileTitle, { color: colors.text }]}>{item.title}</Text>
             </Pressable>
           );
         })}
         {fallbackShortcuts.slice(0, 3 - items.length).map((item) => (
-          <Pressable key={item.title} accessibilityRole="button" onPress={item.onPress} style={tileStyle}>
+          <Pressable key={item.title} accessibilityRole="button" onPress={item.onPress} onHoverIn={() => setHovered(item.title)} onHoverOut={() => setHovered('')} style={tileStyle(item.title)}>
             <View style={[styles.smallCover, styles.iconCover, { backgroundColor: colors.accentSoft }]}>
               <SymbolView name={item.icon} size={23} tintColor={colors.accent} />
             </View>
@@ -112,6 +121,7 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
   );
 }
 const styles = StyleSheet.create({
+  desktopTile: { borderRadius: 8, borderWidth: 0, minHeight: 62, gap: 12, padding: 8 },
   section: { gap: 12, marginTop: 16 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 },
   tile: { width: '48.6%', flexDirection: 'row', alignItems: 'center', gap: 9,

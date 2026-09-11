@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import ArtworkImage from '@/components/artwork-image';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
 import { CollectionPlayingOverlay } from '@/components/now-playing-artwork';
@@ -16,7 +17,7 @@ export default function PlaylistCover({
   style,
 }: {
   borderRadius?: number;
-  playlist: Pick<CrimsonPlaylist, 'coverImages' | 'coverImagesSmall' | 'image' | 'imageSmall' | 'title'>;
+  playlist: Pick<CrimsonPlaylist, 'coverImages' | 'coverImagesSmall' | 'image' | 'imageSmall' | 'title' | 'artwork'>;
   preferLarge?: boolean;
   showPlayingIndicator?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -30,12 +31,13 @@ export default function PlaylistCover({
   return (
     <View style={[styles.cover, { borderRadius }, style]}>
       {customCover ? (
-        <Image cachePolicy="memory-disk" contentFit="cover" source={{ uri: customCover }} style={StyleSheet.absoluteFill} />
+        <ArtworkImage artwork={playlist.artwork} fallbackSource={fallbackArtwork} cachePolicy="memory-disk" contentFit="cover" source={{ uri: customCover }} style={StyleSheet.absoluteFill} />
       ) : (
         <>
           <View style={styles.grid}>
             {[0, 1, 2, 3].map((index) => (
-              <Image
+              <ArtworkImage
+                fallbackSource={fallbackArtwork}
                 cachePolicy="memory-disk"
                 key={index}
                 contentFit="cover"

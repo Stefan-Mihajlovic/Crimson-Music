@@ -1,4 +1,7 @@
 import { Href, useRootNavigationState, useSegments } from 'expo-router';
+import { Platform } from 'react-native';
+import { releaseWebNavigationFocus } from '@/services/navigation-focus';
+export { releaseWebNavigationFocus } from '@/services/navigation-focus';
 
 export type AppRouteGroup = '(home)' | '(search)' | '(library)' | '(account)';
 
@@ -14,7 +17,41 @@ export type ActionSheetItem = {
   playerPresentation?: 'overlay' | 'modal';
 };
 
+export type ActionSheetAnchor = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  trigger: HTMLElement;
+};
+
+let webPresentation: { id: string; openedAt: number; anchor: ActionSheetAnchor | null } | null = null;
+
+/** Capture before navigation hides the source screen and moves browser focus. */
+function captureWebPresentation(id: string) {
+  if (Platform.OS !== 'web' || typeof document === 'undefined' || typeof HTMLElement === 'undefined') return;
+  const active = document.activeElement;
+  const trigger = active instanceof HTMLElement
+    ? active.closest<HTMLElement>('button, [role="button"], a, [tabindex="0"]')
+    : null;
+  const bounds = trigger?.getBoundingClientRect();
+  const anchor = trigger && bounds && bounds.width > 0 && bounds.height > 0
+    ? { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom, trigger }
+    : null;
+  webPresentation = { id, openedAt: Date.now(), anchor };
+  // React Navigation marks the underlying scene aria-hidden during presentation.
+  // Release its focused trigger first; the popup restores it when dismissed.
+  releaseWebNavigationFocus();
+}
+
+export function getActionSheetAnchor(id: string): ActionSheetAnchor | null {
+  return webPresentation?.id === id && Date.now() - webPresentation.openedAt < 5000
+    ? webPresentation.anchor
+    : null;
+}
+
 export function actionSheetHref(item: ActionSheetItem) {
+  captureWebPresentation(item.id);
   const { coverImages, ...params } = item;
   return {
     pathname: '/action-sheet',

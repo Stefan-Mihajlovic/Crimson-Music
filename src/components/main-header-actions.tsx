@@ -1,18 +1,28 @@
+import { FrostedBackdrop } from '@/components/frosted-surface';
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { type SharedValue, useAnimatedReaction, useAnimatedStyle } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { useAuth } from '@/providers/auth-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { useDetailRoutes } from '@/services/action-sheet';
+import { releaseWebNavigationFocus } from '@/services/navigation-focus';
 import { getNotificationUnseenCount, loadNotificationsPage, subscribeNotificationUnreadCount } from '@/services/notifications';
 import { expandedHeaderOpacity } from '@/services/main-header-transition';
 
-export default function MainHeaderActions({ visible = true, offset }: { visible?: boolean; offset?: SharedValue<number> }) {
+type MainHeaderActionsProps = { visible?: boolean; offset?: SharedValue<number>; placement?: 'page' | 'toolbar' };
+
+export default function MainHeaderActions(props: MainHeaderActionsProps) {
+  const { width } = useWindowDimensions();
+  if (Platform.OS === 'web' && width >= 960 && props.placement !== 'toolbar') return null;
+  return <HeaderActionsContent {...props} />;
+}
+
+function HeaderActionsContent({ visible = true, offset }: MainHeaderActionsProps) {
   const router = useRouter();
   const { historyHref, notificationsHref } = useDetailRoutes();
   const { user } = useAuth();
@@ -47,14 +57,14 @@ export default function MainHeaderActions({ visible = true, offset }: { visible?
         accessibilityLabel="Open listening history"
         materialVisible={visible && materialVisible}
         offset={offset}
-        onPress={() => router.push(historyHref())}>
+        onPress={() => { releaseWebNavigationFocus(); router.push(historyHref()); }}>
         {historyIcon}
       </HeaderGlassButton>
       <HeaderGlassButton
         accessibilityLabel={accessibilityLabel}
         materialVisible={visible && materialVisible}
         offset={offset}
-        onPress={() => router.push(notificationsHref())}>
+        onPress={() => { releaseWebNavigationFocus(); router.push(notificationsHref()); }}>
         {icon}
       </HeaderGlassButton>
     </View>
@@ -69,7 +79,7 @@ function HeaderGlassButton({ accessibilityLabel, children, materialVisible, offs
   offset?: SharedValue<number>;
   onPress: () => void;
 }) {
-  const { colors, isDark, performanceMode, reduceMotion } = useAppSettings();
+  const { isDark, performanceMode, reduceMotion } = useAppSettings();
   const [laidOut, setLaidOut] = useState(false);
   const glassAvailable = !performanceMode && isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
   const contentOpacity = useAnimatedStyle(() => ({ opacity: offset ? expandedHeaderOpacity(offset.value) : 1 }));
@@ -92,12 +102,7 @@ function HeaderGlassButton({ accessibilityLabel, children, materialVisible, offs
           style={[StyleSheet.absoluteFill, styles.circle]}
         />
       ) : (
-        <View pointerEvents="none" style={[
-          StyleSheet.absoluteFill,
-          styles.circle,
-          styles.fallback,
-          { backgroundColor: colors.elevated, borderColor: colors.border },
-        ]} />
+        <FrostedBackdrop radius={20} />
       )}
       <Animated.View pointerEvents="none" style={[styles.content, contentOpacity]}>{children}</Animated.View>
     </Pressable>

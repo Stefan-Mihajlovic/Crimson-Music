@@ -1,12 +1,14 @@
 import { registerAccountCleanup } from '@/services/account-lifecycle';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Image } from 'expo-image';
+import ArtworkImage from '@/components/artwork-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  Platform,
+  useWindowDimensions,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -71,6 +73,12 @@ const emptyCollection = buildLibraryCollection(emptyFeed, []);
 
 export default function LibraryScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const contentWidth = Math.min(1440, availableWidth || width - 280) - 56;
+  const gridColumns = desktop ? Math.max(3, Math.min(7, Math.floor(contentWidth / 182))) : 2;
+  const gridWidth = desktop ? Math.floor((contentWidth - 16 * (gridColumns - 1)) / gridColumns) : undefined;
   const { artistHref, favoritesHref, playlistHref } = useDetailRoutes();
   const insets = useSafeAreaInsets();
   const headerScroll = useMainHeaderScroll();
@@ -86,7 +94,7 @@ export default function LibraryScreen() {
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [loading, setLoading] = useState(Boolean(uid));
-  const [layout, setLayout] = useState<LibraryLayout>('list');
+  const [layout, setLayout] = useState<LibraryLayout>(desktop ? 'grid' : 'list');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [sort, setSort] = useState<LibrarySort>('recent');
   const [loadError, setLoadError] = useState(false);
@@ -102,14 +110,14 @@ export default function LibraryScreen() {
         } catch {
           /* Restore defaults if corrupt. */
         }
-        setLayout(value?.layout === 'grid' ? 'grid' : 'list');
+        setLayout(value?.layout === 'grid' ? 'grid' : value?.layout === 'list' ? 'list' : desktop ? 'grid' : 'list');
         setSort(value?.sort === 'title' ? 'title' : 'recent');
       })
       .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [preferencesKey]);
+  }, [desktop, preferencesKey]);
   const saveView = (nextLayout: LibraryLayout, nextSort: LibrarySort) => {
     setLayout(nextLayout);
     setSort(nextSort);
@@ -196,7 +204,7 @@ export default function LibraryScreen() {
     [collection, downloads, filter, query, sort, uid],
   );
   const rows = useMemo<LibraryRow[]>(() => {
-    const columns = layout === 'grid' ? 2 : 1;
+    const columns = layout === 'grid' ? gridColumns : 1;
     return Array.from(
       { length: Math.ceil(visible.length / columns) },
       (_, index) => {
@@ -204,7 +212,7 @@ export default function LibraryScreen() {
         return { key: items[0].key, items };
       },
     );
-  }, [layout, visible]);
+  }, [gridColumns, layout, visible]);
 
   const collectionNode = (item: LibraryCollectionItem) => {
     if (item.kind === 'favorites') {
@@ -214,6 +222,8 @@ export default function LibraryScreen() {
           downloadCollectionKey="favorites"
           imageSource={favoritesArtwork}
           layout={layout}
+          desktop={desktop}
+          gridWidth={gridWidth}
           onPress={() => router.push(favoritesHref())}
           subtitle="Simply yours"
           title="Favorites"
@@ -227,6 +237,8 @@ export default function LibraryScreen() {
           key={item.key}
           artist={artist}
           layout={layout}
+          desktop={desktop}
+          gridWidth={gridWidth}
           onPress={() => router.push(artistHref(artist.id))}
           onLongPress={() =>
             router.push(
@@ -249,6 +261,8 @@ export default function LibraryScreen() {
       <LibraryItem
         key={item.key}
         layout={layout}
+        desktop={desktop}
+        gridWidth={gridWidth}
         onPress={() =>
           router.push(
             playlistHref(playlist.id, owned, playlist.source, playlist.title),
@@ -275,9 +289,10 @@ export default function LibraryScreen() {
   };
 
   return (
-    <MainScreenBackground>
+    <MainScreenBackground overlay={<MainHeaderOverlay title="Library" offset={headerScroll.offset} />}>
       <MainNativeHeader offset={headerScroll.offset} title="Library" />
       <AnimatedFlatList
+        onLayout={({ nativeEvent: { layout: bounds } }) => setAvailableWidth(bounds.width)}
         data={loading ? [] : rows}
         keyExtractor={(item) => item.key}
         initialNumToRender={10}
@@ -290,15 +305,16 @@ export default function LibraryScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.content,
+          desktop && styles.desktopContent,
           { paddingTop: insets.top, paddingBottom: insets.bottom + 150 },
         ]}
         ListHeaderComponent={
           <>
-            <MainHeaderSpacer />
-            <View style={styles.headerActions}>
+            <MainHeaderSpacer title="Library" />
+            <View style={[styles.headerActions, desktop && styles.desktopHeaderActions]}>
               <Reanimated.View
                 layout={
-                  reduceMotion || performanceMode
+                  desktop || reduceMotion || performanceMode
                     ? undefined
                     : LinearTransition.duration(220)
                 }
@@ -309,9 +325,10 @@ export default function LibraryScreen() {
                   value={query}
                   onChangeText={setQuery}
                   onFocusChange={setSearchFocused}
+                  stableLayout={desktop}
                 />
               </Reanimated.View>
-              {!searchFocused ? (
+              {desktop || !searchFocused ? (
                 <>
                   <GlassPressable
                     accessibilityLabel={
@@ -362,14 +379,16 @@ export default function LibraryScreen() {
                 </>
               ) : null}
             </View>
-            {!searchFocused ? (
+            {desktop || !searchFocused ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={{ marginHorizontal: -20 }}
                 contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingBottom: 14 }}
               >
-                {(['all', 'playlists', 'artists', 'downloaded'] as const).map(
+                {(['all', 'playlists', 'artists', 'downloaded'] as const).filter(
+                  (value) => downloads.supported || value !== 'downloaded',
+                ).map(
                   (value) => (
                     <Pressable
                       key={value}
@@ -458,7 +477,7 @@ export default function LibraryScreen() {
           <View
             style={
               layout === 'grid'
-                ? [styles.gridItems, { marginBottom: 12 }]
+                ? [styles.gridItems, desktop && styles.desktopGridItems, { marginBottom: 12 }]
                 : { marginBottom: 6 }
             }
           >
@@ -466,13 +485,15 @@ export default function LibraryScreen() {
           </View>
         )}
       />
-      <MainHeaderOverlay title="Library" offset={headerScroll.offset} />
+
     </MainScreenBackground>
   );
 }
 
 function LibraryItem({
   artist,
+  desktop,
+  gridWidth,
   downloadCollectionKey,
   imageSource,
   layout,
@@ -483,6 +504,8 @@ function LibraryItem({
   title,
 }: {
   artist?: CrimsonArtist;
+  desktop?: boolean;
+  gridWidth?: number;
   downloadCollectionKey?: string;
   imageSource?: number;
   layout: LibraryLayout;
@@ -493,6 +516,7 @@ function LibraryItem({
   title: string;
 }) {
   const { colors, reduceMotion } = useAppSettings();
+  const [hovered, setHovered] = useState(false);
   const downloads = useDownloads();
   const sourceName = playlist?.title || artist?.name || title;
   const image = artist?.imageSmall || artist?.image;
@@ -528,7 +552,9 @@ function LibraryItem({
           styles.artworkClip,
         ]}
       >
-        <Image
+        <ArtworkImage
+          artwork={artist?.artwork}
+          fallbackSource={imageSource || (artist ? defaultArtist : defaultArtwork)}
           contentFit="cover"
           source={
             image
@@ -545,15 +571,19 @@ function LibraryItem({
     );
 
   if (layout === 'grid') {
-    return (
+    const card = (
       <Pressable
         accessibilityLabel={`Open ${title}`}
+        onHoverIn={() => setHovered(true)}
+        onHoverOut={() => setHovered(false)}
         accessibilityRole="button"
         delayLongPress={350}
         onLongPress={onLongPress}
         onPress={onPress}
         style={({ pressed }) => [
           styles.gridItem,
+          desktop && [styles.desktopGridItem, { width: gridWidth }],
+          desktop && hovered && { backgroundColor: colors.controlSurface },
           pressed && styles.itemPressed,
           pressed && !reduceMotion && styles.itemPressedScale,
         ]}
@@ -565,7 +595,7 @@ function LibraryItem({
             artist && styles.roundGridArtwork,
           ]}
         >
-          {artwork(artist ? 999 : 18, 48)}
+          {artwork(artist ? 999 : desktop ? 12 : 18, 48)}
           <View
             pointerEvents="none"
             style={[
@@ -588,6 +618,7 @@ function LibraryItem({
             </View>
           ) : null}
         </View>
+
         <View
           pointerEvents="none"
           style={[styles.gridCopy, artist && styles.artistGridCopy]}
@@ -606,6 +637,36 @@ function LibraryItem({
           </Text>
         </View>
       </Pressable>
+    );
+    return desktop ? <View style={{ width: gridWidth, position: 'relative' }}>
+      {card}
+        {onLongPress ? <Pressable
+          accessibilityRole="button" accessibilityLabel={`More options for ${title}`}
+          onPress={(event) => { event.stopPropagation(); onLongPress(); }}
+          style={[styles.desktopMenu, { backgroundColor: colors.elevated }]}>
+          <SymbolView name="ellipsis" size={18} tintColor={colors.text} />
+        </Pressable> : null}
+    </View> : card;
+  }
+
+  if (desktop) {
+    return (
+      <View style={[styles.desktopListRow, hovered && { backgroundColor: colors.controlSurface }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`}
+          onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)}
+          onPress={onPress} onLongPress={onLongPress} style={styles.desktopListMain}>
+          <View style={[styles.listArtwork, artist && styles.roundListArtwork]}>{artwork(artist ? 23 : 9, 34)}</View>
+          <View style={styles.listCopy}>
+            <Text numberOfLines={1} style={[styles.listTitle, { color: colors.text }]}>{title}</Text>
+            <Text numberOfLines={1} style={[styles.listSubtitle, { color: colors.secondaryText }]}>{subtitle}</Text>
+          </View>
+          <Text style={[styles.desktopItemType, { color: colors.secondaryText }]}>{artist ? 'Artist' : 'Playlist'}</Text>
+        </Pressable>
+        {onLongPress ? <Pressable accessibilityRole="button" accessibilityLabel={`More options for ${title}`}
+          onPress={onLongPress} style={styles.desktopListMenu}>
+          <SymbolView name="ellipsis" size={20} tintColor={colors.secondaryText} />
+        </Pressable> : <View style={styles.desktopListMenu} />}
+      </View>
     );
   }
 
@@ -674,6 +735,16 @@ function EmptyLine({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
+  desktopContent: { paddingHorizontal: 28, width: '100%', maxWidth: 1440, alignSelf: 'center' },
+  desktopHeaderActions: { maxWidth: 640, marginBottom: 18 },
+  desktopGridItems: { justifyContent: 'flex-start', columnGap: 16, rowGap: 16 },
+  desktopGridItem: { padding: 8, borderRadius: 12 },
+  desktopMenu: { position: 'absolute', top: 16, right: 16, width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  desktopListRow: { flexDirection: 'row', alignItems: 'center', minHeight: 66, borderRadius: 8, paddingHorizontal: 10 },
+  desktopListMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 8 },
+  desktopItemType: { width: 100, fontSize: 13 },
+  desktopListMenu: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+
   content: { paddingHorizontal: 20 },
   filterPill: {
     minHeight: 36,

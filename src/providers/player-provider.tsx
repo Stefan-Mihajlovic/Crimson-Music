@@ -11,9 +11,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AppState,
-  Alert,
   Platform,
 } from 'react-native';
+import { Alert } from '@/services/alert';
 import {
   createContext,
   PropsWithChildren,

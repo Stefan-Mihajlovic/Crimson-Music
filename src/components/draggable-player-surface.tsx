@@ -1,8 +1,9 @@
+import FrostedSurface from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
-import { GlassView } from 'expo-glass-effect';
+import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/app-symbol';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -341,8 +342,8 @@ function CompactPlayer({
 
   return (
     <Animated.View pointerEvents={expanded ? 'none' : 'auto'} style={[styles.compact, compactAnimatedStyle]}>
-      {performanceMode ? (
-        <View style={[styles.compactInterior, { backgroundColor: colors.elevated, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>{contents}</View>
+      {performanceMode || !isGlassEffectAPIAvailable() || !isLiquidGlassAvailable() ? (
+        <FrostedSurface radius={26} style={styles.compactInterior}>{contents}</FrostedSurface>
       ) : (
         <GlassView
           colorScheme="auto"

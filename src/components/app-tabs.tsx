@@ -1,9 +1,10 @@
+import { FrostedLayer } from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
-import { useSegments } from 'expo-router';
+import { useFocusEffect, useSegments } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { BackHandler, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { cancelAnimation, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -23,7 +24,9 @@ export default function AppTabs() {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors, isDark, performanceMode, reduceMotion } = useAppSettings();
-  const miniBottom = insets.bottom + 55;
+  const customTabs = performanceMode || Platform.OS === 'android';
+  const customTabBottom = Platform.OS === 'android' ? insets.bottom + 8 : Math.max(8, insets.bottom - 8);
+  const miniBottom = customTabs ? customTabBottom + 62 + 8 : insets.bottom + 55;
   const defaultCollapsedTop = Math.max(1, height - miniBottom - MINI_PLAYER_HEIGHT);
   const collapsedTopRef = useRef(defaultCollapsedTop);
   const playerPosition = useSharedValue(defaultCollapsedTop);
@@ -80,6 +83,15 @@ export default function AppTabs() {
 
   useEffect(() => subscribeToPlayerCollapse(collapse), [collapse]);
 
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== 'android' || !expanded) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      collapse();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [collapse, expanded]));
+
   const handleSearchTap = () => {
     if (routeGroup === '(search)') requestSearchFocus();
   };
@@ -87,8 +99,8 @@ export default function AppTabs() {
   return (
     <PlayerOverlayVisibilityProvider visible={expanded} position={playerPosition}>
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <NativeTabs
-        hidden={performanceMode}
+      <FrostedLayer style={styles.screen} background={<NativeTabs
+        hidden={customTabs}
         backgroundColor={isDark ? 'rgba(17,14,23,0.86)' : 'rgba(255,255,255,0.82)'}
         blurEffect={isDark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
         disableTransparentOnScrollEdge
@@ -130,8 +142,8 @@ export default function AppTabs() {
           <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon src={accountIcon} renderingMode="original" />
         </NativeTabs.Trigger>
-      </NativeTabs>
-      {performanceMode ? <PerformanceTabs /> : null}
+      </NativeTabs>}>
+      {customTabs ? <PerformanceTabs bottom={customTabBottom} /> : null}
       <DraggablePlayerSurface
         collapsedTop={collapsedTop}
         expanded={expanded}
@@ -141,6 +153,7 @@ export default function AppTabs() {
         onExpand={expand}
         position={playerPosition}
       />
+      </FrostedLayer>
     </View>
     </PlayerOverlayVisibilityProvider>
   );
