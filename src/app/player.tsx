@@ -27,6 +27,11 @@ import DesktopPlayer from '@/components/desktop-player';
 import WebPlayerSeek from '@/components/web-player-seek';
 import MobilePlayerSurface from '@/components/mobile-player-surface';
 
+// React Native Web supports this CSS property; native ViewStyle omits it.
+const webPlayerDragStyle: ViewStyle & { touchAction: 'none' } = {
+  touchAction: 'none',
+};
+
 const playerPalette = {
   accent: '#A66BFF',
   muted: 'rgba(255,255,255,0.66)',
@@ -140,7 +145,7 @@ export function PlayerContent({
   return (
     <View style={styles.screen}>
       <View style={[styles.content, { paddingTop: Math.max(insets.top, 18), paddingBottom: Math.max(insets.bottom, 18) }]}>
-        <Animated.View testID="player-drag-header" style={[styles.topBar, Platform.OS === 'web' && { touchAction: 'none' }, topBarAnimatedStyle]}>
+        <Animated.View testID="player-drag-header" style={[styles.topBar, Platform.OS === 'web' && webPlayerDragStyle, topBarAnimatedStyle]}>
           <BouncyPressable accessibilityLabel="Minimize player" accessibilityRole="button" onPress={onClose || (() => router.dismiss())} style={styles.topButton}>
             <SymbolView name="chevron.down" size={20} tintColor={playerPalette.text} weight="bold" />
           </BouncyPressable>
@@ -158,7 +163,7 @@ export function PlayerContent({
         </Animated.View>
 
         <Animated.View style={[styles.playerBody, landscape && styles.landscapeBody, bodyAnimatedStyle]}>
-          <View testID="player-drag-artwork" style={[styles.artworkArea, { height: artworkSize + (landscape ? 32 : 54) }, landscape && { width: artworkSize }, Platform.OS === 'web' && { touchAction: 'none' }, Platform.OS === 'web' && landscape && { overflow: 'hidden' }]}>
+          <View testID="player-drag-artwork" style={[styles.artworkArea, { height: artworkSize + (landscape ? 32 : 54) }, landscape && { width: artworkSize }, Platform.OS === 'web' && webPlayerDragStyle, Platform.OS === 'web' && landscape && { overflow: 'hidden' }]}>
             <View style={[styles.artworkFrame, { width: artworkSize, height: artworkSize }, artworkHidden && styles.artworkPlaceholder]}>
               {!artworkHidden ? (
                 <SwipeableArtwork pageGap={(width - artworkSize) / 2 + 8} size={artworkSize} />
