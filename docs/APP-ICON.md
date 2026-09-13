@@ -31,4 +31,6 @@ The [platform exporter](../design/icon-exploration/scripts/export-platform-asset
 
 Keep `.icon` in `ios.icon` and an opaque PNG in the root `icon` setting. Regenerate native resources with Expo after configuration changes, and run `node scripts/fix-expo-ios-paths.js` after the final iOS prebuild. Clean prebuilds recreate the native project, so preserve the existing bundle identifier and supply local signing settings separately. Re-export the web app to refresh its bundled logo and favicon.
 
+Building this Icon Composer 2.0 document requires Xcode 27 or newer because its `refractivity` feature is not supported by Xcode 26.6. CI uses the `xcode-27` runner and performs a real `actool` icon compilation before the full application build. Merely reading asset tags does not detect the incompatible older compiler.
+
 The selected document passed isolated Xcode 27 asset compilation for an iPhone target with minimum iOS 16.4, including valid light, dark, and tintable icon stacks. Full application builds, installation, and device appearance are separate verification steps; asset validation alone does not establish them.

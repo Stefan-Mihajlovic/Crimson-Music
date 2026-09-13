@@ -91,12 +91,27 @@ jobs:
           retention-days: 7
 
   ios-build:
-    runs-on: macos-26
+    # The layered Sonata icon uses Icon Composer 2 / Xcode 27 materials.
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Verify Xcode and compile the layered app icon
+        run: |
+          xcode_version="$(xcodebuild -version)"
+          printf '%s\n' "$xcode_version"
+          if [[ "$xcode_version" != "Xcode 27."* ]]; then
+            echo "::error::The layered app icon requires the Xcode 27 runner."
+            exit 1
+          fi
+          mkdir -p .build/icon-check
+          xcrun actool assets/Crimson.icon --compile .build/icon-check \
+            --output-format human-readable-text --notices --warnings \
+            --output-partial-info-plist .build/icon-check/icon-info.plist \
+            --app-icon Crimson --compress-pngs --target-device iphone \
+            --minimum-deployment-target 16.4 --platform iphoneos
       - uses: actions/setup-node@v7
         with:
           node-version: 24

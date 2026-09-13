@@ -16,7 +16,7 @@ Crimson uses Expo 57 and React Native and supports iOS, Android, and web. The co
 | Offline downloads | Native implementation | Native downloads; offline device playback validated | Unsupported |
 | Voice search | OS speech recognition | Device/service dependent | Browser dependent |
 
-Frosted surfaces retain the original light/dark background colors and corner shapes, with 80% background opacity and backdrop blur. They add no gradients, highlights, or borders. Navigation, mini players, Vault and preferences controls, header actions, and segmented selections use frosted backdrops; menus and queue sheets also blur the underlying scene. Ordinary content rows keep their existing styling. Performance Mode removes blur and uses opaque surfaces on every platform.
+Navigation, mini players, menus, and queue sheets use frosted backdrops. Vault actions use a darker blurred surface with a light border; main-page header actions display bare icons. Welcome and onboarding primary actions use white fills. Performance Mode removes blur and uses opaque surfaces on every platform.
 
 Android uses `expo-blur` with separate `BlurTargetView` layers, including the legacy RenderScript path for Android 7–11. This provides actual blur on the Moto G5 Plus; it costs more GPU/CPU work than the Android 12+ path. Targets exclude the controls that sample them to avoid recursive rendering. Web uses `backdrop-filter` and its WebKit counterpart through the same shared material component.
 
@@ -28,7 +28,7 @@ Notifications are loaded from Audius inside the app. This repository does not im
 
 - Node.js 24 and npm; install the lockfile with `npm ci`.
 - A registered Audius application and its public app key, configured using `.env.example`.
-- iOS: macOS, Xcode, its command-line tools, and an appropriate signing setup for physical devices.
+- iOS: macOS, Xcode 27 or newer, its command-line tools, and an appropriate signing setup for physical devices. The layered Sonata icon uses Icon Composer 2.0 refractivity and requires the Xcode 27 asset compiler; this build-tool requirement does not raise the app's deployment target.
 - Android: Android 7.0 (API 24) or newer. Build with JDK 21 and the Android SDK (compile/target SDK 36), including the NDK/CMake versions requested by Gradle. Android Studio can install these tools. Both 32-bit `armeabi-v7a` and 64-bit `arm64-v8a` phones are supported.
 - Web: a modern browser; use HTTPS for a hosted build.
 
@@ -105,6 +105,8 @@ Browser media controls are owned by the web player. Space toggles playback, arro
 ## CI builds
 
 The Quality workflow runs typechecking, lint, unit/integration tests, Android/web behavior tests, static web export, a standalone Android Release build for 32-bit and 64-bit ARM, and unsigned iOS Release compilation. Build jobs require no listener tokens or production signing secrets. The Android artifact uses development signing; builds without a configured public Audius key cannot complete login. Web and Android outputs are short-lived CI artifacts. Runtime device/browser results are recorded separately from compilation.
+
+The iOS job selects GitHub's `xcode-27` runner and compiles the layered icon before preparing CocoaPods. The ordinary `macos-26` runner defaults to Xcode 26.6, whose asset compiler cannot read this Icon Composer 2.0 document.
 
 ## Release validation
 
