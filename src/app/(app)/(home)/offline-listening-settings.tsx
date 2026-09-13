@@ -83,7 +83,7 @@ export default function OfflineListeningSettingsScreen() {
           </View>
         ) : null}
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>AUTOMATION</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Automation</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
           <SettingsToggle
             disabled={controlsDisabled}
@@ -104,7 +104,7 @@ export default function OfflineListeningSettingsScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>STORAGE & MUSIC</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Storage & music</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
           <StorageLimitSlider
             key={downloads.maxBytes}

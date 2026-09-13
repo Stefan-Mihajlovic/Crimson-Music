@@ -1,3 +1,4 @@
+import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { Href, useRouter } from 'expo-router';
@@ -84,7 +85,7 @@ export default function AccountScreen() {
         showsVerticalScrollIndicator={false}>
         <MainHeaderSpacer />
         {(settingsError || accountError) && <View style={[styles.notice, { backgroundColor: colors.accentSoft }]}><Text accessibilityRole="alert" style={{ color: colors.text }}>{accountError || settingsError}</Text>{settingsError && <Pressable accessibilityRole="button" onPress={retrySaveSettings} style={styles.retry}><Text style={{ color: colors.accent, fontWeight: '600' }}>Retry saving settings</Text></Pressable>}</View>}
-        <Text style={[styles.sectionLabel, styles.firstSectionLabel, { color: colors.mutedText }]}>ACCOUNT</Text>
+        <Text style={[styles.sectionLabel, styles.firstSectionLabel, { color: colors.mutedText }]}>Account</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
         <Pressable
           accessibilityRole="button"
@@ -117,7 +118,7 @@ export default function AccountScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>APPEARANCE</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Appearance</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
           <View style={styles.themeHeader}><SymbolView name="circle.lefthalf.filled" size={21} tintColor={colors.accent} /><Text style={[styles.rowTitle, { color: colors.text }]}>Theme</Text></View>
           <PillSegmentedControl
@@ -132,7 +133,7 @@ export default function AccountScreen() {
 
         <Text style={[styles.settingScope, { color: colors.secondaryText }]}>Appearance and playback settings apply to this device.</Text>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>PLAYBACK & EXPERIENCE</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Playback & experience</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
           <SettingsToggle icon="antenna.radiowaves.left.and.right" title="Data Saver" subtitle="Uses smaller artwork, loads less discovery data, and saves offline music only over Wi-Fi. Streaming audio quality stays the same." value={dataSaver} onValueChange={(value) => updateSettings({ dataSaver: value })} />
           <Divider />
@@ -141,7 +142,7 @@ export default function AccountScreen() {
           <SettingsToggle icon="bolt.fill" title="Performance Mode" subtitle="Uses solid controls and navigation, and reduces animated artwork and visual effects." value={performanceMode} onValueChange={(value) => updateSettings({ performanceMode: value })} />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>OFFLINE LISTENING</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Offline listening</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
           <SettingsLink disabled={!downloads.supported} icon="arrow.down.circle" title="Downloads" subtitle={`${downloads.downloadedCount} songs saved on this device. Manage storage and downloads.`} onPress={() => router.push('/downloads' as Href)} />
           <Divider />
@@ -167,7 +168,7 @@ export default function AccountScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>SUPPORT & ABOUT</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Support & about</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
           <SettingsLink icon="hand.raised.fill" title="Privacy & Local Data" subtitle="Understand what stays on this device and what Audius stores." onPress={() => router.push('/privacy' as Href)} />
           <Divider />
@@ -176,7 +177,7 @@ export default function AccountScreen() {
           <SettingsLink external icon="chevron.left.forwardslash.chevron.right" title="GitHub" subtitle="View the Crimson Music project." onPress={() => void Linking.openURL('https://github.com/Stefan-Mihajlovic/Crimson-Music')} />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: '#FF6476' }]}>THIS DEVICE</Text>
+        <Text style={[styles.sectionLabel, { color: '#FF6476' }]}>This device</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: 'rgba(255,100,118,0.34)' }]}>
           <Pressable
             accessibilityRole="button"
@@ -220,7 +221,7 @@ export default function AccountScreen() {
         </View>
 
         <View style={styles.version}>
-          <Text style={[styles.versionTitle, { color: colors.accent }]}>CRIMSON MUSIC®</Text>
+          <Text style={[styles.versionTitle, { color: colors.accent }]}>Crimson Music®</Text>
           <Text style={[styles.versionText, { color: colors.mutedText }]}>Version {Constants.expoConfig?.version || '1.0.0'} · Copyright © {new Date().getFullYear()}</Text>
         </View>
       </Reanimated.ScrollView>
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#0E0D13' },
   content: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 180 },
   account: { minHeight: 92, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, },
-  avatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#29232F', borderWidth: 2, borderColor: 'rgba(213,187,255,0.72)' },
+  avatar: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#29232F', borderWidth: 2, borderColor: brandAccentTint(0.72) },
   accountCopy: { flex: 1, minWidth: 0 },
   accountName: { color: '#F6F1FF', fontSize: 20, fontWeight: '700' },
   accountEmail: { marginTop: 3, color: '#9992A2', fontSize: 13 },
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
   rowSubtitle: { marginTop: 3, color: '#928B9B', fontSize: 12, lineHeight: 16 },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 50, backgroundColor: 'rgba(255,255,255,0.12)' },
   version: { alignItems: 'center', gap: 5, paddingVertical: 28 },
-  versionTitle: { color: '#A978FA', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  versionTitle: { color: BrandAccent.dark, fontSize: 12, fontWeight: '700', letterSpacing: 0.2 },
   versionText: { color: '#77717F', fontSize: 11 },
   deleteTitle: { color: '#FF6476', fontSize: 16, fontWeight: '700' },
   deletePressed: { backgroundColor: 'rgba(255,100,118,0.09)' },

@@ -90,7 +90,7 @@ export default function DesktopPlayerPanel({ initialTab = 'queue' }: { initialTa
           style={{ width: 'calc(100% - 24px)', margin: '18px 12px 0', padding: 15, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', border: `1px solid ${colors.border}`, borderRadius: 14, background: 'transparent', color: colors.text, cursor: 'pointer' }}>
           <SymbolView name="infinity" size={22} tintColor={player.autoplayEnabled ? colors.accent : colors.secondaryText} />
           <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 12, fontWeight: 650 }}>Autoplay</span><span style={{ display: 'block', marginTop: 4, color: colors.secondaryText, fontSize: 11 }}>Keep the music going after your queue.</span></span>
-          <span style={{ color: player.autoplayEnabled ? colors.accent : colors.secondaryText, fontSize: 11, fontWeight: 700 }}>{player.autoplayEnabled ? 'ON' : 'OFF'}</span>
+          <span style={{ color: player.autoplayEnabled ? colors.accent : colors.secondaryText, fontSize: 11, fontWeight: 700 }}>{player.autoplayEnabled ? 'On' : 'Off'}</span>
         </button>
         {player.queueIndex > 0 ? <button type="button" style={{ ...textButton, margin: '12px 12px 0' }} onClick={() => setShowHistory(!showHistory)}>{showHistory ? 'Hide' : 'Show'} previously played ({player.queueIndex})</button> : null}
         {showHistory ? player.queue.slice(0, player.queueIndex).map((song, index) => <DesktopQueueRow key={`history:${song.id}:${index}`} song={song} onPlay={() => player.playQueueIndex(index)} onMenu={() => openActions(song)} />) : null}

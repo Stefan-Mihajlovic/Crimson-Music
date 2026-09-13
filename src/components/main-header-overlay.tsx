@@ -46,8 +46,7 @@ export default function MainHeaderOverlay({ title, offset, horizontalInset = 20,
     height: active ? Math.max(0, Math.min(height, playerPosition?.value ?? height) - insets.top) : 0,
   }));
   if (Platform.OS === 'web' && width >= 960 && desktopMainTitles.has(title)) return null;
-  // Keep the window and glass views mounted at alpha 1. Hide through clipping
-  // on blur/scroll instead of reattaching glass under a fading ancestor.
+  // Keep the window mounted and hide through clipping on blur/scroll.
   const expandedRow = (
     <Animated.View
       pointerEvents="box-none"

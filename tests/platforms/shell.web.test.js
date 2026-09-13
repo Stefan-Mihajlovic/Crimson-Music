@@ -9,6 +9,7 @@ let mockWidth = 1440;
 let mockPathname = '/';
 let mockSegments = ['(app)', '(home)'];
 let mockRootState = { index: 0, routes: [{ name: '(app)' }] };
+let mockComplete = true;
 let mockUser = { uid: 'first', DisplayName: 'Listener' };
 const mockRouter = { navigate: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const emptyFeed = { playlists: [], likedPlaylists: [], followedArtists: [] };
@@ -27,7 +28,7 @@ jest.mock('../../src/components/frosted-surface', () => ({ FrostedBackdrop: () =
 jest.mock('../../src/components/playlist-cover', () => () => null);
 jest.mock('../../src/components/main-header-actions', () => function MockHeaderActions() { return <><button aria-label="Open listening history" /><button aria-label="Open notifications" /></>; });
 jest.mock('../../src/components/web-player-bar', () => function MockWebPlayerBar({ hidden, mobileBottom }) { return <output data-player-hidden={String(hidden)} data-player-bottom={mobileBottom} />; });
-jest.mock('../../src/providers/auth-provider', () => ({ useAuth: () => ({ user: mockUser }) }));
+jest.mock('../../src/providers/auth-provider', () => ({ useAuth: () => ({ user: mockUser, onboardingComplete: mockComplete }) }));
 jest.mock('../../src/providers/player-provider', () => ({ usePlayer: () => ({ currentSong: { id: 'playing' } }) }));
 jest.mock('../../src/providers/settings-provider', () => ({ useAppSettings: () => ({
   isDark: true,
@@ -47,6 +48,7 @@ const artistFeed = (id) => ({ ...emptyFeed, followedArtists: [{ id, name: `${id}
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  mockComplete = true;
   mockWidth = 1440;
   mockPathname = '/';
   mockSegments = ['(app)', '(home)'];
@@ -174,6 +176,15 @@ test('a slow sidebar request cannot bring back the previous account’s library'
   expect(button('Open first artist')).toBeUndefined();
   expect(button('Open second artist')).toBeDefined();
   mockUser = null;
+  await render();
+  expect(container.querySelector('aside')).toBeNull();
+  expect(container.querySelector('output')).toBeNull();
+  expect(container.querySelector('[data-testid="route-content"]')).not.toBeNull();
+});
+
+
+test('required setup cannot expose desktop navigation or the player before preferences are saved', async () => {
+  mockComplete = false;
   await render();
   expect(container.querySelector('aside')).toBeNull();
   expect(container.querySelector('output')).toBeNull();

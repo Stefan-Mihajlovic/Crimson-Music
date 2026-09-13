@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import ResponsivePopup from '@/components/responsive-popup';
 import { POPUP_CLOSE_CLEARANCE, POPUP_DESKTOP_INSET, POPUP_MOBILE_INSET } from '@/components/popup-layout';
 import { Image } from 'expo-image';
@@ -857,7 +858,7 @@ const styles = StyleSheet.create({
   },
   headerButtonText: { color: '#D8C5F7', fontSize: 15 },
   doneText: {
-    color: '#C28EFF',
+    color: BrandAccent.highlight,
     fontSize: 15,
     fontWeight: '700',
     marginLeft: 'auto',

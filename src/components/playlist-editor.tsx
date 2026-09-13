@@ -174,7 +174,7 @@ export default function PlaylistEditor({
           ListHeaderComponent={
             <View style={{ gap: 12, paddingVertical: 20 }}>
               <Text style={[styles.label, { color: colors.secondaryText }]}>
-                NAME
+                Name
               </Text>
               <TextInput
                 accessibilityLabel="Playlist name"
@@ -192,7 +192,7 @@ export default function PlaylistEditor({
                 ]}
               />
               <Text style={[styles.label, { color: colors.secondaryText }]}>
-                DESCRIPTION
+                Description
               </Text>
               <TextInput
                 accessibilityLabel="Playlist description"
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heading: { fontSize: 18, fontWeight: '700' },
-  label: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  label: { fontSize: 11, fontWeight: '700' },
   input: {
     minHeight: 48,
     padding: 14,

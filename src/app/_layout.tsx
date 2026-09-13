@@ -72,7 +72,7 @@ function ThemedApp() {
 }
 
 function RootNavigator() {
-  const { ready, user } = useAuth();
+  const { ready, user, onboardingComplete } = useAuth();
   const network = useNetwork();
   const { colors, performanceMode, reduceMotion } = useAppSettings();
 
@@ -102,11 +102,13 @@ function RootNavigator() {
       <Stack.Screen
         name="onboarding"
         options={({ route }) => {
-          const isEditing = (route.params as { mode?: string } | undefined)?.mode === 'edit';
+          const isEditing = onboardingComplete && (route.params as { mode?: string } | undefined)?.mode === 'edit';
           return {
             animation: reduceMotion ? 'none' : isEditing ? 'slide_from_bottom' : 'fade',
             contentStyle: { backgroundColor: colors.background },
             presentation: isEditing ? 'fullScreenModal' : 'card',
+            gestureEnabled: isEditing,
+            fullScreenGestureEnabled: isEditing,
           };
         }}
       />
@@ -116,45 +118,10 @@ function RootNavigator() {
         <Stack.Screen name="register" options={{ animation: reduceMotion ? 'none' : 'slide_from_right' }} />
         <Stack.Screen name="reset-password" options={{ animation: reduceMotion ? 'none' : 'slide_from_right' }} />
       </Stack.Protected>
-      <Stack.Protected guard={Boolean(user)}>
+      <Stack.Protected guard={Boolean(user) && onboardingComplete}>
         <Stack.Screen name="(app)" options={{ animation: 'none' }} />
-      </Stack.Protected>
-      <Stack.Screen
-        name="artist"
-        options={{
-          animation: reduceMotion ? 'none' : 'slide_from_right',
-          presentation: 'card',
-          gestureDirection: 'horizontal',
-          fullScreenGestureEnabled: true,
-          headerShown: true,
-          headerTransparent: Platform.OS === 'ios',
-          headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background },
-          headerTintColor: colors.text,
-          headerBackButtonDisplayMode: 'minimal',
-          headerLargeTitleEnabled: false,
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      />
-      <Stack.Screen
-        name="playlist"
-        options={{
-          animation: reduceMotion ? 'none' : 'slide_from_right',
-          presentation: 'card',
-          gestureDirection: 'horizontal',
-          fullScreenGestureEnabled: true,
-          headerShown: true,
-          headerTransparent: Platform.OS === 'ios',
-          headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background },
-          headerTintColor: colors.text,
-          headerBackButtonDisplayMode: 'minimal',
-          headerLargeTitleEnabled: false,
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      />
-      {['category', 'favorites', 'privacy', 'downloads'].map((name) => (
         <Stack.Screen
-          key={name}
-          name={name}
+          name="artist"
           options={{
             animation: reduceMotion ? 'none' : 'slide_from_right',
             presentation: 'card',
@@ -169,40 +136,89 @@ function RootNavigator() {
             contentStyle: { backgroundColor: colors.background },
           }}
         />
-      ))}
-      <Stack.Screen
-        name="action-sheet"
-        options={{
-          presentation: Platform.OS === 'web' ? 'transparentModal' : 'formSheet',
-          animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
-          contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : Platform.OS === 'ios' || performanceMode ? colors.elevated : 'transparent' },
-          sheetAllowedDetents: [0.5, 1.0],
-          sheetInitialDetentIndex: 0,
-          sheetGrabberVisible: true,
-          sheetExpandsWhenScrolledToEdge: true,
-        }}
-      />
-      <Stack.Screen
-        name="player-details"
-        options={{
-          presentation: Platform.OS === 'web' ? 'transparentModal' : 'formSheet',
-          animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
-          contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : Platform.OS === 'ios' || performanceMode ? colors.elevated : 'transparent' },
-          sheetAllowedDetents: [0.62, 1.0],
-          sheetInitialDetentIndex: 0,
-          sheetGrabberVisible: true,
-          sheetExpandsWhenScrolledToEdge: true,
-        }}
-      />
-      <Stack.Screen
-        name="player"
-        options={{
-          presentation: Platform.OS === 'web' ? 'transparentModal' : 'fullScreenModal',
-          animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
-          contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : colors.background },
-          gestureEnabled: true,
-        }}
-      />
+        <Stack.Screen
+          name="playlist"
+          options={{
+            animation: reduceMotion ? 'none' : 'slide_from_right',
+            presentation: 'card',
+            gestureDirection: 'horizontal',
+            fullScreenGestureEnabled: true,
+            headerShown: true,
+            headerTransparent: Platform.OS === 'ios',
+            headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background },
+            headerTintColor: colors.text,
+            headerBackButtonDisplayMode: 'minimal',
+            headerLargeTitleEnabled: false,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        />
+        {['category', 'favorites', 'downloads'].map((name) => (
+          <Stack.Screen
+            key={name}
+            name={name}
+            options={{
+              animation: reduceMotion ? 'none' : 'slide_from_right',
+              presentation: 'card',
+              gestureDirection: 'horizontal',
+              fullScreenGestureEnabled: true,
+              headerShown: true,
+              headerTransparent: Platform.OS === 'ios',
+              headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background },
+              headerTintColor: colors.text,
+              headerBackButtonDisplayMode: 'minimal',
+              headerLargeTitleEnabled: false,
+              contentStyle: { backgroundColor: colors.background },
+            }}
+          />
+        ))}
+        <Stack.Screen
+          name="action-sheet"
+          options={{
+            presentation: Platform.OS === 'web' ? 'transparentModal' : 'formSheet',
+            animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
+            contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : Platform.OS === 'ios' || performanceMode ? colors.elevated : 'transparent' },
+            sheetAllowedDetents: [0.5, 1.0],
+            sheetInitialDetentIndex: 0,
+            sheetGrabberVisible: true,
+            sheetExpandsWhenScrolledToEdge: true,
+          }}
+        />
+        <Stack.Screen
+          name="player-details"
+          options={{
+            presentation: Platform.OS === 'web' ? 'transparentModal' : 'formSheet',
+            animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
+            contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : Platform.OS === 'ios' || performanceMode ? colors.elevated : 'transparent' },
+            sheetAllowedDetents: [0.62, 1.0],
+            sheetInitialDetentIndex: 0,
+            sheetGrabberVisible: true,
+            sheetExpandsWhenScrolledToEdge: true,
+          }}
+        />
+        <Stack.Screen
+          name="player"
+          options={{
+            presentation: Platform.OS === 'web' ? 'transparentModal' : 'fullScreenModal',
+            animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
+            contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : colors.background },
+            gestureEnabled: true,
+          }}
+        />
+      </Stack.Protected>
+      <Stack.Screen name="privacy" options={{
+        title: 'Privacy & Local Data',
+        animation: reduceMotion ? 'none' : 'slide_from_right',
+        presentation: 'card',
+        gestureDirection: 'horizontal',
+        fullScreenGestureEnabled: true,
+        headerShown: true,
+        headerTransparent: Platform.OS === 'ios',
+        headerStyle: { backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background },
+        headerTintColor: colors.text,
+        headerBackButtonDisplayMode: 'minimal',
+        headerLargeTitleEnabled: false,
+        contentStyle: { backgroundColor: colors.background },
+      }} />
     </Stack>
   );
 }

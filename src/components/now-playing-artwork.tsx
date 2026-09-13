@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import ArtworkImage from '@/components/artwork-image';
 import { useEffect, useState } from 'react';
 import { Animated, Platform, StyleSheet, View } from 'react-native';
@@ -5,9 +6,9 @@ import { Animated, Platform, StyleSheet, View } from 'react-native';
 import { usePlayer, usePlayerSpectrum, usePlayerStatus } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { CrimsonSong } from '@/services/music';
+import { PAUSED_SPECTRUM as pausedBars } from '@/services/playback-spectrum';
 
 const fallbackArtwork = require('@/assets/images/home/default-song.webp');
-const pausedBars = [0.36, 0.36, 0.36, 0.36];
 
 function PlaybackSpectrum({ size }: { size: number }) {
   const levels = usePlayerSpectrum();
@@ -17,15 +18,18 @@ function PlaybackSpectrum({ size }: { size: number }) {
   const playing = status.playing && !status.isBuffering;
 
   useEffect(() => {
-    bars.forEach((bar) => bar.stopAnimation());
-    Animated.parallel(bars.map((bar, index) => Animated.timing(bar, {
-      duration: performanceMode || reduceMotion ? 0 : playing ? 65 : 160,
+    const animation = Animated.parallel(bars.map((bar, index) => Animated.timing(bar, {
+      // The analyzer already applies fast attack/short decay; this only bridges
+      // sampling frames so drum transients aren't smoothed a second time.
+      duration: performanceMode || reduceMotion ? 0 : playing ? 35 : 120,
       toValue: playing && !performanceMode && !reduceMotion ? levels[index] : pausedBars[index],
       useNativeDriver: Platform.OS !== 'web',
-    }))).start();
+    })));
+    animation.start();
+    return () => animation.stop();
   }, [bars, levels, performanceMode, playing, reduceMotion]);
 
-  const spectrumHeight = Math.max(13, Math.round(size * 0.42));
+  const spectrumHeight = Math.max(16, Math.round(size * 0.54));
   return (
     <View
       pointerEvents="none"
@@ -38,7 +42,7 @@ function PlaybackSpectrum({ size }: { size: number }) {
             performanceMode && { shadowOpacity: 0 },
             {
               height: spectrumHeight,
-              width: Math.max(2, Math.round(size * 0.055)),
+              width: Math.max(2.5, Math.round(size * 0.065)),
               transform: [{ scaleY: bar }],
             },
           ]}
@@ -136,7 +140,7 @@ const styles = StyleSheet.create({
   bar: {
     borderRadius: 99,
     backgroundColor: '#F4EBFF',
-    shadowColor: '#B981FF',
+    shadowColor: BrandAccent.dark,
     shadowOpacity: 0.9,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 0 },

@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import { Redirect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
@@ -17,7 +18,7 @@ export default function AudiusCallbackScreen() {
 
   return (
     <View style={styles.screen}>
-      <ActivityIndicator color="#B981FF" size="large" />
+      <ActivityIndicator color={BrandAccent.dark} size="large" />
       <Text accessibilityLiveRegion="polite" style={styles.message}>Finishing your Audius login…</Text>
     </View>
   );

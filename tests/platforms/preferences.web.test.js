@@ -6,7 +6,7 @@ import OnboardingScreen from '../../src/app/onboarding';
 const mockSave = jest.fn();
 const mockRouter = { canGoBack: () => true, back: jest.fn(), replace: jest.fn() };
 jest.mock('react-native-web/dist/exports/useWindowDimensions', () => () => ({ width: 1440, height: 900, scale: 1, fontScale: 1 }));
-jest.mock('expo-router', () => ({ get router() { return mockRouter; }, useLocalSearchParams: () => ({ mode: 'edit' }), Redirect: () => null }));
+jest.mock('expo-router', () => ({ get router() { return mockRouter; }, useLocalSearchParams: () => ({ mode: 'edit' }), useFocusEffect: (callback) => require('react').useEffect(callback, [callback]), Redirect: () => null }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: () => null }));
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));

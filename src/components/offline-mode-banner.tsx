@@ -12,12 +12,12 @@ export default function OfflineModeBanner() {
   const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, onboardingComplete } = useAuth();
   const { downloadedCount, ready } = useDownloads();
   const { isOffline } = useNetwork();
 
   // This screen already explains offline mode; a floating banner would cover its header.
-  if (!isOffline || !user || segments.at(-1) === 'offline-listening') return null;
+  if (!isOffline || !user || !onboardingComplete || segments.at(-1) === 'offline-listening') return null;
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -31,7 +31,7 @@ export default function OfflineModeBanner() {
         style={[styles.banner, { top: insets.top + 6 }]}
         tintColor="rgba(104, 53, 157, 0.42)">
         <SymbolView name="wifi.slash" size={15} tintColor="#FFFFFF" weight="semibold" />
-        <Text style={styles.label}>OFFLINE MODE</Text>
+        <Text style={styles.label}>Offline mode</Text>
         <View style={styles.divider} />
         <Text style={styles.count}>{ready ? `${downloadedCount} saved` : 'Loading…'}</Text>
         <SymbolView name="chevron.right" size={11} tintColor="rgba(255,255,255,0.72)" weight="semibold" />
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     gap: 7,
     paddingHorizontal: 12,
   },
-  label: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.7 },
+  label: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
   divider: { width: StyleSheet.hairlineWidth, height: 14, backgroundColor: 'rgba(255,255,255,0.35)' },
   count: { color: 'rgba(255,255,255,0.82)', fontSize: 11, fontWeight: '700' },
 });

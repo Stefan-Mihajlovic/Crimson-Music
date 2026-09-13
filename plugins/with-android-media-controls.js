@@ -11,6 +11,44 @@ function replaceRequired(source, original, replacement, label) {
   return source.replace(original, replacement);
 }
 
+function replaceSectionRequired(source, start, end, replacement, label) {
+  const from = source.indexOf(start);
+  const to = source.indexOf(end, from + start.length);
+  if (from < 0 || to < 0) throw new Error(`Crimson Android media: upstream ${label} changed; review the Expo Audio adapter before building.`);
+  return source.slice(0, from) + replacement + source.slice(to);
+}
+
+function patchAudioPlayerSampling(source) {
+  for (const unusedImport of [
+    'import android.Manifest\n', 'import android.content.pm.PackageManager\n',
+    'import android.media.audiofx.Visualizer\n', 'import android.util.Log\n',
+    'import androidx.core.content.ContextCompat\n',
+  ]) source = replaceRequired(source, unusedImport, '', 'visualizer imports');
+  source = replaceRequired(source, '  bufferDurationMs: Long = 0\n', '  bufferDurationMs: Long = 0,\n  private val crimsonSamples: CrimsonAudioSampleSink = CrimsonAudioSampleSink(context.mainLooper)\n', 'player sample sink');
+  source = replaceRequired(source, '  player = ExoPlayer.Builder(context)', '  player = ExoPlayer.Builder(context, crimsonSamples.renderersFactory(context))', 'player renderer factory');
+  source = replaceRequired(source, '  private var samplingEnabled = false\n  private var visualizer: Visualizer? = null\n', '', 'visualizer fields');
+  source = replaceRequired(source, '  init {\n    installPlayerListeners()', `  init {
+    crimsonSamples.onSample = { channels ->
+      if (ref.isPlaying) sendAudioSampleUpdate(channels)
+    }
+    installPlayerListeners()`, 'sample listener');
+  source = replaceSectionRequired(source, '  fun setSamplingEnabled(enabled: Boolean) {', '  override fun setPlaybackRate(rate: Float)', `  fun setSamplingEnabled(enabled: Boolean) {
+    crimsonSamples.setEnabled(enabled)
+  }
+
+`, 'sampling permission path');
+  source = replaceSectionRequired(source, '  private fun extractAmplitudes(chunk: ByteArray)', '  override fun currentStatus()', '', 'visualizer byte conversion');
+  source = replaceRequired(source, `  private fun sendAudioSampleUpdate(sample: List<Float>) {
+    val body = mapOf(
+      "channels" to listOf(
+        mapOf("frames" to sample)
+      ),`, `  private fun sendAudioSampleUpdate(channels: List<FloatArray>) {
+    val body = mapOf(
+      "channels" to channels.map { mapOf("frames" to it.toList()) },`, 'sample event payload');
+  source = replaceSectionRequired(source, '  private fun createVisualizer() {', '  override fun sharedObjectDidRelease()', '', 'visualizer capture');
+  return replaceRequired(source, '    visualizer?.release()\n    super.releasePlayer()', '    crimsonSamples.release()\n    super.releasePlayer()', 'sample sink release');
+}
+
 /** Extend Expo's one foreground playback service, not a second MediaSession/player. */
 function patchAndroidMedia(projectRoot) {
   const projectPackage = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
@@ -28,6 +66,8 @@ function patchAndroidMedia(projectRoot) {
     const source = fs.readFileSync(file, 'utf8');
     if (!source.includes(MARKER)) changes.set(file, `${MARKER}\n${transform(source)}`);
   }
+
+  patch('AudioPlayer.kt', patchAudioPlayerSampling);
 
   patch('AudioModule.kt', (source) => {
     source = replaceRequired(source, '    Name("ExpoAudio")', `    Name("ExpoAudio")
@@ -172,7 +212,7 @@ function patchAndroidMedia(projectRoot) {
   });
 
   // Validate all anchors before writing any dependency source. Canonical files live in Git.
-  for (const file of ['CrimsonRemoteCommands.kt', 'CrimsonArtworkPalette.kt']) {
+  for (const file of ['CrimsonRemoteCommands.kt', 'CrimsonArtworkPalette.kt', 'CrimsonPcmSamples.kt', 'CrimsonAudioSampleSink.kt']) {
     changes.set(path.join(sourceRoot, file), fs.readFileSync(path.join(SOURCE_DIRECTORY, file), 'utf8'));
   }
   for (const [file, contents] of changes) fs.writeFileSync(file, contents);
@@ -185,3 +225,4 @@ module.exports = function withAndroidMediaControls(config) {
   }]);
 };
 module.exports.patchAndroidMedia = patchAndroidMedia;
+module.exports.patchAudioPlayerSampling = patchAudioPlayerSampling;

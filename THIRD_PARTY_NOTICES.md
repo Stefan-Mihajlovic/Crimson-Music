@@ -33,6 +33,10 @@ The original in-app credits identify these design resources under [Creative Comm
 
 Crimson incorporates visual resources into its interface with app-specific sizing and presentation. Preserve these credits and the license reference when redistributing the corresponding resources or adaptations.
 
+## Crimson artwork and design sources
+
+The Sonata app icon's editable vector layers, portable exports, and design history are documented in [APP-ICON.md](docs/APP-ICON.md). The Favorites heart was generated with OpenAI's image generation tool and animated for Crimson; its source prompt and reproducible export steps are recorded in [FAVORITES-ARTWORK.md](docs/FAVORITES-ARTWORK.md). These app assets are separate from artist artwork supplied by Audius. The design archive's external icon references identify their original sources and are not used as Crimson's app icon.
+
 ## Web icon outlines
 
 ### Ionicons

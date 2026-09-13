@@ -1,11 +1,12 @@
+import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter, useSegments } from 'expo-router';
 import { SymbolView, SymbolViewProps } from '@/components/app-symbol';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   ActivityIndicator,
-  Linking,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,8 +14,8 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from 'react-native';
-import { Alert } from '@/services/alert';
 import Animated, {
   Extrapolation,
   FadeIn,
@@ -26,6 +27,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { profileImageSource } from '@/components/profile-images';
+import { recapDeckLayout } from '@/components/recap-deck-layout';
 import { useAuth } from '@/providers/auth-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { loadMonthlyListeningStats, ProfileListeningStats, subscribeLocalListeningHistory } from '@/services/music';
@@ -64,10 +66,13 @@ const emptyStats: ProfileListeningStats = {
 export default function ProfileSettingsScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const segments = useSegments();
+  const editProfileRoute = segments.some((segment) => segment === '(account)') ? '/(app)/(account)/edit-profile' : '/(app)/(home)/edit-profile';
   const { artistHref } = useDetailRoutes();
   const { playSong } = usePlayer();
   const { colors, performanceMode, reduceMotion } = useAppSettings();
   const { width: screenWidth } = useWindowDimensions();
+  const [viewportWidth, setViewportWidth] = useState(screenWidth);
   const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
   const [stats, setStats] = useState<ProfileListeningStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -81,7 +86,6 @@ export default function ProfileSettingsScreen() {
   const savedPhoto = user?.ProfilePhoto || '1';
   const monthName = selectedMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const selectedMonthKey = keyForMonth(selectedMonth);
-  const deckWidth = Math.min(screenWidth - 80, 360);
 
   const loadStats = useCallback((force = false) => {
     const revision = ++requestRevision.current;
@@ -128,9 +132,10 @@ export default function ProfileSettingsScreen() {
   };
 
   const slides = createSlides(stats || emptyStats, selectedMonth);
+  const deckWidth = recapDeckLayout(viewportWidth, slides.length).cardWidth;
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <View onLayout={({ nativeEvent: { layout } }) => { if (layout.width > 0) setViewportWidth(layout.width); }} style={[styles.screen, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: 'Profile' }} />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
@@ -143,7 +148,7 @@ export default function ProfileSettingsScreen() {
           />
         )}
         showsVerticalScrollIndicator={false}>
-        <SectionLabel title="YOUR AUDIUS PROFILE" />
+        <SectionLabel title="Your Audius profile" />
         <View style={[styles.profileCard, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
           <Image
             contentFit="cover"
@@ -159,33 +164,32 @@ export default function ProfileSettingsScreen() {
             </Text>
           </View>
           <Pressable
-            accessibilityLabel="Open your profile on Audius"
+            accessibilityLabel="Edit profile"
             accessibilityRole="button"
-            onPress={() => void Linking.openURL(`https://audius.co/${encodeURIComponent(user?.Username || '')}`).catch(() => Alert.alert('Could not open Audius', 'Please try again.'))}
+            onPress={() => router.push(editProfileRoute)}
             style={({ pressed }) => [
               styles.editButton,
               { backgroundColor: colors.accent },
               pressed && styles.pressed,
             ]}>
-            <SymbolView name="arrow.up.right" size={14} tintColor="#FFFFFF" weight="semibold" />
-            <Text style={[styles.editButtonText, { color: '#FFFFFF' }]}>Audius</Text>
+            <SymbolView name="pencil" size={14} tintColor="#FFFFFF" weight="semibold" />
+            <Text style={[styles.editButtonText, { color: '#FFFFFF' }]}>Edit</Text>
           </Pressable>
         </View>
 
-        <SectionLabel title="LISTENING ON THIS DEVICE" />
         <MonthSelector selectedMonth={selectedMonth} onSelect={selectMonth} />
         {statsError && <View style={[styles.feedback, { backgroundColor: colors.accentSoft }]}><Text accessibilityRole="alert" style={{ color: colors.text }}>{statsError}</Text><Pressable accessibilityRole="button" onPress={refreshStats} style={styles.recapAction}><Text style={{ color: colors.accent }}>Try again</Text></Pressable></View>}
         {statsLoading ? <LoadingDeck deckWidth={deckWidth} monthName={monthName} /> : stats && (stats.plays > 0 || stats.minutes > 0) ? <>
-          <StatsDeck key={`${selectedMonthKey}:${deckWidth}`} viewportWidth={screenWidth} deckWidth={deckWidth} monthKey={selectedMonthKey} monthName={monthName} reduceMotion={performanceMode || reduceMotion} slides={slides} />
+          <StatsDeck key={`${selectedMonthKey}:${viewportWidth}`} viewportWidth={viewportWidth} monthKey={selectedMonthKey} monthName={monthName} reduceMotion={performanceMode || reduceMotion} slides={slides} />
           <Text style={[styles.recapNote, { color: colors.secondaryText }]}>Based on listening records retained on this device. Older months may be incomplete if local history was cleared.</Text>
-          {!!stats.topTracks?.length && <SectionLabel title="YOUR TOP TRACKS" />}
+          {!!stats.topTracks?.length && <SectionLabel title="Your top tracks" />}
           {stats.topTracks?.map((track, index) => <Pressable key={track.id} accessibilityRole="button" accessibilityLabel={`Play ${track.title} by ${track.creator}`} disabled={recapBusy} onPress={() => void playRecap(track.id)} style={styles.topRow}>
             <Text style={{ color: colors.mutedText, width: 20 }}>{index + 1}</Text>
             <Image source={{ uri: track.imageSmall || track.image }} contentFit="cover" style={styles.topArtwork} />
             <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: colors.text, fontWeight: '600' }}>{track.title}</Text><Text numberOfLines={1} style={{ color: colors.secondaryText, marginTop: 3 }}>{track.creator} · {track.plays} plays</Text></View>
             <SymbolView name="play.fill" size={16} tintColor={colors.text} />
           </Pressable>)}
-          {!!stats.topArtists?.length && <SectionLabel title="YOUR TOP ARTISTS" />}
+          {!!stats.topArtists?.length && <SectionLabel title="Your top artists" />}
           {stats.topArtists?.map((artist) => <Pressable key={artist.id || artist.name} accessibilityRole="button" accessibilityLabel={`Open ${artist.name}`} disabled={!artist.id} onPress={() => router.push(artistHref(artist.id))} style={styles.topRow}>
             <Image source={profileImageSource(artist.imageSmall || artist.image || '1')} contentFit="cover" style={[styles.topArtwork, { borderRadius: 24 }]} />
             <View style={{ flex: 1 }}><Text style={{ color: colors.text, fontWeight: '600' }}>{artist.name}</Text><Text style={{ color: colors.secondaryText, marginTop: 3 }}>{artist.plays} plays</Text></View><SymbolView name="chevron.right" size={14} tintColor={colors.secondaryText} />
@@ -263,26 +267,28 @@ function MonthSelector({ onSelect, selectedMonth }: { onSelect: (month: Date) =>
 
 function StatsDeck({
   viewportWidth,
-  deckWidth,
   monthKey,
   monthName,
   reduceMotion,
   slides,
 }: {
   viewportWidth: number;
-  deckWidth: number;
   monthKey: string;
   monthName: string;
   reduceMotion: boolean;
   slides: StatSlide[];
 }) {
-  const pageWidth = deckWidth + 12;
-  const scrollX = useSharedValue(0);
+  const { cardWidth, gap, leadingInset, trailingInset, firstCenterOffset, firstGapExtra, snapOffsets } = recapDeckLayout(viewportWidth, slides.length);
+  const pageIndices = slides.map((_, index) => index);
+  const scrollProgress = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
-      scrollX.value = event.contentOffset.x;
+      scrollProgress.value = interpolate(event.contentOffset.x, snapOffsets, pageIndices, Extrapolation.CLAMP);
     },
   });
+  const paginationStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: interpolate(scrollProgress.value, [0, 1], [firstCenterOffset, 0], Extrapolation.CLAMP) }],
+  }));
 
   return (
     <Animated.View key={monthKey} entering={reduceMotion ? undefined : FadeIn.duration(260)} style={styles.deckEntrance}>
@@ -292,39 +298,43 @@ function StatsDeck({
           decelerationRate="fast"
           horizontal
           onScroll={onScroll}
-          snapToInterval={pageWidth}
+          snapToOffsets={snapOffsets}
+          // React Native Web does not implement snapToOffsets.
+          style={Platform.OS === 'web' ? { scrollSnapType: 'x mandatory' } as ViewStyle & CSSProperties : undefined}
           disableIntervalMomentum
-          contentContainerStyle={{ paddingHorizontal: (viewportWidth - deckWidth) / 2, gap: 12 }}
+          contentInsetAdjustmentBehavior="never"
+          contentContainerStyle={{ paddingLeft: leadingInset, paddingRight: trailingInset, gap }}
           scrollEventThrottle={16}
           showsHorizontalScrollIndicator={false}>
           {slides.map((slide, index) => (
             <SwipeStatCard
               key={slide.id}
-              cardWidth={deckWidth}
+              cardWidth={cardWidth}
+              leadingInset={leadingInset}
+              trailingSpace={index === 0 ? firstGapExtra : 0}
               index={index}
               monthName={monthName}
-              pageWidth={pageWidth}
               reduceMotion={reduceMotion}
-              scrollX={scrollX}
+              scrollProgress={scrollProgress}
               slide={slide}
             />
           ))}
         </Animated.ScrollView>
-        <View pointerEvents="none" style={styles.pagination}>
+        <Animated.View pointerEvents="none" style={[styles.pagination, paginationStyle]}>
           {slides.map((slide, index) => (
-            <PaginationDot key={slide.id} index={index} pageWidth={pageWidth} scrollX={scrollX} />
+            <PaginationDot key={slide.id} index={index} scrollProgress={scrollProgress} />
           ))}
-        </View>
+        </Animated.View>
       </View>
     </Animated.View>
   );
 }
 
-function PaginationDot({ index, pageWidth, scrollX }: { index: number; pageWidth: number; scrollX: SharedValue<number> }) {
+function PaginationDot({ index, scrollProgress }: { index: number; scrollProgress: SharedValue<number> }) {
   const style = useAnimatedStyle(() => ({
     opacity: interpolate(
-      scrollX.value,
-      [(index - 1) * pageWidth, index * pageWidth, (index + 1) * pageWidth],
+      scrollProgress.value,
+      [index - 1, index, index + 1],
       [0.3, 1, 0.3],
       Extrapolation.CLAMP,
     ),
@@ -334,35 +344,37 @@ function PaginationDot({ index, pageWidth, scrollX }: { index: number; pageWidth
 
 function SwipeStatCard({
   cardWidth,
+  leadingInset,
   index,
   monthName,
-  pageWidth,
   reduceMotion,
-  scrollX,
+  scrollProgress,
   slide,
+  trailingSpace,
 }: {
   index: number;
   monthName: string;
-  pageWidth: number;
   cardWidth: number;
+  leadingInset: number;
   reduceMotion: boolean;
-  scrollX: SharedValue<number>;
+  scrollProgress: SharedValue<number>;
   slide: StatSlide;
+  trailingSpace: number;
 }) {
   const { dataSaver, performanceMode } = useAppSettings();
   const contentAnimatedStyle = useAnimatedStyle(() => {
     if (reduceMotion) return {};
     const inputRange = [
-      (index - 1) * pageWidth,
-      index * pageWidth,
-      (index + 1) * pageWidth,
+      index - 1,
+      index,
+      index + 1,
     ];
     return {
-      opacity: interpolate(scrollX.value, inputRange, [0.34, 1, 0.34], Extrapolation.CLAMP),
+      opacity: interpolate(scrollProgress.value, inputRange, [0.34, 1, 0.34], Extrapolation.CLAMP),
       transform: [
         {
           translateX: interpolate(
-            scrollX.value,
+            scrollProgress.value,
             inputRange,
             [46, 0, -46],
             Extrapolation.CLAMP,
@@ -374,20 +386,20 @@ function SwipeStatCard({
   const artworkAnimatedStyle = useAnimatedStyle(() => {
     if (reduceMotion) return { transform: [{ scale: 1.06 }] };
     const inputRange = [
-      (index - 1) * pageWidth,
-      index * pageWidth,
-      (index + 1) * pageWidth,
+      index - 1,
+      index,
+      index + 1,
     ];
     return {
       transform: [
-        { translateX: interpolate(scrollX.value, inputRange, [-28, 0, 28], Extrapolation.CLAMP) },
+        { translateX: interpolate(scrollProgress.value, inputRange, [-28, 0, 28], Extrapolation.CLAMP) },
         { scale: 1.06 },
       ],
     };
   });
   const leftArtworkAnimatedStyle = useAnimatedStyle(() => {
     if (reduceMotion) return { opacity: 0.76 };
-    const progress = Math.min(1, Math.abs(scrollX.value - index * pageWidth) / pageWidth);
+    const progress = Math.min(1, Math.abs(scrollProgress.value - index));
     return {
       opacity: interpolate(progress, [0, 1], [0.76, 0.46], Extrapolation.CLAMP),
       transform: [
@@ -398,7 +410,7 @@ function SwipeStatCard({
   });
   const rightArtworkAnimatedStyle = useAnimatedStyle(() => {
     if (reduceMotion) return { opacity: 0.76 };
-    const progress = Math.min(1, Math.abs(scrollX.value - index * pageWidth) / pageWidth);
+    const progress = Math.min(1, Math.abs(scrollProgress.value - index));
     return {
       opacity: interpolate(progress, [0, 1], [0.76, 0.46], Extrapolation.CLAMP),
       transform: [
@@ -409,7 +421,7 @@ function SwipeStatCard({
   });
   const primaryArtworkAnimatedStyle = useAnimatedStyle(() => {
     if (reduceMotion) return {};
-    const progress = Math.min(1, Math.abs(scrollX.value - index * pageWidth) / pageWidth);
+    const progress = Math.min(1, Math.abs(scrollProgress.value - index));
     return {
       transform: [{ scale: interpolate(progress, [0, 1], [1, 1.025], Extrapolation.CLAMP) }],
     };
@@ -424,7 +436,12 @@ function SwipeStatCard({
   return (
     <View
       accessibilityLabel={`${slide.title}: ${slide.value}`}
-      style={[styles.recapSlider, styles.recapPage, { width: cardWidth }]}>
+      style={[styles.recapSlider, styles.recapPage, { width: cardWidth, marginRight: trailingSpace },
+        Platform.OS === 'web' && {
+          scrollSnapAlign: index === 0 ? 'start' : 'center',
+          scrollMarginLeft: index === 0 ? leadingInset : 0,
+          scrollSnapStop: 'always',
+        } as ViewStyle & CSSProperties]}>
       <LinearGradient
         colors={slide.colors}
         end={{ x: 1, y: 1 }}
@@ -456,7 +473,7 @@ function SwipeStatCard({
                 key={day}
                 style={[styles.recapCalendarDay, listened && styles.recapCalendarDayListened]}>
                 {listened ? (
-                  <SymbolView name="flame.fill" size={16} tintColor="#B56EFF" weight="semibold" />
+                  <SymbolView name="flame.fill" size={16} tintColor={BrandAccent.dark} weight="semibold" />
                 ) : (
                   <View style={styles.recapCalendarDot} />
                 )}
@@ -496,7 +513,7 @@ function SwipeStatCard({
         </Animated.View>
       ) : null}
       <Animated.View style={[styles.recapContent, contentAnimatedStyle]}>
-        <Text style={styles.recapMonth}>{monthName.toUpperCase()}</Text>
+        <Text style={styles.recapMonth}>{monthName}</Text>
         <View style={styles.recapMetric}>
           <Text
             adjustsFontSizeToFit
@@ -522,7 +539,7 @@ function LoadingDeck({ deckWidth, monthName }: { deckWidth: number; monthName: s
       end={{ x: 1, y: 1 }}
       start={{ x: 0, y: 0 }}
       style={[styles.loadingDeck, { width: deckWidth }]}>
-      <ActivityIndicator color="#B981FF" />
+      <ActivityIndicator color={BrandAccent.dark} />
       <Text style={styles.loadingTitle}>Loading {monthName}</Text>
     </LinearGradient>
   );
@@ -542,7 +559,7 @@ function createSlides(stats: ProfileListeningStats, month: Date): StatSlide[] {
     : [];
   return [
     {
-      accent: '#A66BFF',
+      accent: BrandAccent.dark,
       artworks: artworksFor(0),
       colors: ['#241735', '#17101F', '#100D15'],
       icon: 'play.fill',
@@ -625,7 +642,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.35,
   },
-  monthSelector: { marginBottom: 12 },
+  monthSelector: { marginTop: 24, marginBottom: 12 },
   monthSelectorHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 14, marginBottom: 8 },
   monthSelectorTitle: { fontSize: 15, fontWeight: '700' },
   monthSelectorCaption: { fontSize: 10, fontWeight: '600' },
@@ -742,10 +759,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.025)',
   },
   recapCalendarDayListened: {
-    backgroundColor: 'rgba(166,107,255,0.16)',
+    backgroundColor: brandAccentTint(0.16),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(193,132,255,0.52)',
-    shadowColor: '#A66BFF',
+    borderColor: brandAccentTint(0.52),
+    shadowColor: BrandAccent.dark,
     shadowOpacity: 0.48,
     shadowRadius: 7,
   },
@@ -758,7 +775,7 @@ const styles = StyleSheet.create({
   recapSideArtworkLeft: { left: 28 },
   recapSideArtworkRight: { right: 28 },
   recapContent: { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingBottom: 40 },
-  recapMonth: { width: '100%', color: 'rgba(255,255,255,0.72)', fontSize: 10, fontWeight: '800', letterSpacing: 1.35, textAlign: 'center' },
+  recapMonth: { width: '100%', color: 'rgba(255,255,255,0.72)', fontSize: 10, fontWeight: '800', textAlign: 'center' },
   recapMetric: { width: '100%', alignItems: 'center' },
   cardValue: {
     maxWidth: '90%',
@@ -784,7 +801,8 @@ const styles = StyleSheet.create({
   dot: { width: 18, height: 2, borderRadius: 1, backgroundColor: '#FFFFFF' },
   loadingDeck: {
     minHeight: 350,
-    alignSelf: 'center',
+    alignSelf: 'flex-start',
+    marginLeft: 4,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

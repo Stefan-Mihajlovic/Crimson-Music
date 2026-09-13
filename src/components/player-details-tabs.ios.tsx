@@ -1,3 +1,4 @@
+import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { GlassView } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -7,8 +8,8 @@ import { PlayerDetailsTab, PlayerDetailsTabsProps } from '@/components/player-de
 import { useAppSettings } from '@/providers/settings-provider';
 
 const tabs: { label: string; value: PlayerDetailsTab }[] = [
-  { label: 'UP NEXT', value: 'queue' },
-  { label: 'RELATED', value: 'related' },
+  { label: 'Up next', value: 'queue' },
+  { label: 'Related', value: 'related' },
 ];
 const trackPadding = 5;
 
@@ -55,7 +56,7 @@ export default function PlayerDetailsTabs({ onChange, value }: PlayerDetailsTabs
           style={[
             styles.thumb,
             {
-              backgroundColor: performanceMode ? colors.accent : isDark ? 'rgba(143,89,245,0.68)' : 'rgba(125,63,209,0.62)',
+              backgroundColor: performanceMode ? colors.accent : isDark ? brandAccentTint(0.68) : brandAccentTint(0.62, 'light'),
               width: segmentWidth,
             },
             performanceMode && { shadowOpacity: 0 },
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderRadius: 21,
     borderCurve: 'continuous',
-    shadowColor: '#7E46D8',
+    shadowColor: BrandAccent.glow,
     shadowOpacity: 0.3,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },

@@ -85,10 +85,12 @@ export class AudiusSessionClient {
     this.notify();
     return session;
   }
-  async updateAccount(account: AudiusAccount, expectedRevision: number) {
+  async updateAccount(account: AudiusAccount, expectedRevision: number, previousAccount?: AudiusAccount) {
     if (this.revision !== expectedRevision || this.session?.account.id !== account.id) {
       throw new AudiusSessionError('The Audius account changed. Please try again.', 'cancelled');
     }
+    // A profile read started before Save must not overwrite the confirmed edit.
+    if (previousAccount && this.session.account !== previousAccount) return this.session.account;
     this.session = { ...this.session, account };
     await this.persist();
     return account;
@@ -125,6 +127,9 @@ export class AudiusSessionClient {
       }
       const updated = sessionWithTokens(await response.json(), previous);
       if (revision !== this.revision) throw new AudiusSessionError('The Audius account changed. Please try again.', 'cancelled');
+      // Token rotation can overlap a confirmed profile edit. Rotate credentials
+      // while retaining the latest name and photo from the current session.
+      updated.account = this.session!.account;
       this.session = updated;
       await this.persist();
       return updated;

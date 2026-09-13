@@ -16,10 +16,10 @@ export default function MainScreenBackground({ children, overlay }: { children: 
   const background = (
     <LinearGradient
       colors={isDark ? [
-        'rgba(75,27,132,0.62)', 'rgba(49,22,84,0.3)', 'rgba(28,17,45,0.1)',
+        'rgba(64,18,132,0.62)', 'rgba(40,16,84,0.3)', 'rgba(25,14,45,0.1)',
         'rgba(14,13,19,0)', 'rgba(14,13,19,0)',
       ] : [
-        'rgba(210,185,246,0.62)', 'rgba(226,209,249,0.34)', 'rgba(241,232,251,0.14)',
+        'rgba(202,177,246,0.62)', 'rgba(220,202,249,0.34)', 'rgba(241,232,251,0.14)',
         'rgba(255,255,255,0)', 'rgba(255,255,255,0)',
       ]}
       locations={[0, 0.34 * extent, 0.6 * extent, 0.8 * extent, extent]}

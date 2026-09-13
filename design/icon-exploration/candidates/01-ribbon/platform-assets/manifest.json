@@ -1,0 +1,28 @@
+{
+  "candidate": "01-ribbon",
+  "source": "../Crimson-Ribbon.icon",
+  "stagedOnly": true,
+  "backgroundColor": "#571db6",
+  "android": {
+    "canvasDp": 108,
+    "safeDiameterDp": 66,
+    "scale": 0.8746579900286919,
+    "alphaBounds": {
+      "minX": 294,
+      "minY": 256,
+      "maxX": 758,
+      "maxY": 771,
+      "radius": 304.9499959009674
+    }
+  },
+  "assets": {
+    "icon": "icon.png",
+    "foreground": "android-foreground.png",
+    "background": "android-background.png",
+    "monochrome": "android-monochrome.png",
+    "splash": "mark.png",
+    "favicon": "favicon.png",
+    "wordmark": "wordmark.png"
+  },
+  "note": "Portable SVG/PNG assets use the same vector geometry. iOS adds native Composer materials. Convert selected wordmark.png to WebP at integration."
+}

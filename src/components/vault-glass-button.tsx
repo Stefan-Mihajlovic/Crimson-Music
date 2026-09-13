@@ -1,8 +1,6 @@
 import FrostedSurface from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
-import { GlassContainer, GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
-import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -21,12 +19,12 @@ type VaultGlassButtonProps = {
   contentStyle?: StyleProp<ViewStyle>;
 };
 
-/** Vault controls deliberately retain native glass over the illustrated card. */
+/** Shared dark, frosted controls keep the same appearance on every platform. */
 export default function VaultGlassButton({
   accessibilityLabel,
   children,
   disabled = false,
-  height = 44,
+  height = 52,
   onPress,
   style,
   contentStyle,
@@ -49,12 +47,11 @@ export default function VaultGlassButton({
       }}
       style={[
         styles.button,
-        { height, borderRadius: height / 2 },
+        { height, borderRadius: 12 },
         style,
         pressStyle,
       ]}>
-      <VaultGlassSurface interactive radius={height / 2} style={StyleSheet.absoluteFill} />
-      {/* Keep the glass and its ancestors opaque, including while disabled. */}
+      <VaultGlassSurface radius={12} style={StyleSheet.absoluteFill} />
       <View pointerEvents="none" style={[styles.content, contentStyle, disabled && styles.disabledContent]}>
         {children}
       </View>
@@ -62,50 +59,23 @@ export default function VaultGlassButton({
   );
 }
 
-export function VaultGlassSurface({ radius, interactive = false, style, children }: {
+export function VaultGlassSurface({ radius, style, children }: {
   radius: number;
-  interactive?: boolean;
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 }) {
-  const { colors, isDark, performanceMode } = useAppSettings();
-  if (!performanceMode && isLiquidGlassAvailable() && isGlassEffectAPIAvailable()) {
-    return (
-      <GlassView
-        pointerEvents="none"
-        colorScheme="dark"
-        glassEffectStyle="clear"
-        isInteractive={interactive}
-        tintColor="rgba(145,92,235,0.26)"
-        style={[styles.glassEdge, { borderRadius: radius }, style]}>
-        <LinearGradient
-          pointerEvents="none"
-          colors={['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.02)', 'rgba(175,130,255,0.12)']}
-          locations={[0, 0.45, 1]}
-          start={{ x: 0.15, y: 0 }}
-          end={{ x: 0.85, y: 1 }}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
-        />
-        {children}
-      </GlassView>
-    );
-  }
   return (
-    <FrostedSurface tone="dark" solidColor={isDark ? colors.elevated : '#30263E'} radius={radius} style={style}>{children}</FrostedSurface>
+    <FrostedSurface tone="dark" solidColor="#10071F" intensity={70} radius={radius}
+      style={style}>
+      {children}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.glassEdge, { borderRadius: radius }]} />
+    </FrostedSurface>
   );
-}
-
-export function VaultGlassGroup({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const { performanceMode } = useAppSettings();
-  return !performanceMode && isLiquidGlassAvailable() && isGlassEffectAPIAvailable()
-    ? <GlassContainer spacing={12} style={style}>{children}</GlassContainer>
-    : <View style={style}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
   button: { alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
-  glassEdge: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(230,215,255,0.38)' },
+  glassEdge: { borderWidth: 1, borderColor: 'rgba(231,224,255,0.85)' },
   disabledContent: { opacity: 0.5 },
-  fallback: { borderWidth: StyleSheet.hairlineWidth },
 });

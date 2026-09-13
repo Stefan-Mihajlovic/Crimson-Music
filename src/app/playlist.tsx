@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   desktopHero: { height: 'auto', minHeight: 252, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', padding: 28, gap: 28 },
   desktopCover: { borderRadius: 10, flexShrink: 0, zIndex: 1, boxShadow: '0 12px 32px rgba(0,0,0,0.2)' },
   desktopHeroCopy: { flex: 1, minWidth: 0, paddingHorizontal: 0, paddingBottom: 0, zIndex: 1 },
-  desktopEyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, marginBottom: 8 },
+  desktopEyebrow: { fontSize: 10, fontWeight: '700', marginBottom: 8 },
   desktopName: { letterSpacing: -1.4, fontWeight: '800' },
   desktopActions: { flexWrap: 'wrap', marginTop: 20 },
   desktopPlayButton: { flexGrow: 0, flexShrink: 0, flexBasis: 132, width: 132 },

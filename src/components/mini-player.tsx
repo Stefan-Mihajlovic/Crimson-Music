@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import { FrostedBackdrop } from '@/components/frosted-surface';
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Image } from 'expo-image';
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   progressTrack: { position: 'absolute', top: 0, left: 16, right: 16, height: 2, backgroundColor: 'rgba(255,255,255,0.13)' },
-  progressFill: { height: 2, borderRadius: 1, backgroundColor: '#B981FF' },
+  progressFill: { height: 2, borderRadius: 1, backgroundColor: BrandAccent.dark },
   songArea: { flex: 1, minWidth: 0, height: '100%' },
   songAreaContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 8 },
   artwork: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#282331' },

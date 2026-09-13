@@ -1,0 +1,118 @@
+{
+  "observedOn": "2026-09-13",
+  "method": "Official Apple iTunes Lookup API artworkUrl512, visual inspection of downloaded publisher artwork",
+  "icons": [
+    {
+      "name": "Spotify: Music and Podcasts",
+      "publisher": "Spotify",
+      "appStoreId": 324684580,
+      "appStoreURL": "https://apps.apple.com/us/app/spotify-music-and-podcasts/id324684580?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/6d/e0/d6/6de0d66e-e40d-1cb9-a6cc-031808eeab93/AppIcon-0-0-1x_U007epad-0-1-0-0-sRGB-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Apple Music",
+      "publisher": "Apple",
+      "appStoreId": 1108187390,
+      "appStoreURL": "https://apps.apple.com/us/app/apple-music/id1108187390?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/31/6c/c3/316cc33a-5e7d-8902-58eb-f4e16c5d9440/music-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "YouTube Music",
+      "publisher": "Google",
+      "appStoreId": 1017492454,
+      "appStoreURL": "https://apps.apple.com/us/app/youtube-music/id1017492454?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/ac/a1/77/aca1773e-850b-5810-6e19-1e914225032f/logo_youtube_music_2024_q4_color-0-0-1x_U007emarketing-0-0-0-7-0-0-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Amazon Music: Songs & Podcasts",
+      "publisher": "AMZN Mobile LLC",
+      "appStoreId": 510855668,
+      "appStoreURL": "https://apps.apple.com/us/app/amazon-music-songs-podcasts/id510855668?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/3c/8d/97/3c8d972a-2186-b5b7-4f94-aa5a4d70d89c/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "TIDAL Music: HiFi Sound",
+      "publisher": "TIDAL Music AS",
+      "appStoreId": 913943275,
+      "appStoreURL": "https://apps.apple.com/us/app/tidal-music-hifi-sound/id913943275?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/05/9e/b9/059eb9f4-ba72-87f7-7cc6-18f0b619cd52/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Deezer: Music Player, Podcast",
+      "publisher": "DEEZER SA",
+      "appStoreId": 292738169,
+      "appStoreURL": "https://apps.apple.com/us/app/deezer-music-player-podcast/id292738169?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/ca/f2/6c/caf26c5c-14f2-6fff-7ed6-e213f7bea094/AppIcon-0-0-1x_U007epad-0-11-0-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "SoundCloud: The Music You Love",
+      "publisher": "SoundCloud Global Limited & Co KG",
+      "appStoreId": 336353151,
+      "appStoreURL": "https://apps.apple.com/us/app/soundcloud-the-music-you-love/id336353151?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/0b/a6/ba/0ba6ba5a-89d9-e920-c6e2-f6d602ce8099/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Audius Music",
+      "publisher": "Audius, Inc.",
+      "appStoreId": 1491270519,
+      "appStoreURL": "https://apps.apple.com/us/app/audius-music/id1491270519?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/48/5f/05/485f0509-60c6-11f1-b7ce-8124b4dafdf9/AppIcon-0-0-1x_U007ephone-0-1-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Qobuz: Music & Editorial",
+      "publisher": "Qobuz",
+      "appStoreId": 946429340,
+      "appStoreURL": "https://apps.apple.com/us/app/qobuz-music-editorial/id946429340?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/58/11/7f/58117f78-46c7-4d68-9730-c751ffa77ad3/AppIcon-Release-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Pandora: Music & Podcasts",
+      "publisher": "Pandora Media, LLC",
+      "appStoreId": 284035177,
+      "appStoreURL": "https://apps.apple.com/us/app/pandora-music-podcasts/id284035177?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/8a/5f/bb/8a5fbb7d-dfec-db96-aa3f-5c593044c070/AppIcon-0-0-1x_U007epad-0-1-0-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Audiomack - Play Music Offline",
+      "publisher": "Audiomack, Inc.",
+      "appStoreId": 921765888,
+      "appStoreURL": "https://apps.apple.com/us/app/audiomack-play-music-offline/id921765888?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/44/f8/78/44f87894-a7d0-2bdb-d8c5-5c0777629e6f/AppIcon-1-0-0-1x_U007emarketing-0-6-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Anghami: Play Music & Podcasts",
+      "publisher": "Anghami",
+      "appStoreId": 545395155,
+      "appStoreURL": "https://apps.apple.com/us/app/anghami-play-music-podcasts/id545395155?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/98/e6/79/98e67991-b326-1015-0d6b-7480f575cbad/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "JioSaavn – Music & Podcasts",
+      "publisher": "Saavn Media Limited",
+      "appStoreId": 441813332,
+      "appStoreURL": "https://apps.apple.com/us/app/jiosaavn-music-podcasts/id441813332?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/bd/7f/3d/bd7f3d7f-dc24-3be9-813e-84f40f11beda/appiconfree-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "网易云音乐-数亿音乐畅听",
+      "publisher": "杭州网易云音乐科技有限公司",
+      "appStoreId": 590338362,
+      "appStoreURL": "https://apps.apple.com/cn/app/%E7%BD%91%E6%98%93%E4%BA%91%E9%9F%B3%E4%B9%90-%E6%95%B0%E4%BA%BF%E9%9F%B3%E4%B9%90%E7%95%85%E5%90%AC/id590338362?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/a5/f6/e7/a5f6e7c0-9cc2-3248-ded9-7ac7748e9f94/appIconNew-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "QQ音乐 - 听我想听",
+      "publisher": "Tencent Technology (Shenzhen) Company Limited",
+      "appStoreId": 414603431,
+      "appStoreURL": "https://apps.apple.com/cn/app/qq%E9%9F%B3%E4%B9%90-%E5%90%AC%E6%88%91%E6%83%B3%E5%90%AC/id414603431?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/69/25/be/6925beb0-dc55-b399-27a0-e73c388194a1/AppIcon-0-0-1x_U007ephone-0-0-0-1-0-0-sRGB-85-220.png/512x512bb.jpg"
+    },
+    {
+      "name": "Yandex Music: музыка, книги",
+      "publisher": "Direct Cursus Computer Systems Trading",
+      "appStoreId": 520797969,
+      "appStoreURL": "https://apps.apple.com/kz/app/yandex-music-%D0%BC%D1%83%D0%B7%D1%8B%D0%BA%D0%B0-%D0%BA%D0%BD%D0%B8%D0%B3%D0%B8/id520797969?uo=4",
+      "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/ba/ac/47/baac476f-49e6-ae63-30ae-fd1df8eb25b4/AppIcon-0-0-1x_U007epad-0-1-0-0-sRGB-85-220.png/512x512bb.jpg"
+    }
+  ]
+}

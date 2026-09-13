@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 type AuthSwitchPromptProps = {
@@ -32,7 +33,7 @@ export default function AuthSwitchPrompt({
 const styles = StyleSheet.create({
   button: { minHeight: 38, alignItems: 'center', justifyContent: 'center' },
   prompt: { color: 'rgba(255,255,255,0.82)', fontSize: 14, fontWeight: '400' },
-  action: { color: '#A56DFF', fontWeight: '600' },
+  action: { color: BrandAccent.dark, fontWeight: '600' },
   pressed: { opacity: 0.68 },
   disabled: { opacity: 0.5 },
 });

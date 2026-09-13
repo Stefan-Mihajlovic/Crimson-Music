@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 /**
  * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
@@ -12,7 +13,7 @@ export const Colors = {
     backgroundElement: '#F4E5EA',
     backgroundSelected: '#EACFD8',
     textSecondary: '#725A63',
-    accent: '#A30F3D',
+    accent: BrandAccent.light,
   },
   dark: {
     text: '#FFF7FA',
@@ -20,7 +21,7 @@ export const Colors = {
     backgroundElement: '#2A171E',
     backgroundSelected: '#42212D',
     textSecondary: '#C7ADB6',
-    accent: '#FF4F7D',
+    accent: BrandAccent.dark,
   },
 } as const;
 

@@ -79,12 +79,6 @@ function headerClip(tree) {
     .find((view) => StyleSheet.flatten(view.props.style)?.overflow === 'hidden');
 }
 
-function layOutHeaderGlass(tree) {
-  act(() => {
-    tree.root.findAllByType('ExpoGlassView').forEach((glass) => glass.props.onLayout());
-  });
-}
-
 test('all tab roots retain the real UIKit bar and native soft scroll edge while the compact title fades', () => {
   let tree;
   for (const title of ['Home', 'Search', 'Library', 'Account']) {
@@ -134,7 +128,7 @@ test('expanded heading keeps History and Notifications together in one row with 
   act(() => tree.unmount());
 });
 
-test('expanded glass stays mounted and opaque while the row scrolls and only its content fades', () => {
+test('bare header actions stay mounted while the row scrolls and its content fades', () => {
   let tree;
   act(() => { tree = TestRenderer.create(<MainHeaderOverlay title="Home" offset={mockOffset} />); });
   const windowOverlay = tree.root.findByType('FullWindowOverlay');
@@ -147,10 +141,11 @@ test('expanded glass stays mounted and opaque while the row scrolls and only its
   expect(StyleSheet.flatten(overlay().props.style).opacity).toBeUndefined();
   expect(StyleSheet.flatten(headerClip(tree).props.style).opacity).toBeUndefined();
   expect(overlay().props.pointerEvents).toBe('box-none');
-  layOutHeaderGlass(tree);
-  const originalGlass = tree.root.findAllByType('ExpoGlassView');
-  expect(originalGlass).toHaveLength(2);
-  expect(originalGlass.every((glass) => glass.props.glassEffectStyle === 'regular')).toBe(true);
+  const historyButton = () => tree.root.findAllByProps({ accessibilityLabel: 'Open listening history' }).find((node) => node.props.hitSlop === 4);
+  const originalButton = historyButton();
+  expect(tree.root.findAllByType('ExpoGlassView')).toHaveLength(0);
+  expect(StyleSheet.flatten(originalButton.props.style({ pressed: false })).backgroundColor).toBeUndefined();
+  expect(StyleSheet.flatten(originalButton.props.style({ pressed: false })).borderWidth).toBeUndefined();
 
   mockOffset.value = 68;
   act(() => tree.update(<MainHeaderOverlay title="Home" offset={mockOffset} />));
@@ -159,14 +154,14 @@ test('expanded glass stays mounted and opaque while the row scrolls and only its
   expect(overlay().props.pointerEvents).toBe('box-none');
   const title = tree.root.findAllByType(Text).find((text) => text.props.children === 'Home');
   expect(StyleSheet.flatten(title.props.style).opacity).toBe(0);
-  expect(tree.root.findAllByType('ExpoGlassView')[0]).toBe(originalGlass[0]);
-  expect(tree.root.findAllByType('ExpoGlassView').every((glass) => glass.props.glassEffectStyle === 'none')).toBe(true);
+  expect(historyButton()).toBe(originalButton);
+  expect(historyButton().props.disabled).toBe(true);
 
   mockOffset.value = 0;
   act(() => tree.update(<MainHeaderOverlay title="Home" offset={mockOffset} />));
   expect(tree.root.findByType('FullWindowOverlay')).toBe(windowOverlay);
-  expect(tree.root.findAllByType('ExpoGlassView')[0]).toBe(originalGlass[0]);
-  expect(tree.root.findAllByType('ExpoGlassView').every((glass) => glass.props.glassEffectStyle === 'regular')).toBe(true);
+  expect(historyButton()).toBe(originalButton);
+  expect(historyButton().props.disabled).toBe(false);
   expect(overlay().props.pointerEvents).toBe('box-none');
   act(() => tree.unmount());
   act(() => { tree = TestRenderer.create(<MainHeaderSpacer />); });
@@ -177,9 +172,9 @@ test('expanded glass stays mounted and opaque while the row scrolls and only its
 test('blur clips the mounted window overlay out of view and accessibility, then restores it on focus', () => {
   let tree;
   act(() => { tree = TestRenderer.create(<MainHeaderOverlay title="Account" offset={mockOffset} />); });
-  layOutHeaderGlass(tree);
   const windowOverlay = tree.root.findByType('FullWindowOverlay');
-  const originalGlass = tree.root.findAllByType('ExpoGlassView')[0];
+  const historyButton = () => tree.root.findAllByProps({ accessibilityLabel: 'Open listening history' }).find((node) => node.props.hitSlop === 4);
+  const originalButton = historyButton();
   expect(StyleSheet.flatten(headerClip(tree).props.style).height).toBe(793);
   mockFocused = false;
   act(() => tree.update(<MainHeaderOverlay title="Account" offset={mockOffset} />));
@@ -187,14 +182,14 @@ test('blur clips the mounted window overlay out of view and accessibility, then 
   expect(StyleSheet.flatten(headerClip(tree).props.style).height).toBe(0);
   expect(headerClip(tree).props.accessibilityElementsHidden).toBe(true);
   expect(headerClip(tree).props.importantForAccessibility).toBe('no-hide-descendants');
-  expect(tree.root.findAllByType('ExpoGlassView')[0]).toBe(originalGlass);
-  expect(originalGlass.props.glassEffectStyle).toBe('none');
+  expect(historyButton()).toBe(originalButton);
+  expect(historyButton().props.disabled).toBe(true);
   mockFocused = true;
   act(() => tree.update(<MainHeaderOverlay title="Account" offset={mockOffset} />));
   expect(StyleSheet.flatten(headerClip(tree).props.style).height).toBe(793);
   expect(headerClip(tree).props.accessibilityElementsHidden).toBe(false);
   expect(headerClip(tree).props.importantForAccessibility).toBe('auto');
-  expect(originalGlass.props.glassEffectStyle).toBe('regular');
+  expect(historyButton().props.disabled).toBe(false);
   act(() => tree.unmount());
 });
 

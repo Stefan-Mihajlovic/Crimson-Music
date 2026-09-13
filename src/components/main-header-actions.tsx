@@ -1,5 +1,3 @@
-import { FrostedBackdrop } from '@/components/frosted-surface';
-import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
@@ -29,11 +27,11 @@ function HeaderActionsContent({ visible = true, offset }: MainHeaderActionsProps
   const { colors, dataSaver } = useAppSettings();
   const uid = user?.uid;
   const unreadCount = useSyncExternalStore(subscribeNotificationUnreadCount, () => getNotificationUnseenCount(uid), () => 0);
-  const [materialVisible, setMaterialVisible] = useState(false);
+  const [actionsVisible, setActionsVisible] = useState(false);
   useAnimatedReaction(
     () => visible && (!offset || expandedHeaderOpacity(offset.value) > 0),
     (next, previous) => {
-      if (next !== previous) scheduleOnRN(setMaterialVisible, next);
+      if (next !== previous) scheduleOnRN(setActionsVisible, next);
     },
     [visible, offset],
   );
@@ -53,57 +51,42 @@ function HeaderActionsContent({ visible = true, offset }: MainHeaderActionsProps
   const historyIcon = <SymbolView name="clock.arrow.circlepath" size={19} tintColor={colors.text} weight="semibold" />;
   return (
     <View style={styles.actions}>
-      <HeaderGlassButton
+      <HeaderIconButton
         accessibilityLabel="Open listening history"
-        materialVisible={visible && materialVisible}
+        actionsVisible={visible && actionsVisible}
         offset={offset}
         onPress={() => { releaseWebNavigationFocus(); router.push(historyHref()); }}>
         {historyIcon}
-      </HeaderGlassButton>
-      <HeaderGlassButton
+      </HeaderIconButton>
+      <HeaderIconButton
         accessibilityLabel={accessibilityLabel}
-        materialVisible={visible && materialVisible}
+        actionsVisible={visible && actionsVisible}
         offset={offset}
         onPress={() => { releaseWebNavigationFocus(); router.push(notificationsHref()); }}>
         {icon}
-      </HeaderGlassButton>
+      </HeaderIconButton>
     </View>
   );
 }
 
-/** The two navigation actions retain native glass; ordinary controls stay separate. */
-function HeaderGlassButton({ accessibilityLabel, children, materialVisible, offset, onPress }: {
+/** Keep navigation icons bare while preserving their touch targets and scroll fade. */
+function HeaderIconButton({ accessibilityLabel, children, actionsVisible, offset, onPress }: {
   accessibilityLabel: string;
   children: ReactNode;
-  materialVisible: boolean;
+  actionsVisible: boolean;
   offset?: SharedValue<number>;
   onPress: () => void;
 }) {
-  const { isDark, performanceMode, reduceMotion } = useAppSettings();
-  const [laidOut, setLaidOut] = useState(false);
-  const glassAvailable = !performanceMode && isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
+  const { reduceMotion } = useAppSettings();
   const contentOpacity = useAnimatedStyle(() => ({ opacity: offset ? expandedHeaderOpacity(offset.value) : 1 }));
-  // none -> regular creates a fresh effect after layout/on return. Keep glass
-  // ancestors opaque; only the glyphs fade with scrolling.
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       hitSlop={4}
+      disabled={!actionsVisible}
       onPress={onPress}
       style={({ pressed }) => [styles.button, pressed && !reduceMotion && styles.pressed]}>
-      {glassAvailable ? (
-        <GlassView
-          pointerEvents="none"
-          colorScheme={isDark ? 'dark' : 'light'}
-          onLayout={() => setLaidOut(true)}
-          glassEffectStyle={laidOut && materialVisible ? 'regular' : 'none'}
-          isInteractive
-          style={[StyleSheet.absoluteFill, styles.circle]}
-        />
-      ) : (
-        <FrostedBackdrop radius={20} />
-      )}
       <Animated.View pointerEvents="none" style={[styles.content, contentOpacity]}>{children}</Animated.View>
     </Pressable>
   );
@@ -112,8 +95,6 @@ function HeaderGlassButton({ accessibilityLabel, children, materialVisible, offs
 const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   button: { width: 40, height: 40, borderRadius: 20 },
-  circle: { borderRadius: 20 },
-  fallback: { borderWidth: StyleSheet.hairlineWidth },
   pressed: { transform: [{ scale: 0.97 }] },
   content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   icon: { width: 27, height: 27, alignItems: 'center', justifyContent: 'center' },

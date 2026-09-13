@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="sr-Latn">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Četiri originalna predloga za novu Crimson Music ikonicu. Izaberi svog favorita.">
+    <title>Nova Crimson ikonica — četiri pravca</title>
+    <link rel="stylesheet" href="gallery.css">
+    <script defer src="gallery.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#predlozi">Pređi na ikonice</a>
+    <main class="page">
+      <header class="masthead">
+        <a class="wordmark" href="#" aria-label="Crimson Music — početak galerije"><span class="brand-dot" aria-hidden="true"></span>CRIMSON <span>MUSIC</span></a>
+        <span class="edition">NOVA IKONICA <span aria-hidden="true">/</span> 2026</span>
+      </header>
+
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">4 PREDLOGA</p>
+        <h1 id="page-title">Nova ikonica za Crimson.</h1>
+        <p class="intro-copy">Uporedi izgled i veličinu, pa sačuvaj favorita.</p>
+      </section>
+
+      <section class="comparison-controls" aria-label="Podešavanja prikaza">
+        <div class="control-group">
+          <span class="control-label" id="appearance-label">Izgled</span>
+          <div class="segmented" role="group" aria-labelledby="appearance-label">
+            <button type="button" data-appearance="default" aria-pressed="true">Default</button>
+            <button type="button" data-appearance="dark" aria-pressed="false">Dark</button>
+            <button type="button" data-appearance="mono" aria-pressed="false">Mono</button>
+          </div>
+        </div>
+        <div class="control-group generation-control">
+          <span class="control-label" id="generation-label">Sistem</span>
+          <div class="segmented compact" role="group" aria-labelledby="generation-label">
+            <button type="button" data-generation="27" aria-pressed="true">iOS 27</button>
+            <button type="button" data-generation="26" aria-pressed="false">iOS 26</button>
+          </div>
+        </div>
+        <p class="preview-note" id="preview-note">Originalni prikazi iz Icon Composera.</p>
+      </section>
+
+      <section class="candidate-grid" id="predlozi" aria-label="Predlozi ikonica"></section>
+
+      <section class="selection-panel" id="selection-panel" aria-labelledby="selection-title" hidden>
+        <div class="selection-topline">
+          <div class="selection-identity">
+            <img id="selected-thumbnail" alt="" width="54" height="54">
+            <div><p class="eyebrow">SAČUVAN FAVORIT</p><h2 id="selection-title"></h2></div>
+          </div>
+          <button class="quiet-button reset-choice" id="reset-choice" type="button" aria-label="Poništi sačuvanog favorita">Poništi</button>
+        </div>
+        <p class="selection-copy">Kad odlučiš, pošalji mi ovu poruku:</p>
+        <div class="copy-row">
+          <label class="sr-only" for="selection-message">Poruka sa tvojim izborom</label>
+          <input id="selection-message" readonly spellcheck="false" aria-describedby="copy-status">
+          <button class="copy-button" id="copy-choice" type="button">Kopiraj izbor <span aria-hidden="true">↗</span></button>
+        </div>
+        <p class="selection-footnote" id="copy-status" role="status">Izbor je sačuvan samo u ovom pregledaču. Ikonica u aplikaciji još nije promenjena.</p>
+      </section>
+
+      <footer class="page-footer">
+        <p>Svi predlozi imaju svoj slojeviti <span class="file-type">.icon</span> dokument.<br>Izabrani znak zatim ide u aplikaciju, na iOS, Android i web.</p>
+        <div class="footer-links">
+          <a href="research.md" target="_blank" rel="noopener">Istraživanje 16 muzičkih servisa <span aria-hidden="true">↗</span></a>
+          <a href="selection-criteria.md" target="_blank" rel="noopener">Na šta da obratiš pažnju <span aria-hidden="true">↗</span></a>
+        </div>
+      </footer>
+    </main>
+
+    <dialog class="original-dialog" id="original-dialog" aria-labelledby="original-title">
+      <div class="original-header">
+        <div><p class="eyebrow" id="original-mode"></p><h2 id="original-title"></h2></div>
+        <button id="close-original" class="close-dialog" type="button" aria-label="Zatvori veliki prikaz">×</button>
+      </div>
+      <div class="original-image-wrap"><img id="original-image" width="1024" height="1024" alt=""></div>
+      <div class="original-footer"><span>Izvorna slika · 1024 × 1024</span><a id="original-link" target="_blank" rel="noopener">Otvori original <span aria-hidden="true">↗</span></a></div>
+    </dialog>
+    <div class="sr-only" id="gallery-status" role="status" aria-live="polite"></div>
+    <noscript><p class="noscript-note">Za poređenje i čuvanje izbora uključi JavaScript. Svi predlozi su u folderu <a href="candidates/">candidates</a>.</p></noscript>
+  </body>
+</html>

@@ -40,7 +40,7 @@ export default function HomeLayout() {
           sheetAllowedDetents: [0.92],
           sheetCornerRadius: 28,
           sheetGrabberVisible: true,
-          title: 'Audius Profile',
+          title: 'Edit profile',
         }}
       />
       <Stack.Screen name="report-bug" options={{ title: 'Report a Bug' }} />

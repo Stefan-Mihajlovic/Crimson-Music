@@ -1,18 +1,17 @@
 import { Redirect } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AuthBackdrop from '@/components/auth-backdrop';
 import BrandLogo from '@/components/brand-logo';
-import NativeButton from '@/components/native-button';
 import { useAuth } from '@/providers/auth-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { CrimsonAuthError } from '@/services/auth';
 
 export default function WelcomeScreen() {
   const { signInWithAudius, user } = useAuth();
-  const { colors } = useAppSettings();
+  const { reduceMotion } = useAppSettings();
   const signingIn = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -43,7 +42,6 @@ export default function WelcomeScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.hero}>
           <BrandLogo style={styles.logo} />
-          <Text style={styles.tagline}>Your Audius. A new way to listen.</Text>
         </View>
 
         <View style={styles.actions}>
@@ -54,14 +52,19 @@ export default function WelcomeScreen() {
           {error ? (
             <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>
           ) : null}
-          <NativeButton
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={busy ? 'Connecting to Audius…' : 'Login with Audius'}
+            accessibilityState={{ disabled: busy, busy }}
             disabled={busy}
-            icon={busy ? <ActivityIndicator color={colors.text} size="small" /> : undefined}
-            label={busy ? 'Connecting to Audius…' : 'Login with Audius'}
             onPress={() => void login()}
-            size="large"
+            style={({ pressed }) => [styles.loginButton, busy && styles.loginDisabled,
+              pressed && [styles.loginPressed, !reduceMotion && styles.loginPressedScale]]}
             testID="login-with-audius"
-          />
+          >
+            {busy ? <ActivityIndicator color="#100D17" size="small" /> : null}
+            <Text style={styles.loginLabel}>{busy ? 'Connecting to Audius…' : 'Login with Audius'}</Text>
+          </Pressable>
           <Text style={styles.note}>Sign in securely on Audius to continue.</Text>
         </View>
       </SafeAreaView>
@@ -73,10 +76,15 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, paddingHorizontal: 24 },
   hero: { flex: 1, alignItems: 'center', paddingTop: 54 },
   logo: { width: 272, height: 88 },
-  tagline: { marginTop: 14, color: 'rgba(255,255,255,0.72)', fontSize: 16, letterSpacing: 0.1, textAlign: 'center' },
   actions: { width: '100%', maxWidth: 430, alignSelf: 'center', paddingBottom: 20, gap: 14 },
   title: { color: '#FFFFFF', fontSize: 27, lineHeight: 33, fontWeight: '600', letterSpacing: -0.7, textAlign: 'center' },
   description: { paddingHorizontal: 12, marginBottom: 12, color: 'rgba(255,255,255,0.65)', fontSize: 15, lineHeight: 22, textAlign: 'center' },
   error: { paddingHorizontal: 10, color: '#FF91A2', fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  loginButton: { width: '100%', minHeight: 56, paddingHorizontal: 24, paddingVertical: 16,
+    borderRadius: 28, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  loginLabel: { color: '#100D17', fontSize: 16, fontWeight: '700', textAlign: 'center', flexShrink: 1 },
+  loginDisabled: { opacity: 0.65 },
+  loginPressed: { opacity: 0.9 },
+  loginPressedScale: { transform: [{ scale: 0.98 }] },
   note: { color: 'rgba(255,255,255,0.45)', fontSize: 12, lineHeight: 18, textAlign: 'center' },
 });

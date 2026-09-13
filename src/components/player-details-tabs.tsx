@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 
 export default function PlayerDetailsTabs({ onChange, value }: PlayerDetailsTabsProps) {
   return <PillSegmentedControl
-    options={[{ label: 'UP NEXT', value: 'queue' }, { label: 'RELATED', value: 'related' }]}
+    options={[{ label: 'Up next', value: 'queue' }, { label: 'Related', value: 'related' }]}
     value={value === 'lyrics' ? 'queue' : value} onChange={onChange}
     style={[
       { marginTop: 14, marginHorizontal: 20, marginBottom: 8 },

@@ -6,7 +6,7 @@ Crimson connects directly to Audius. It does not create a separate Crimson accou
 
 ## Sign-in and account actions
 
-Sign-in opens Audius authorization in a system browser session or web popup. Crimson receives OAuth tokens and an Audius profile; it does not collect the listener's Audius password. It requests `write` access so actions such as favoriting music, following artists, and editing playlists can update the listener's Audius account.
+Sign-in opens Audius authorization in a system browser session or web popup. Crimson receives OAuth tokens and an Audius profile; it does not collect the listener's Audius password. It requests `write` access so actions such as favoriting music, following artists, editing playlists, and changing the display name or profile photo can update the listener's Audius account.
 
 The application's public Audius key identifies the OAuth client. Authenticated requests use the listener's token. Audius remains responsible for the account and the data stored by its service.
 
@@ -29,6 +29,10 @@ Web `sessionStorage` is readable by scripts on the same origin; it is not equiva
 ## Network requests
 
 Browsing and playback send requests to Audius and the media/artwork hosts returned by its responses. Those services receive normal connection information, such as the requesting IP address and requested resource. The app can also check Audius connectivity and open Audius or attribution links in a browser.
+
+Before login, the welcome screen requests public trending artwork from Audius without account credentials. It caches the artwork list in memory for up to an hour and uses bundled images when unavailable. Data Saver requests smaller covers, and Reduce Motion or Performance Mode stops the scrolling artwork.
+
+Edit profile opens the system photo picker or browser file chooser. A selected photo stays in the editor preview until Save. Saving uploads the photo to an Audius storage node, then updates the public Audius profile using the listener's authorized session. The OAuth token is sent only to the Audius API, never to photo storage. A failed profile update after a successful upload may leave an unreferenced image on Audius storage.
 
 Listening history and statistics are computed locally. That does not make streaming private from Audius or its delivery hosts: they still receive the requests needed to serve music. Data Saver reduces artwork and discovery traffic and limits downloads to Wi-Fi; it does not change the audio bitrate or eliminate network requests.
 

@@ -27,7 +27,7 @@ export default function AccountLayout() {
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="offline-listening" options={{ title: 'Offline Listening' }} />
       <Stack.Screen name="offline-listening-settings" options={{ title: 'Offline Listening Settings' }} />
-      <Stack.Screen name="edit-profile" options={{ title: 'Audius Profile' }} />
+      <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
       <Stack.Screen name="report-bug" options={{ title: 'Report a Bug' }} />
       <Stack.Screen name="licenses" options={{ title: 'Licenses & Attribution' }} />
     </Stack>
