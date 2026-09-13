@@ -70,9 +70,9 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
           <Text style={{ color: colors.accent, fontWeight: '700', opacity: items.length ? 1 : 0.4 }}>{editing ? 'Done' : 'Edit'}</Text>
         </Pressable>
       </View>
-      <Text style={[styles.section, { color: colors.secondaryText }]}>NOW PLAYING</Text>
+      <Text style={[styles.section, { color: colors.secondaryText }]}>Now playing</Text>
       <SongRow song={currentSong} active onPlay={() => playQueueIndex(queueIndex)} subtitle={currentSong.creator} />
-      <Text style={[styles.section, { color: colors.secondaryText }]}>UP NEXT</Text>
+      <Text style={[styles.section, { color: colors.secondaryText }]}>Up next</Text>
       {editing ? <Text style={[styles.editHint, { color: colors.secondaryText }]}>Drag a handle to move a song. Hold near an edge to scroll.</Text> : null}
     </> : null}
   </View>;
@@ -105,7 +105,7 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
               {queueIndex > 0 ? <Pressable accessibilityRole="button" onPress={() => setShowHistory(!showHistory)} style={styles.textButton}><Text style={{ color: colors.accent }}>{showHistory ? 'Hide' : 'Show'} previously played ({queueIndex})</Text></Pressable> : null}
             </View>
             {showHistory && queueIndex > 0 ? <>
-              <Text style={[styles.section, { color: colors.secondaryText }]}>PREVIOUSLY PLAYED</Text>
+              <Text style={[styles.section, { color: colors.secondaryText }]}>Previously played</Text>
               {queue.slice(0, queueIndex).map((song, index) => <SongRow key={`${song.id}:${index}`} song={song} active={false}
                 onPlay={() => playQueueIndex(index)} subtitle={song.creator} />)}
             </> : null}
@@ -158,7 +158,7 @@ function SongRowContent({ song, onPlay, subtitle, active = false, playing = fals
 const styles = StyleSheet.create({
   list: { flex: 1 }, sourceBlock: { paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 22, paddingTop: 12, paddingBottom: 13, flexDirection: 'row', alignItems: 'center' },
   overline: { fontSize: 13 }, source: { marginTop: 3, fontSize: 20, fontWeight: '800' },
-  section: { fontSize: 11, fontWeight: '700', letterSpacing: 1, paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 22, paddingTop: 14, paddingBottom: 8 },
+  section: { fontSize: 11, fontWeight: '700', paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 22, paddingTop: 14, paddingBottom: 8 },
   row: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Platform.OS === 'web' ? POPUP_MOBILE_INSET : 18, paddingVertical: 10 },
   rowCopy: { flex: 1, minWidth: 0 }, rowTitle: { fontSize: 15, fontWeight: '700' }, rowSubtitle: { marginTop: 2, fontSize: 13 },
   queueRow: { flex: 1, flexDirection: 'row', alignItems: 'center' }, rowControl: { width: 42, minHeight: 60, alignItems: 'center', justifyContent: 'center' },

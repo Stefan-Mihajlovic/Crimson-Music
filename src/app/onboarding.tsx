@@ -1,16 +1,19 @@
+import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { FrostedLayer } from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
 import { Image, ImageSource } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  BackHandler,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -40,13 +43,14 @@ import { scheduleOnRN } from 'react-native-worklets';
 import BouncyPressable from '@/components/bouncy-pressable';
 import BrandLogo from '@/components/brand-logo';
 import DesktopMusicPreferences from '@/components/desktop-music-preferences';
-import { PreferencesGlassButton, PreferencesGlassSurface } from '@/components/preferences-glass';
+import { PreferencesGlassButton } from '@/components/preferences-glass';
 import { useAuth } from '@/providers/auth-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { RecommendationStyle } from '@/services/auth';
+import { MINIMUM_PERSONALIZATION_CATEGORIES, normalizeFavoriteCategories, type PersonalizationCategoryId } from '@/services/personalization';
 
 type CategoryOption = {
-  id: string;
+  id: PersonalizationCategoryId;
   image: ImageSource;
   label: string;
 };
@@ -76,12 +80,17 @@ const recommendationOptions: RecommendationOption[] = [
   { id: 'underground', label: 'Deep underground' },
 ];
 
-const minimumCategoryCount = 2;
+const minimumCategoryCount = MINIMUM_PERSONALIZATION_CATEGORIES;
 const finalSliderCategories = categories.slice(0, 8);
 const finalSliderColumnWidth = 104;
 const finalSliderLoopWidth = finalSliderCategories.length * finalSliderColumnWidth;
 
 export default function OnboardingScreen({ editing = false }: { editing?: boolean } = {}) {
+  const { user } = useAuth();
+  return <OnboardingFlow key={user?.uid || 'signed-out'} editing={editing} />;
+}
+
+function OnboardingFlow({ editing }: { editing: boolean }) {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const { completeOnboarding, onboardingComplete, user } = useAuth();
   const { performanceMode, reduceMotion: reduceMotionSetting } = useAppSettings();
@@ -90,10 +99,10 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && screenWidth >= 960;
-  const isEditing = editing || mode === 'edit';
+  const isEditing = onboardingComplete && (editing || mode === 'edit');
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    () => (user?.FavoriteCategories || []).filter((id) => categories.some((category) => category.id === id)),
+    () => normalizeFavoriteCategories(user?.FavoriteCategories),
   );
   const [recommendationStyle, setRecommendationStyle] = useState<RecommendationStyle>(
     () => user?.RecommendationStyle || 'balanced',
@@ -129,6 +138,20 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
     if (router.canGoBack()) router.back();
     else router.replace('/(app)/(account)/account');
   }, []);
+
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== 'android') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (saving.current) return true;
+      if (step > 0) {
+        setError('');
+        setStep(step === 2 ? 1 : 0);
+      } else if (isEditing) close();
+      // First-run setup has no dismiss/skip path; Back can only revisit a step.
+      return true;
+    });
+    return () => subscription.remove();
+  }, [close, isEditing, step]));
 
   useEffect(() => {
     idlePullOffset.value = 0;
@@ -419,15 +442,15 @@ export default function OnboardingScreen({ editing = false }: { editing?: boolea
                     />
                   </Animated.View>
                   <View pointerEvents="none" style={styles.pullNativeGlass}>
-                    <PreferencesGlassSurface effect="clear" interactive radius={52} style={StyleSheet.absoluteFill} />
+
                     <Animated.View style={[styles.pullGlassContent, pullArrowStyle]}>
                       {finishing ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <ActivityIndicator color="#100D17" size="small" />
                       ) : (
                         <SymbolView
                           name="arrow.up"
                           size={42}
-                          tintColor="#FFFFFF"
+                          tintColor="#100D17"
                           weight="medium"
                         />
                       )}
@@ -549,9 +572,10 @@ function CurvedPullLabel({ label }: { label: string }) {
 
 function OnboardingNextButton({ disabled = false, label, onPress }: { disabled?: boolean; label: string; onPress: () => void }) {
   return (
-    <PreferencesGlassButton accessibilityLabel={label} disabled={disabled} height={52} selected onPress={onPress}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+      style={({ pressed }) => [styles.nextButton, disabled && styles.nextDisabled, pressed && styles.nextPressed]}>
       <Text style={styles.nextLabel}>{label}</Text>
-    </PreferencesGlassButton>
+    </Pressable>
   );
 }
 
@@ -742,7 +766,7 @@ function CategoryCard({
     borderColor: interpolateColor(
       selection.value,
       [0, 1],
-      ['rgba(255,255,255,0.24)', '#B36DFF'],
+      ['rgba(255,255,255,0.24)', BrandAccent.dark],
     ),
   }));
   const selectedOverlayStyle = useAnimatedStyle(() => ({
@@ -770,7 +794,7 @@ function CategoryCard({
         />
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, selectedOverlayStyle]}>
           <LinearGradient
-            colors={['rgba(126,45,228,0.08)', 'rgba(174,79,255,0.95)']}
+            colors={[brandAccentTint(0.08), brandAccentTint(0.95)]}
             locations={[0.12, 1]}
             style={StyleSheet.absoluteFill}
           />
@@ -841,7 +865,7 @@ function RecommendationCard({
         onPress={onPress}
         selected={selected}
         style={[styles.recommendationGlass, selected && styles.recommendationSelected]}
-        tintColor={selected ? '#9B4DFF' : 'rgba(255,255,255,0.07)'}
+        tintColor={selected ? BrandAccent.dark : 'rgba(255,255,255,0.07)'}
         contentStyle={styles.recommendationContent}>
         <Animated.Text style={[styles.recommendationLabel, labelStyle]}>
           {option.label}
@@ -905,7 +929,10 @@ const styles = StyleSheet.create({
   },
   check: { position: 'absolute', top: 8, right: 8, width: 24, height: 24 },
   footer: { flexShrink: 0, paddingHorizontal: 24, paddingTop: 7, paddingBottom: 4 },
-  nextLabel: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  nextButton: { width: '100%', minHeight: 56, paddingHorizontal: 24, paddingVertical: 16, borderRadius: 28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  nextLabel: { color: '#100D17', fontSize: 16, fontWeight: '700' },
+  nextDisabled: { opacity: 0.65 },
+  nextPressed: { opacity: 0.9 },
   helper: {
     height: 22,
     color: 'rgba(255,255,255,0.44)',
@@ -924,7 +951,7 @@ const styles = StyleSheet.create({
   recommendationShell: { width: '100%', height: 58 },
   recommendationGlass: { width: '100%' },
   recommendationSelected: {
-    shadowColor: '#A95DFF',
+    shadowColor: BrandAccent.glow,
     shadowOpacity: 0.38,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 5 },
@@ -1002,7 +1029,7 @@ const styles = StyleSheet.create({
     width: 104,
     height: 104,
     overflow: 'visible',
-    shadowColor: '#A875FF',
+    shadowColor: BrandAccent.glow,
     shadowOpacity: 0.24,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },
@@ -1026,6 +1053,8 @@ const styles = StyleSheet.create({
   pullNativeGlass: {
     width: 104,
     height: 104,
+    borderRadius: 52,
+    backgroundColor: '#FFFFFF',
   },
   pullGlassContent: {
     position: 'absolute',

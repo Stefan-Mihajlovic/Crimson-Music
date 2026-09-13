@@ -1,12 +1,12 @@
+import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { FrostedLayer } from '@/components/frosted-surface';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import HomeQuickAccess from '@/components/home-quick-access';
+import HomeDiscovery from '@/components/home-discovery';
 import {
   preferredGenres,
   type DiscoveryProfile,
 } from '@/services/discovery-profile';
 import { useNetwork } from '@/providers/network-provider';
-import { requestLibraryRefresh } from '@/services/navigation-events';
 import { Image } from 'expo-image';
 import ArtworkImage from '@/components/artwork-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,10 +33,7 @@ import Reanimated from 'react-native-reanimated';
 import { useMainHeaderScroll } from '@/hooks/use-main-header-scroll';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import VaultGlassButton, {
-  VaultGlassGroup,
-  VaultGlassSurface,
-} from '@/components/vault-glass-button';
+import VaultGlassButton from '@/components/vault-glass-button';
 import MainHeaderOverlay, {
   MainHeaderSpacer,
 } from '@/components/main-header-overlay';
@@ -59,7 +56,6 @@ import {
   CrimsonArtist,
   CrimsonPlaylist,
   CrimsonSong,
-  createOwnedPlaylist,
   loadHomeFeed,
   loadVaultMood,
   readOfflineData,
@@ -177,8 +173,6 @@ export default function HomeScreen({
   const { artistHref, playlistHref } = useDetailRoutes();
   const insets = useSafeAreaInsets();
   const headerScroll = useMainHeaderScroll();
-  const scrollRef = useRef<ScrollView>(null);
-  const vaultTop = useRef(0);
   const [vaultCopyBottom, setVaultCopyBottom] = useState(68);
   const { user } = useAuth();
   const { playSong } = usePlayer();
@@ -225,9 +219,6 @@ export default function HomeScreen({
   const [newReleases, setNewReleases] = useState<CrimsonSong[]>(
     cachedFeed?.newReleases || [],
   );
-  const [lastMood, setLastMood] = useState<VaultMood | null>(null);
-  const [vaultMix, setVaultMix] = useState<CrimsonSong[]>([]);
-  const [savingMix, setSavingMix] = useState(false);
   const vaultVariation = useRef(0);
   const [vaultOpen, setVaultOpen] = useState(false);
   const vaultOpenRef = useRef(false);
@@ -239,7 +230,7 @@ export default function HomeScreen({
   const vaultMountedRef = useRef(true);
   const [vaultExpansion] = useState(() => new Animated.Value(0));
   const [vaultOpenerOffset] = useState(() => new Animated.Value(0));
-  const [vaultMoodsOffset] = useState(() => new Animated.Value(240));
+  const [vaultMoodsOffset] = useState(() => new Animated.Value(280));
   const [skeletonShimmer] = useState(() => new Animated.Value(0));
   const [songsFeedKey, setSongsFeedKey] = useState<string | null>(
     cachedFeed ? homeFeedKey : null,
@@ -307,52 +298,10 @@ export default function HomeScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [homeFeedKey, personalizationKey, user?.uid]);
 
-  useEffect(() => {
-    let active = true;
-    const stored = user?.uid
-      ? AsyncStorage.getItem(`crimson.vault.last-mood:${user.uid}`)
-      : Promise.resolve(null);
-    void stored
-      .then((value) => {
-        if (active)
-          setLastMood(
-            vaultMoods.some((item) => item.mood === value)
-              ? (value as VaultMood)
-              : null,
-          );
-      })
-      .catch(() => {
-        if (active) setLastMood(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [user?.uid]);
   const refresh = () => {
     setFeedError(null);
     setRefreshing(true);
     setRotation(Date.now());
-  };
-  const saveVaultMix = async () => {
-    if (!user?.uid || !vaultMix.length || savingMix) return;
-    setSavingMix(true);
-    try {
-      await createOwnedPlaylist(
-        user.uid,
-        `The Vault · ${lastMood || 'Mix'}`,
-        undefined,
-        { trackIds: vaultMix.map((song) => song.id) },
-      );
-      requestLibraryRefresh();
-      Alert.alert('Mix saved', 'Your Vault mix is now in your Audius library.');
-    } catch (error) {
-      Alert.alert(
-        'Could not save mix',
-        error instanceof Error ? error.message : 'Try again.',
-      );
-    } finally {
-      setSavingMix(false);
-    }
   };
 
   useEffect(() => {
@@ -396,7 +345,7 @@ export default function HomeScreen({
     if (reduceMotion || performanceMode) {
       vaultExpansion.setValue(open ? 1 : 0);
       vaultOpenerOffset.setValue(open ? 80 : 0);
-      vaultMoodsOffset.setValue(open ? 0 : 240);
+      vaultMoodsOffset.setValue(open ? 0 : 280);
       return;
     }
 
@@ -427,7 +376,7 @@ export default function HomeScreen({
         spring(vaultMoodsOffset, 0, true),
       ])))) return;
     } else {
-      if (!(await run(exit(vaultMoodsOffset, 240)))) return;
+      if (!(await run(exit(vaultMoodsOffset, 280)))) return;
       if (!(await run(Animated.parallel([
         spring(vaultExpansion, 0, false),
         spring(vaultOpenerOffset, 0, true),
@@ -478,12 +427,8 @@ export default function HomeScreen({
     );
   };
 
-  const chooseVaultMood = async (mood: VaultMood, newMix = false) => {
-    if (
-      vaultOpenRef.current !== !newMix ||
-      vaultLoadingRef.current
-    )
-      return;
+  const chooseVaultMood = async (mood: VaultMood) => {
+    if (!vaultOpenRef.current || vaultLoadingRef.current) return;
     const openedRevision = vaultTransitionRevision.current;
     vaultLoadingRef.current = true;
     setVaultLoadingMood(mood);
@@ -501,15 +446,8 @@ export default function HomeScreen({
         );
         return;
       }
-      setLastMood(mood);
-      setVaultMix(queue);
-      if (user?.uid)
-        void AsyncStorage.setItem(
-          `crimson.vault.last-mood:${user.uid}`,
-          mood,
-        ).catch(() => undefined);
       playSong(queue[0], queue, `The Vault · ${mood}`);
-      if (!newMix && openedRevision === vaultTransitionRevision.current) void transitionVault(false);
+      if (openedRevision === vaultTransitionRevision.current) void transitionVault(false);
     } catch {
       if (vaultMountedRef.current)
         Alert.alert(
@@ -522,19 +460,9 @@ export default function HomeScreen({
     }
   };
 
-  const openVaultFromPlaylist = () => {
-    void transitionVault(true);
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({
-        animated: !reduceMotion && !performanceMode,
-        y: Math.max(0, vaultTop.current - insets.top - 52),
-      });
-    });
-  };
-
   const vaultHeight = vaultExpansion.interpolate({
     inputRange: [0, 1],
-    outputRange: desktop ? [190, 222] : [Math.max(154, vaultCopyBottom + 80), Math.max(336, vaultCopyBottom + 262)],
+    outputRange: desktop ? [190, 286] : [Math.max(140, vaultCopyBottom + 90), Math.max(348, vaultCopyBottom + 292)],
   });
   const vaultBackgroundScale = vaultExpansion.interpolate({
     inputRange: [0, 1],
@@ -561,12 +489,14 @@ export default function HomeScreen({
         preview={Boolean(personalizationOverride)}
       />
       <Reanimated.ScrollView
-        ref={scrollRef}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={refresh}
             tintColor={colors.accent}
+            colors={[colors.accent]}
+            // Content padding does not move the native refresh indicator.
+            progressViewOffset={Platform.OS === 'web' ? undefined : insets.top}
           />
         }
         alwaysBounceVertical
@@ -585,9 +515,6 @@ export default function HomeScreen({
         <View onLayout={({ nativeEvent: { layout } }) => setContentWidth(layout.width)} />
 
         <Animated.View
-          onLayout={(event) => {
-            vaultTop.current = event.nativeEvent.layout.y;
-          }}
           style={[
             styles.vault,
             {
@@ -611,10 +538,6 @@ export default function HomeScreen({
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
-          <LinearGradient
-            colors={['rgba(17,10,27,0.10)', 'rgba(17,10,27,0.48)']}
-            style={StyleSheet.absoluteFill}
-          />
           </>}>
           {desktop ? (
             <View style={styles.desktopVaultContent}>
@@ -628,7 +551,7 @@ export default function HomeScreen({
                     <View style={styles.desktopMoods}>
                       {vaultMoods.map(({ mood, icon }) => (
                         <VaultGlassButton key={mood} accessibilityLabel={`Play ${mood} from The Vault`}
-                          disabled={Boolean(vaultLoadingMood)} height={42}
+                          disabled={Boolean(vaultLoadingMood)} height={52}
                           onPress={() => void chooseVaultMood(mood)} style={styles.desktopMood} contentStyle={styles.moodContent}>
                           {vaultLoadingMood === mood ? <ActivityIndicator color="#E7E0FF" size="small" /> : <>
                             <SymbolView name={icon} size={15} tintColor="#E7E0FF" />
@@ -637,12 +560,14 @@ export default function HomeScreen({
                         </VaultGlassButton>
                       ))}
                     </View>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Close Vault moods" onPress={() => void transitionVault(false)}>
-                      <Text style={styles.desktopVaultClose}>Close moods</Text>
-                    </Pressable>
+                    <VaultGlassButton accessibilityLabel="Close Vault moods" onPress={() => void transitionVault(false)}
+                      style={styles.vaultCloseButton} contentStyle={styles.moodContent}>
+                      <SymbolView name="xmark" size={15} tintColor="#E7E0FF" />
+                      <Text style={styles.moodText}>Close</Text>
+                    </VaultGlassButton>
                   </>
                 ) : (
-                  <VaultGlassButton accessibilityLabel="Open Vault" height={52} onPress={() => void transitionVault(true)}
+                  <VaultGlassButton accessibilityLabel="Open Vault" height={56} onPress={() => void transitionVault(true)}
                     style={styles.desktopVaultButton} contentStyle={styles.moodContent}>
                     <SymbolView name="play.fill" size={18} tintColor="#FFFFFF" />
                     <Text style={styles.moodText}>Find my mix</Text>
@@ -653,9 +578,6 @@ export default function HomeScreen({
           ) : <>
           <View onLayout={({ nativeEvent: { layout } }) => setVaultCopyBottom(Math.ceil(layout.y + layout.height))} style={styles.vaultPrimary}>
             <Text style={styles.vaultTitle}>VAULT</Text>
-            <Text style={styles.vaultDescription}>
-              A fresh mix from Audius, made for you.
-            </Text>
           </View>
           <View
             pointerEvents={vaultOpen ? 'none' : 'auto'}
@@ -666,7 +588,7 @@ export default function HomeScreen({
             <Animated.View style={[styles.vaultOpener, { transform: [{ translateY: vaultOpenerOffset }] }]}>
               <VaultGlassButton
                 accessibilityLabel="Open Vault"
-                height={48}
+                height={56}
                 onPress={() => void transitionVault(true)}
                 style={styles.vaultPlayButton}
                 contentStyle={{ flexDirection: 'row', gap: 10 }}
@@ -691,14 +613,14 @@ export default function HomeScreen({
             style={[styles.vaultMoodClip, { top: vaultCopyBottom + 28 }]}
           >
             <Animated.View style={{ transform: [{ translateY: vaultMoodsOffset }] }}>
-              <VaultGlassGroup style={styles.vaultMoodGroup}>
+              <View style={styles.vaultMoodGroup}>
                 <View style={styles.moods}>
                   {vaultMoods.map(({ mood, icon }) => (
                     <VaultGlassButton
                       key={mood}
                       accessibilityLabel={`Play ${mood} from The Vault`}
                       disabled={Boolean(vaultLoadingMood)}
-                      height={44}
+                      height={52}
                       onPress={() => void chooseVaultMood(mood)}
                       style={styles.moodItem}
                       contentStyle={styles.moodContent}
@@ -710,7 +632,7 @@ export default function HomeScreen({
                           <SymbolView
                             name={icon}
                             size={16}
-                            tintColor="#CDB7FF"
+                            tintColor={BrandAccent.highlight}
                             weight="semibold"
                           />
                           <Text style={styles.moodText}>{mood}</Text>
@@ -721,7 +643,7 @@ export default function HomeScreen({
                 </View>
                 <VaultGlassButton
                   accessibilityLabel="Close Vault moods"
-                  height={44}
+                  height={52}
                   onPress={() => void transitionVault(false)}
                   style={styles.vaultCloseButton}
                   contentStyle={styles.moodContent}
@@ -734,39 +656,13 @@ export default function HomeScreen({
                   />
                   <Text style={styles.moodText}>Close</Text>
                 </VaultGlassButton>
-              </VaultGlassGroup>
+              </View>
             </Animated.View>
           </View>
           </>}
           </FrostedLayer>
         </Animated.View>
 
-        {lastMood ? (
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-            <VaultGlassButton
-              accessibilityLabel={`Play another ${lastMood} mix`}
-              disabled={vaultOpen || Boolean(vaultLoadingMood)}
-              onPress={() => void chooseVaultMood(lastMood, true)}
-              style={{ flex: 1 }}
-            >
-              <Text style={styles.moodText}>
-                {vaultLoadingMood ? 'Making mix…' : `New ${lastMood} mix`}
-              </Text>
-            </VaultGlassButton>
-            {vaultMix.length ? (
-              <VaultGlassButton
-                accessibilityLabel="Save Vault mix to Audius"
-                disabled={savingMix}
-                onPress={() => void saveVaultMix()}
-                style={{ flex: 1 }}
-              >
-                <Text style={styles.moodText}>
-                  {savingMix ? 'Saving…' : 'Save mix'}
-                </Text>
-              </VaultGlassButton>
-            ) : null}
-          </View>
-        ) : null}
         {!personalizationOverride ? <HomeQuickAccess /> : null}
         {feedError ? (
           <Pressable
@@ -920,49 +816,6 @@ export default function HomeScreen({
           style={styles.fullBleedCarousel}
           contentContainerStyle={[styles.playlistList, desktop && styles.desktopCarousel]}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open The Vault"
-            onHoverIn={() => setHoveredCard('vault')}
-            onHoverOut={() => setHoveredCard('')}
-            disabled={Boolean(vaultLoadingMood)}
-            onPress={openVaultFromPlaylist}
-            style={({ pressed }) => [
-              styles.playlistCard,
-              desktop && [styles.desktopCard, { width: desktopCardWidth }],
-              desktop && hoveredCard === 'vault' && { backgroundColor: colors.controlSurface },
-              pressed && !reduceMotion && styles.artistPressedScale,
-            ]}
-          >
-            <FrostedLayer style={[styles.playlistArtworkWrap, desktop && { width: desktopCardWidth - 16, height: desktopCardWidth - 16 }]} background={<>
-              <Image
-                autoplay={!reduceMotion && !performanceMode}
-                contentFit="cover"
-                source={require('@/assets/images/onboarding/vault-banner.gif')}
-                style={[styles.playlistArtwork, desktop && { width: desktopCardWidth - 16, height: desktopCardWidth - 16 }]}
-              />
- </>}>
-              <VaultGlassSurface
-                interactive
-                radius={26}
-                style={[styles.vaultCardPlay, desktop && { top: (desktopCardWidth - 68) / 2, left: (desktopCardWidth - 68) / 2 }]}
-              >
-                <SymbolView name="play.fill" size={25} tintColor="#F0E9FF" />
-              </VaultGlassSurface>
-            </FrostedLayer>
-            <Text
-              numberOfLines={1}
-              style={[styles.playlistTitle, { color: colors.text }]}
-            >
-              The Vault
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={[styles.playlistSubtitle, { color: colors.secondaryText }]}
-            >
-              Ready to experience magic
-            </Text>
-          </Pressable>
           {loading ? (
             <PlaylistListSkeleton shimmer={skeletonShimmer} />
           ) : (
@@ -1016,62 +869,11 @@ export default function HomeScreen({
           )}
         </ScrollView>
 
-        {loading ? (
-          <FeatureSkeleton shimmer={skeletonShimmer} />
-        ) : featuredArtist ? (
-          <View style={styles.featureSection}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Artist spotlight
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Open ${featuredArtist.name}`}
-              onPress={() => router.push(artistHref(featuredArtist.id))}
-              onLongPress={() => openArtistActions(featuredArtist)}
-              delayLongPress={350}
-              style={({ pressed }) => [
-                styles.featureCard,
-                desktop && styles.desktopFeatureCard,
-                pressed && styles.artistPressed,
-                pressed && !reduceMotion && styles.artistPressedScale,
-              ]}
-            >
-              <View style={styles.featureImageWrap}>
-                <ArtworkImage
-                  artwork={featuredArtist.artwork}
-                  fallbackSource={defaultArtistImage}
-                  contentFit="cover"
-                  source={
-                    featuredArtist.image
-                      ? { uri: featuredArtist.image }
-                      : defaultArtistImage
-                  }
-                  style={StyleSheet.absoluteFill}
-                />
-                <CollectionPlayingOverlay
-                  sourceName={featuredArtist.name}
-                  spectrumSize={50}
-                />
-              </View>
-              <LinearGradient
-                colors={['rgba(24,16,38,0.84)', 'rgba(82,31,126,0.68)']}
-                style={styles.featureInfo}
-              >
-                <Text numberOfLines={1} style={styles.featureName}>
-                  {featuredArtist.name}
-                </Text>
-                <Text style={styles.featureFollowers}>
-                  {featuredArtist.followers} Followers
-                </Text>
-                <View
-                  style={[styles.featureButton, styles.featureButtonVisual]}
-                >
-                  <Text style={styles.featureButtonText}>View Profile</Text>
-                </View>
-              </LinearGradient>
-            </Pressable>
-          </View>
-        ) : null}
+        {loading ? <FeatureSkeleton shimmer={skeletonShimmer} /> : null}
+        <HomeDiscovery artist={loading ? null : featuredArtist} profile={profile} rotation={rotation}
+          contentWidth={contentWidth} excludeTrackIds={[...songs, ...newReleases].map((song) => song.id)}
+          onOpenArtist={(artist) => router.push(artistHref(artist.id))}
+          onArtistMenu={openArtistActions} onSongMenu={openSongActions} />
       </Reanimated.ScrollView>
 
     </MainScreenBackground>
@@ -1266,15 +1068,13 @@ const styles = StyleSheet.create({
   desktopVaultTitle: { color: '#FFFFFF', fontSize: 42, lineHeight: 48, letterSpacing: -1.5, fontWeight: '800' },
   desktopVaultDescription: { color: '#D4C4E8', fontSize: 14, lineHeight: 21, maxWidth: 310 },
   desktopVaultActions: { width: '48%', alignItems: 'flex-end', gap: 12 },
-  desktopVaultButton: { width: 178 },
+  desktopVaultButton: { width: 200 },
   desktopMoods: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' },
   desktopMood: { width: '48%' },
-  desktopVaultClose: { color: '#E7E0FF', fontSize: 12, padding: 4 },
   desktopSongGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 24, rowGap: 4 },
   desktopSongCell: { minWidth: 0 },
   desktopCarousel: { gap: 16, paddingBottom: 6 },
   desktopCard: { padding: 8, borderRadius: 12, alignItems: 'stretch', gap: 0 },
-  desktopFeatureCard: { maxWidth: 700, height: 228 },
   screen: { flex: 1, backgroundColor: '#0E0D13' },
   scrollContent: { paddingHorizontal: 20 },
   vault: {
@@ -1283,7 +1083,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#762DFF',
+    shadowColor: BrandAccent.glow,
     shadowRadius: 64,
     shadowOffset: { width: 0, height: -28 },
   },
@@ -1301,13 +1101,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.1,
   },
-  vaultDescription: {
-    maxWidth: 250,
-    color: 'rgba(231,224,255,0.78)',
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
-  },
   vaultOpenerClip: {
     position: 'absolute',
     height: 80,
@@ -1320,8 +1113,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  vaultPlayButton: { width: '62%', maxWidth: 240 },
-  vaultMoodClip: { position: 'absolute', height: 234, paddingTop: 16, left: 12, right: 12, overflow: 'hidden' },
+  vaultPlayButton: { width: '44%', minWidth: 144, maxWidth: 200 },
+  vaultMoodClip: { position: 'absolute', height: 264, paddingTop: 16, left: 12, right: 12, overflow: 'hidden' },
   vaultMoodGroup: { alignItems: 'center', gap: 12 },
   moods: {
     width: '100%',
@@ -1367,7 +1160,7 @@ const styles = StyleSheet.create({
     borderRadius: 71,
     borderWidth: 2,
     borderColor: 'rgba(220,214,247,0.72)',
-    backgroundColor: 'rgba(143,89,245,0.13)',
+    backgroundColor: brandAccentTint(0.13),
   },
   artistImageWrap: {
     width: 134,
@@ -1388,7 +1181,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   playlistHighlight: {
-    color: '#8F59F5',
+    color: BrandAccent.dark,
     fontSize: 22,
     lineHeight: 26,
     fontWeight: '800',
@@ -1396,7 +1189,6 @@ const styles = StyleSheet.create({
   },
   playlistList: { gap: 11, paddingHorizontal: 20 },
   playlistCard: { width: 142 },
-  playlistArtworkWrap: { width: 142, height: 142 },
   playlistArtwork: {
     width: 142,
     height: 142,
@@ -1404,15 +1196,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1F1D23',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(220,214,247,0.22)',
-  },
-  vaultCardPlay: {
-    position: 'absolute',
-    top: 45,
-    left: 45,
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   playlistTitle: {
     marginTop: 8,
@@ -1422,35 +1205,6 @@ const styles = StyleSheet.create({
   },
   playlistSubtitle: { marginTop: 2, color: '#8A85A1', fontSize: 12 },
   featureSection: { marginTop: 32, gap: 14 },
-  featureCard: {
-    height: 178,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(220,214,247,0.22)',
-    backgroundColor: '#19151F',
-  },
-  featureImageWrap: { width: '45%', height: '100%', overflow: 'hidden' },
-  featureInfo: { flex: 1, justifyContent: 'center', paddingHorizontal: 17 },
-  featureName: {
-    color: '#F1ECFF',
-    fontSize: 27,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-  },
-  featureFollowers: { marginTop: 5, color: '#AAA1BB', fontSize: 14 },
-  featureButton: { width: '100%', marginTop: 19 },
-  featureButtonVisual: {
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 15,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(220,214,247,0.22)',
-    backgroundColor: 'rgba(82,169,209,0.34)',
-  },
-  featureButtonText: { color: '#F5F0FF', fontSize: 14, fontWeight: '700' },
   skeletonBlock: { overflow: 'hidden' },
   skeletonShimmer: {
     position: 'absolute',

@@ -56,7 +56,7 @@ export default function DesktopMusicPreferences({
           <p role={error ? 'alert' : undefined} style={{ margin: 0, fontSize: 13, color: error ? '#EF8299' : colors.secondaryText, lineHeight: 1.5 }}>{error || (saving ? 'Saving your preferences…' : 'Your choices shape your Home recommendations.')}</p>
           <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
             {onClose ? <button type="button" disabled={saving} onClick={onClose} style={{ ...buttonStyle, border: `1px solid ${colors.border}`, color: colors.text, background: colors.elevated }}>Cancel</button> : null}
-            <button type="submit" disabled={saving || selectedCategories.length < 2} style={{ ...buttonStyle, border: 0, background: colors.accent, color: '#fff', opacity: saving || selectedCategories.length < 2 ? 0.5 : 1 }}>{saving ? 'Saving…' : editing ? 'Save preferences' : 'Start listening'}</button>
+            <button type="submit" disabled={saving || selectedCategories.length < 2} style={{ ...buttonStyle, border: 0, background: '#FFFFFF', color: '#100D17', opacity: saving || selectedCategories.length < 2 ? 0.5 : 1 }}>{saving ? 'Saving…' : editing ? 'Save preferences' : 'Start listening'}</button>
           </div>
         </footer>
       </form>

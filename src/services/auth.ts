@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { activateAccount, isAccountDeleted, registerAccountCleanup } from '@/services/account-lifecycle';
 import { clearAudiusCaches } from '@/services/audius';
-import { AudiusSessionError, getAudiusSession, loginAudius, logoutAudius, refreshAudiusAccount, restoreAudiusSession, subscribeAudiusSession } from '@/services/audius-session';
+import { AudiusSessionError, getAudiusSession, getAudiusSessionRevision, loginAudius, logoutAudius, refreshAudiusAccount, restoreAudiusSession, subscribeAudiusSession } from '@/services/audius-session';
 import type { AudiusAccount } from '@/services/audius-session-core';
+import { updateAudiusProfile, type ProfileUpdate } from '@/services/audius-profile';
+import { hasSavedPersonalization, MINIMUM_PERSONALIZATION_CATEGORIES, normalizeFavoriteCategories } from '@/services/personalization';
 
 export type RecommendationStyle = 'familiar' | 'balanced' | 'surprise' | 'underground';
 export type CrimsonUser = {
@@ -22,7 +24,7 @@ export class CrimsonAuthError extends Error {
   constructor(message: string, code = 'general') { super(message); this.name = 'CrimsonAuthError'; this.code = code; }
 }
 
-type Preferences = { FavoriteCategories?: string[]; RecommendationStyle?: RecommendationStyle };
+type Preferences = { FavoriteCategories?: string[]; RecommendationStyle?: RecommendationStyle; OnboardingComplete?: boolean };
 const preferencesKey = (uid: string) => `crimson.audius.preferences.v1:${uid}`;
 const styles: RecommendationStyle[] = ['familiar', 'balanced', 'surprise', 'underground'];
 async function userFrom(account: AudiusAccount): Promise<CrimsonUser> {
@@ -31,15 +33,18 @@ async function userFrom(account: AudiusAccount): Promise<CrimsonUser> {
     const parsed: unknown = JSON.parse(await AsyncStorage.getItem(preferencesKey(account.id)) || '{}');
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) preferences = parsed as Preferences;
   } catch { /* Use device defaults. */ }
+  // Preferences may finish loading after Save has committed newer account fields.
+  const session = getAudiusSession();
+  const latestAccount = session?.account.id === account.id ? session.account : account;
   return {
-    uid: account.id, Username: account.handle, DisplayName: account.name, Email: '', ProfilePhoto: account.picture,
-    AuthProvider: 'audius', CanWrite: getAudiusSession()?.scope === 'write',
-    FavoriteCategories: Array.isArray(preferences.FavoriteCategories) ? preferences.FavoriteCategories.filter((v) => typeof v === 'string').slice(0, 10) : [],
+    uid: latestAccount.id, Username: latestAccount.handle, DisplayName: latestAccount.name, Email: '', ProfilePhoto: latestAccount.picture,
+    AuthProvider: 'audius', CanWrite: session?.scope === 'write',
+    FavoriteCategories: normalizeFavoriteCategories(preferences.FavoriteCategories),
     RecommendationStyle: styles.includes(preferences.RecommendationStyle!) ? preferences.RecommendationStyle : 'balanced',
-    OnboardingComplete: true,
+    OnboardingComplete: hasSavedPersonalization(preferences),
   };
 }
-export const hasCompletePersonalization = (user: CrimsonUser | null | undefined) => Boolean(user);
+export const hasCompletePersonalization = (user: CrimsonUser | null | undefined) => hasSavedPersonalization(user);
 export async function signInWithAudius() {
   try {
     const account = await loginAudius();
@@ -61,6 +66,9 @@ export async function refreshSession() {
   if (!getAudiusSession()) return null;
   return userFrom(await refreshAudiusAccount());
 }
+export async function updateUserProfile(uid: string, update: ProfileUpdate) {
+  return userFrom(await updateAudiusProfile(uid, update));
+}
 export async function signOut() {
   clearAudiusCaches();
   await logoutAudius();
@@ -77,13 +85,21 @@ function updatePreferences(uid: string, patch: Preferences): Promise<CrimsonUser
   const operation = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(async () => {
     const session = getAudiusSession();
     if (session?.account.id !== uid || isAccountDeleted(uid)) throw new CrimsonAuthError('Login with Audius to continue.');
+    const revision = getAudiusSessionRevision();
+    const assertCurrent = () => {
+      if (getAudiusSession()?.account.id !== uid || getAudiusSessionRevision() !== revision || isAccountDeleted(uid)) {
+        throw new CrimsonAuthError('The Audius account changed. Please try again.', 'cancelled');
+      }
+    };
     const current = await userFrom(session.account);
+    assertCurrent();
     await AsyncStorage.setItem(preferencesKey(uid), JSON.stringify({
       FavoriteCategories: current.FavoriteCategories,
       RecommendationStyle: current.RecommendationStyle,
+      OnboardingComplete: current.OnboardingComplete,
       ...patch,
     }));
-    if (getAudiusSession()?.account.id !== uid) throw new CrimsonAuthError('The Audius account changed. Please try again.');
+    assertCurrent();
     return userFrom(getAudiusSession()!.account);
   });
   preferenceWrites.set(uid, operation);
@@ -91,4 +107,10 @@ function updatePreferences(uid: string, patch: Preferences): Promise<CrimsonUser
   return operation;
 }
 export const updateUserRecommendationStyle = (uid: string, style: RecommendationStyle) => updatePreferences(uid, { RecommendationStyle: styles.includes(style) ? style : 'balanced' });
-export const completeUserOnboarding = (uid: string, categories: string[], style: RecommendationStyle) => updatePreferences(uid, { FavoriteCategories: [...new Set(categories.map((v) => v.trim()).filter(Boolean))].slice(0, 10), RecommendationStyle: styles.includes(style) ? style : 'balanced' });
+export function completeUserOnboarding(uid: string, categories: string[], style: RecommendationStyle) {
+  const selected = normalizeFavoriteCategories(categories);
+  if (selected.length < MINIMUM_PERSONALIZATION_CATEGORIES) {
+    return Promise.reject(new CrimsonAuthError(`Choose at least ${MINIMUM_PERSONALIZATION_CATEGORIES} music categories.`));
+  }
+  return updatePreferences(uid, { FavoriteCategories: selected, RecommendationStyle: styles.includes(style) ? style : 'balanced', OnboardingComplete: true });
+}

@@ -1,3 +1,4 @@
+import { musicCategories as categories } from '@/constants/music-categories';
 import { resetPlayerListeningHistory } from '@/services/playback-session';
 import { preferredGenres, rankDiscoveryTracks, type DiscoveryProfile } from '@/services/discovery-profile';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,7 +32,6 @@ import {
   ArtistDetail,
   CategoryDetail,
   CrimsonArtist,
-  CrimsonCategory,
   CrimsonPlaylist,
   CrimsonSong,
   DiscoveryCatalog,
@@ -134,19 +134,7 @@ async function saveOfflineData(scope: string, value: unknown) {
   await AsyncStorage.setItem(offlineDataKey(scope), JSON.stringify(value));
 }
 
-const categories: CrimsonCategory[] = [
-  { id: 'electronic', name: 'Electronic', color: '#5632A8', image: '', imageSmall: '', localImage: require('@/assets/images/categories/electronic.jpg') },
-  { id: 'hip-hop-rap', name: 'Hip-Hop/Rap', color: '#8B2F52', image: '', imageSmall: '', localImage: require('@/assets/images/categories/hip-hop-rap.jpg') },
-  { id: 'pop', name: 'Pop', color: '#B54778', image: '', imageSmall: '', localImage: require('@/assets/images/categories/pop.jpg') },
-  { id: 'r-b-soul', name: 'R&B/Soul', color: '#7046A0', image: '', imageSmall: '', localImage: require('@/assets/images/categories/r-b-soul.jpg') },
-  { id: 'rock', name: 'Rock', color: '#8C3B35', image: '', imageSmall: '', localImage: require('@/assets/images/categories/rock.jpg') },
-  { id: 'ambient', name: 'Ambient', color: '#326E78', image: '', imageSmall: '', localImage: require('@/assets/images/categories/ambient.jpg') },
-  { id: 'jazz', name: 'Jazz', color: '#7B5931', image: '', imageSmall: '', localImage: require('@/assets/images/categories/jazz.jpg') },
-  { id: 'classical', name: 'Classical', color: '#405F8E', image: '', imageSmall: '', localImage: require('@/assets/images/categories/classical.jpg') },
-  { id: 'reggae', name: 'Reggae', color: '#357650', image: '', imageSmall: '', localImage: require('@/assets/images/categories/reggae.jpg') },
-  { id: 'podcasts', name: 'Podcasts', color: '#5C526B', image: '', imageSmall: '', localImage: require('@/assets/images/categories/podcasts.jpg') },
-  { id: 'events', name: 'Events', color: '#70377E', image: '', imageSmall: '', localImage: require('@/assets/images/categories/events.jpg') },
-];
+
 
 const homeArtistGenres = ['Rock', 'Hip-Hop/Rap', 'R&B/Soul', 'Electronic', 'Pop', 'Jazz'];
 const vaultMoodProfiles: Record<VaultMood, { genres: string[]; moods: string[]; tags: string[] }> = {

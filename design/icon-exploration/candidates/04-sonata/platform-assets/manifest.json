@@ -1,0 +1,28 @@
+{
+  "candidate": "04-sonata",
+  "source": "../Crimson-Sonata.icon",
+  "stagedOnly": true,
+  "backgroundColor": "#281146",
+  "android": {
+    "canvasDp": 108,
+    "safeDiameterDp": 66,
+    "scale": 0.8265318761177787,
+    "alphaBounds": {
+      "minX": 229,
+      "minY": 262,
+      "maxX": 794,
+      "maxY": 761,
+      "radius": 304.90080354108613
+    }
+  },
+  "assets": {
+    "icon": "icon.png",
+    "foreground": "android-foreground.png",
+    "background": "android-background.png",
+    "monochrome": "android-monochrome.png",
+    "splash": "mark.png",
+    "favicon": "favicon.png",
+    "wordmark": "wordmark.png"
+  },
+  "note": "Portable SVG/PNG assets use the same vector geometry. iOS adds native Composer materials. Convert selected wordmark.png to WebP at integration."
+}

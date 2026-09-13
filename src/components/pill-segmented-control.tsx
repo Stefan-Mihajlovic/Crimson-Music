@@ -1,3 +1,4 @@
+import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { FrostedBackdrop } from '@/components/frosted-surface';
 import { GlassView } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
@@ -64,7 +65,7 @@ export default function PillSegmentedControl<T extends string>({
           style={[
             styles.thumb,
             {
-              backgroundColor: Platform.OS !== 'ios' ? 'transparent' : performanceMode ? colors.accent : isDark ? 'rgba(143,89,245,0.68)' : 'rgba(125,63,209,0.62)',
+              backgroundColor: Platform.OS !== 'ios' ? 'transparent' : performanceMode ? colors.accent : isDark ? brandAccentTint(0.68) : brandAccentTint(0.62, 'light'),
               width: segmentWidth,
             },
             performanceMode && { shadowOpacity: 0 },
@@ -127,7 +128,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderRadius: 999,
     borderCurve: 'continuous',
-    shadowColor: '#7E46D8',
+    shadowColor: BrandAccent.glow,
     shadowOpacity: 0.3,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },

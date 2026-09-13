@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import type { Alert as NativeAlert, AlertButton, AlertOptions } from 'react-native';
 
 type Notice = { title: string; message?: string; buttons: AlertButton[]; options?: AlertOptions };
@@ -32,7 +33,7 @@ function present() {
   notice.buttons.forEach((button) => {
     const control = document.createElement('button');
     control.textContent = button.text || 'OK';
-    control.style.cssText = `font:inherit;font-weight:600;border:0;border-radius:999px;min-height:44px;padding:10px 18px;cursor:pointer;background:${button.style === 'cancel' ? '#eee' : button.style === 'destructive' ? '#b5233c' : '#7850d4'};color:${button.style === 'cancel' ? '#222' : '#fff'}`;
+    control.style.cssText = `font:inherit;font-weight:600;border:0;border-radius:999px;min-height:44px;padding:10px 18px;cursor:pointer;background:${button.style === 'cancel' ? '#eee' : button.style === 'destructive' ? '#b5233c' : BrandAccent.light};color:${button.style === 'cancel' ? '#222' : '#fff'}`;
     control.onclick = () => finish(button.onPress);
     actions.append(control);
   });

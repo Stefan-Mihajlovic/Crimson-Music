@@ -29,6 +29,7 @@ const client = new AudiusSessionClient({
 export { AudiusSessionError };
 export const getCurrentAudiusUserId = () => client.current()?.account.id || null;
 export const getAudiusSession = () => client.current();
+export const getAudiusSessionRevision = () => client.version();
 export const subscribeAudiusSession = (listener: () => void) => client.subscribe(listener);
 export const restoreAudiusSession = () => client.restore();
 export const logoutAudius = () => client.logout();
@@ -100,9 +101,19 @@ export function loginAudius() {
 
 export async function refreshAudiusAccount() {
   const revision = client.version();
+  const previousAccount = client.current()?.account;
   const payload = await audiusRequest<unknown>('/me');
   const account = await resolveAccount(payload, await client.accessToken());
-  return client.updateAccount(account, revision);
+  return client.updateAccount(account, revision, previousAccount);
+}
+
+/** Apply only fields that Audius has accepted, preserving other account data. */
+export async function commitAudiusProfile(uid: string, patch: Partial<Pick<AudiusAccount, 'name' | 'picture'>>, revision: number) {
+  const account = client.current()?.account;
+  if (!account || account.id !== uid || client.version() !== revision) {
+    throw new AudiusSessionError('The Audius account changed. Please try again.', 'cancelled');
+  }
+  return client.updateAccount({ ...account, ...patch }, revision);
 }
 
 /** Never send account tokens to an artwork mirror, CDN, or a third-party URL. */

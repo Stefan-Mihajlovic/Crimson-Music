@@ -1,0 +1,28 @@
+{
+  "candidate": "03-resonance",
+  "source": "../Crimson-Resonance.icon",
+  "stagedOnly": true,
+  "backgroundColor": "#6d28d9",
+  "android": {
+    "canvasDp": 108,
+    "safeDiameterDp": 66,
+    "scale": 0.9399032735955793,
+    "alphaBounds": {
+      "minX": 207,
+      "minY": 238,
+      "maxX": 808,
+      "maxY": 785,
+      "radius": 304.96967062316213
+    }
+  },
+  "assets": {
+    "icon": "icon.png",
+    "foreground": "android-foreground.png",
+    "background": "android-background.png",
+    "monochrome": "android-monochrome.png",
+    "splash": "mark.png",
+    "favicon": "favicon.png",
+    "wordmark": "wordmark.png"
+  },
+  "note": "Portable SVG/PNG assets use the same vector geometry. iOS adds native Composer materials. Convert selected wordmark.png to WebP at integration."
+}

@@ -1,3 +1,4 @@
+import FavoritesArtwork from '@/components/favorites-artwork';
 import { registerAccountCleanup } from '@/services/account-lifecycle';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ArtworkImage from '@/components/artwork-image';
@@ -53,7 +54,6 @@ import { subscribeToLibraryRefresh } from '@/services/navigation-events';
 
 const defaultArtwork = require('@/assets/images/home/default-song.webp');
 const defaultArtist = require('@/assets/images/home/default-artist.webp');
-const favoritesArtwork = require('@/assets/images/onboarding/favorites.webp');
 const emptyFeed: LibraryFeed = {
   playlists: [],
   likedPlaylists: [],
@@ -220,7 +220,7 @@ export default function LibraryScreen() {
         <LibraryItem
           key={item.key}
           downloadCollectionKey="favorites"
-          imageSource={favoritesArtwork}
+          favorites
           layout={layout}
           desktop={desktop}
           gridWidth={gridWidth}
@@ -495,7 +495,7 @@ function LibraryItem({
   desktop,
   gridWidth,
   downloadCollectionKey,
-  imageSource,
+  favorites = false,
   layout,
   onLongPress,
   onPress,
@@ -507,7 +507,7 @@ function LibraryItem({
   desktop?: boolean;
   gridWidth?: number;
   downloadCollectionKey?: string;
-  imageSource?: number;
+  favorites?: boolean;
   layout: LibraryLayout;
   onLongPress?: () => void;
   onPress: () => void;
@@ -552,17 +552,17 @@ function LibraryItem({
           styles.artworkClip,
         ]}
       >
-        <ArtworkImage
+        {favorites ? <FavoritesArtwork style={StyleSheet.absoluteFill} /> : <ArtworkImage
           artwork={artist?.artwork}
-          fallbackSource={imageSource || (artist ? defaultArtist : defaultArtwork)}
+          fallbackSource={(artist ? defaultArtist : defaultArtwork)}
           contentFit="cover"
           source={
             image
               ? { uri: image }
-              : imageSource || (artist ? defaultArtist : defaultArtwork)
+              : (artist ? defaultArtist : defaultArtwork)
           }
           style={StyleSheet.absoluteFill}
-        />
+        />}
         <CollectionPlayingOverlay
           sourceName={sourceName}
           spectrumSize={spectrumSize}

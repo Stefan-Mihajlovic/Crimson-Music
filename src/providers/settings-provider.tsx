@@ -1,3 +1,4 @@
+import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, useColorScheme } from 'react-native';
@@ -39,8 +40,8 @@ const palettes: Record<ResolvedAppTheme, AppPalette> = {
     secondaryText: '#655E6B',
     mutedText: '#817A86',
     border: 'rgba(42,31,48,0.12)',
-    accent: '#7D3FD1',
-    accentSoft: 'rgba(125,63,209,0.13)',
+    accent: BrandAccent.light,
+    accentSoft: brandAccentTint(0.13, 'light'),
   },
   Dark: {
     background: '#0E0D13',
@@ -52,8 +53,8 @@ const palettes: Record<ResolvedAppTheme, AppPalette> = {
     secondaryText: '#A29AAA',
     mutedText: '#817A8D',
     border: 'rgba(220,214,247,0.16)',
-    accent: '#9B68FA',
-    accentSoft: 'rgba(143,89,245,0.18)',
+    accent: BrandAccent.dark,
+    accentSoft: brandAccentTint(0.18),
   },
 };
 

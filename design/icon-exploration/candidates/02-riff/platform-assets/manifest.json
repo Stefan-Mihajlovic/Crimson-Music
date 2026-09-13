@@ -1,0 +1,28 @@
+{
+  "candidate": "02-riff",
+  "source": "../Crimson-Riff.icon",
+  "stagedOnly": true,
+  "backgroundColor": "#6d28d9",
+  "android": {
+    "canvasDp": 108,
+    "safeDiameterDp": 66,
+    "scale": 0.904215337896074,
+    "alphaBounds": {
+      "minX": 282,
+      "minY": 254,
+      "maxX": 680,
+      "maxY": 774,
+      "radius": 304.9499959009674
+    }
+  },
+  "assets": {
+    "icon": "icon.png",
+    "foreground": "android-foreground.png",
+    "background": "android-background.png",
+    "monochrome": "android-monochrome.png",
+    "splash": "mark.png",
+    "favicon": "favicon.png",
+    "wordmark": "wordmark.png"
+  },
+  "note": "Portable SVG/PNG assets use the same vector geometry. iOS adds native Composer materials. Convert selected wordmark.png to WebP at integration."
+}

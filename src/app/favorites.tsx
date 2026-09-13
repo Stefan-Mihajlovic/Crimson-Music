@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import FavoritesArtwork from '@/components/favorites-artwork';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
@@ -36,7 +36,6 @@ import { actionSheetHref } from '@/services/action-sheet';
 import { CrimsonSong, loadFavoriteSongs } from '@/services/music';
 import { subscribeToLibraryRefresh } from '@/services/navigation-events';
 
-const favoritesArtwork = require('@/assets/images/onboarding/favorites.webp');
 const favoritesDownloadKey = 'favorites';
 
 export default function FavoritesScreen() {
@@ -220,15 +219,15 @@ export default function FavoritesScreen() {
         ListHeaderComponent={
           <>
             <View style={[styles.hero, desktop && [styles.desktopHero, { backgroundColor: colors.elevated }]]}>
-              <Image
-                source={favoritesArtwork}
+              <FavoritesArtwork
+                variant="hero"
                 contentFit="cover"
                 style={desktop ? [styles.desktopCover, { width: coverSize, height: coverSize }] : StyleSheet.absoluteFill}
               />
               <LinearGradient
                 colors={desktop ? [colors.accentSoft, colors.background] : [
-                  'rgba(91,35,144,0.05)',
-                  'rgba(14,13,19,0.58)',
+                  'rgba(14,13,19,0)',
+                  'rgba(14,13,19,0.15)',
                   colors.background,
                 ]}
                 style={StyleSheet.absoluteFill}
@@ -341,7 +340,7 @@ const styles = StyleSheet.create({
   desktopHero: { height: 'auto', minHeight: 252, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', padding: 28, gap: 28 },
   desktopCover: { borderRadius: 10, flexShrink: 0, zIndex: 1, boxShadow: '0 12px 32px rgba(0,0,0,0.2)' },
   desktopHeroCopy: { flex: 1, minWidth: 0, paddingHorizontal: 0, paddingBottom: 0, zIndex: 1 },
-  desktopEyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, marginBottom: 8 },
+  desktopEyebrow: { fontSize: 10, fontWeight: '700', marginBottom: 8 },
   desktopName: { letterSpacing: -1.4, fontWeight: '800' },
   desktopActions: { flexWrap: 'wrap', marginTop: 20 },
   desktopPlayButton: { flexGrow: 0, flexShrink: 0, flexBasis: 132, width: 132 },

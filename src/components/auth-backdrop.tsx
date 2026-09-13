@@ -1,21 +1,16 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PropsWithChildren } from 'react';
 import { StyleSheet, View } from 'react-native';
+import WelcomeArtworkGrid from '@/components/welcome-artwork-grid';
 
 export default function AuthBackdrop({ children }: PropsWithChildren) {
   return (
     <View style={styles.root}>
-      <Image
-        source={require('@/assets/images/auth/auth-background.webp')}
-        contentFit="cover"
-        contentPosition="top"
-        style={StyleSheet.absoluteFill}
-      />
+      <WelcomeArtworkGrid />
       <View style={styles.dim} />
       <LinearGradient
-        colors={['rgba(13,10,16,0.64)', 'rgba(13,10,16,0.10)', '#0D0A10']}
-        locations={[0, 0.46, 0.88]}
+        colors={['rgba(13,10,16,0.58)', 'rgba(13,10,16,0.04)', '#0D0A10']}
+        locations={[0, 0.4, 0.88]}
         style={StyleSheet.absoluteFill}
       />
       <LinearGradient
@@ -37,6 +32,6 @@ const styles = StyleSheet.create({
   dim: {
     position: 'absolute',
     inset: 0,
-    backgroundColor: 'rgba(13,10,16,0.42)',
+    backgroundColor: 'rgba(16,8,29,0.34)',
   },
 });

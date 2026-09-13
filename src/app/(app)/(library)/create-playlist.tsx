@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -146,7 +147,7 @@ export default function CreatePlaylistScreen() {
           style={[styles.formGroup, { backgroundColor: colors.controlSurface }]}
         >
           <Text style={[styles.fieldLabel, { color: colors.mutedText }]}>
-            NAME
+            Name
           </Text>
           <TextInput
             maxLength={80}
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   headerAction: { paddingHorizontal: 2, paddingVertical: 4 },
-  headerActionText: { color: '#A97AFF', fontSize: 16, fontWeight: '700' },
+  headerActionText: { color: BrandAccent.dark, fontSize: 16, fontWeight: '700' },
   headerActionDisabled: { opacity: 0.38 },
   coverButton: {
     width: 176,
@@ -248,7 +249,6 @@ const styles = StyleSheet.create({
     color: '#8F879B',
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 1.1,
   },
   input: { height: 48, color: '#F1ECFF', fontSize: 16 },
   help: {

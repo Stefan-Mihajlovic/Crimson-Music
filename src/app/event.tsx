@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -95,8 +96,8 @@ export default function EventDetailScreen() {
           />
           <View style={styles.heroCopy}>
             <Text style={styles.overline}>
-              AUDIUS{' '}
-              {event.type === 'remix_contest' ? 'REMIX CONTEST' : 'EVENT'}
+              Audius{' '}
+              {event.type === 'remix_contest' ? 'remix contest' : 'event'}
             </Text>
             <Text style={styles.title}>{event.title}</Text>
             <Pressable
@@ -232,10 +233,9 @@ const styles = StyleSheet.create({
   hero: { height: 390, justifyContent: 'flex-end', backgroundColor: '#211C28' },
   heroCopy: { paddingHorizontal: 22, paddingBottom: 24 },
   overline: {
-    color: '#D5B7FF',
+    color: BrandAccent.highlight,
     fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 1.2,
   },
   title: {
     marginTop: 7,

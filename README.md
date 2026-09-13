@@ -7,11 +7,13 @@ An open-source Audius music player built with Expo 57, React Native, and TypeScr
 ## Features
 
 - Discover music matched to saved genres and listening habits, continue recent listening, and catch new tracks from followed artists.
+- Explore artist spotlights and Underground gems with direct track playback.
 - Search Audius tracks, artists, and playlists with recent searches, type filters, and paginated results.
 - Play music with one ordered queue, queue editing, playback recovery, and a paused session restore.
 - Manage Audius favorites, follows, and playlists, including privacy, titles, descriptions, track order, and deletion.
 - Generate a Vault mood mix and save it to your Audius library.
 - Personalize discovery with device-local music preferences.
+- Edit your Audius display name and profile photo inside Crimson. New listeners complete music preferences before entering the app.
 - View local listening history and statistics, and Audius notifications.
 - Save music for offline listening on native platforms, with storage controls and a visible download queue, Wi-Fi waiting, retry, and cancellation.
 - Use a persistent desktop web player with browser media commands, keyboard shortcuts, seeking, and volume.

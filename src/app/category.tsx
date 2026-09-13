@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -437,7 +438,7 @@ const styles = StyleSheet.create({
   },
   eventEntries: {
     marginTop: 8,
-    color: '#CDAEFF',
+    color: BrandAccent.highlight,
     fontSize: 12,
     fontWeight: '800',
   },

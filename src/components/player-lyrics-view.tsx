@@ -55,7 +55,7 @@ export default function PlayerLyricsView({ karaoke, lyrics }: { karaoke: Karaoke
       <View style={styles.modeCopy}>
         <View style={styles.modeTitleRow}>
           <Text style={[styles.modeTitle, { color: colors.text }]}>Karaoke</Text>
-          <Text style={[styles.beta, { color: colors.accent, borderColor: colors.accent }]}>BETA</Text>
+          <Text style={[styles.beta, { color: colors.accent, borderColor: colors.accent }]}>Beta</Text>
         </View>
         <Text style={[styles.modeSubtitle, { color: colors.secondaryText }]}>Word-by-word synchronized lyrics</Text>
       </View>
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   modeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   modeTitle: { fontSize: 13, lineHeight: 16, fontWeight: '800' },
   modeSubtitle: { marginTop: 2, fontSize: 10, lineHeight: 12 },
-  beta: { paddingHorizontal: 5, paddingVertical: 3, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, fontSize: 8, lineHeight: 9, fontWeight: '800', letterSpacing: 0.6 },
+  beta: { paddingHorizontal: 5, paddingVertical: 3, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, fontSize: 8, lineHeight: 9, fontWeight: '800' },
   modeToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 },
   modeState: { minWidth: 18, fontSize: 11, fontWeight: '800' },
   plainLyrics: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 15 },

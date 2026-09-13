@@ -1,3 +1,4 @@
+import FavoritesArtwork from '@/components/favorites-artwork';
 import { Image } from 'expo-image';
 import { type Href, usePathname, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PropsWithChildren } from 'react';
@@ -26,7 +27,6 @@ const tabs: { group: AppRouteGroup; label: string; icon: SymbolViewProps['name']
   { group: '(library)', label: 'Library', icon: 'folder', href: '/(app)/(library)/library' },
 ];
 const libraryRoutes = createDetailRoutes('(library)');
-const favoritesArtwork = require('@/assets/images/onboarding/favorites.webp');
 const brandArtwork = require('@/assets/images/icon.png');
 const emptyItems: LibraryCollectionItem[] = [{ key: 'favorites', kind: 'favorites' }];
 type RouteState = { index?: number; routes: readonly { name: string; state?: RouteState }[] };
@@ -38,7 +38,7 @@ function selectedAppGroup(state?: RouteState): string | undefined {
 }
 
 export default function WebAppShell({ children }: PropsWithChildren) {
-  const { user } = useAuth();
+  const { user, onboardingComplete } = useAuth();
   const { colors, isDark, performanceMode, reduceMotion } = useAppSettings();
   const { currentSong } = usePlayer();
   const { width } = useWindowDimensions();
@@ -56,7 +56,7 @@ export default function WebAppShell({ children }: PropsWithChildren) {
   const fullPlayer = pathname === '/player' || (desktop && pathname === '/player-details') || (modalRoute && (baseRoute?.name === 'player' || lastPage === '/player'));
   const activeGroup = segments.find((value) => ['(home)', '(search)', '(library)', '(account)'].includes(value));
   const selectedGroup = activeGroup || selectedAppGroup(rootState) || '(home)';
-  const showShell = Boolean(user) && !['/welcome', '/sign-in', '/register', '/reset-password', '/onboarding', '/oauth/callback'].includes(pathname);
+  const showShell = Boolean(user) && onboardingComplete && !['/welcome', '/sign-in', '/register', '/reset-password', '/onboarding', '/oauth/callback'].includes(pathname);
   const [query, setQuery] = useState(getSearchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
   const tabBottom = Math.max(12, insets.bottom);
@@ -203,7 +203,7 @@ function SidebarLibrary({ uid }: { uid: string }) {
           const subtitle = item.kind === 'favorites' ? 'Your favorite songs' : item.kind === 'artist' ? 'Artist' : item.owned ? 'Your playlist' : 'Playlist';
           const href = item.kind === 'favorites' ? libraryRoutes.favoritesHref() : item.kind === 'artist' ? libraryRoutes.artistHref(item.artist.id) : libraryRoutes.playlistHref(item.playlist.id, item.owned, item.playlist.source, item.playlist.title);
           return <button key={item.key} className="crimson-library-item" onClick={() => navigate(href)} aria-label={`Open ${title}`}>
-            {item.kind === 'playlist' ? <PlaylistCover playlist={item.playlist} borderRadius={7} showPlayingIndicator={false} style={{ width: 43, height: 43, flexShrink: 0 }} /> : <ArtworkImage source={item.kind === 'favorites' ? favoritesArtwork : { uri: item.artist.imageSmall || item.artist.image }} artwork={item.kind === 'artist' ? item.artist.artwork : undefined} style={{ width: 43, height: 43, borderRadius: item.kind === 'artist' ? 22 : 7 }} />}
+            {item.kind === 'playlist' ? <PlaylistCover playlist={item.playlist} borderRadius={7} showPlayingIndicator={false} style={{ width: 43, height: 43, flexShrink: 0 }} /> : item.kind === 'favorites' ? <FavoritesArtwork style={{ width: 43, height: 43, borderRadius: 7 }} /> : <ArtworkImage source={{ uri: item.artist.imageSmall || item.artist.image }} artwork={item.artist.artwork} style={{ width: 43, height: 43, borderRadius: 22 }} />}
             <span><strong>{title}</strong><small>{subtitle}</small></span>
           </button>;
         })}

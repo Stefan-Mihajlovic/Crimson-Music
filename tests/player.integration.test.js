@@ -6,6 +6,7 @@ import { setAudioModeAsync } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { PlayerProvider, usePlayer, usePlayerSpectrum } from '../src/providers/player-provider';
+import { PlaybackSpectrumAnalyzer } from '../src/services/playback-spectrum';
 import { getUserCollectionState, loadRelatedSongs, recordListeningEvent, resolveTrackPlaybackUrl, toggleUserCollectionItem } from '../src/services/music';
 
 const mockAudio = {
@@ -18,6 +19,7 @@ const mockAudio = {
 };
 let mockStatus;
 let mockUser;
+let mockSettings;
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('expo-audio', () => ({
   useAudioPlayer: () => mockAudio,
@@ -26,7 +28,7 @@ jest.mock('expo-audio', () => ({
 }));
 jest.mock('../src/providers/auth-provider', () => ({ useAuth: () => ({ user: mockUser }) }));
 jest.mock('../src/providers/download-provider', () => ({ useDownloads: () => ({ getPlaybackUri: () => null }) }));
-jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ reduceMotion: false, performanceMode: false }) }));
+jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => mockSettings }));
 jest.mock('../src/services/remote-controls', () => ({ configureRemoteControls: jest.fn(), subscribeToRemoteControls: () => () => {} }));
 jest.mock('../src/services/audius-session', () => ({ audiusMediaHeaders: jest.fn(async () => undefined) }));
 jest.mock('../src/services/music', () => ({
@@ -67,6 +69,7 @@ beforeEach(async () => {
     return { remove: () => { appStateListeners.delete(listener); } };
   });
   mockUser = { uid: 'listener' };
+  mockSettings = { reduceMotion: false, performanceMode: false };
   mockStatus = { id: 1, isLoaded: true, playing: false, isBuffering: false, currentTime: 0, duration: 180, didJustFinish: false };
   getUserCollectionState.mockResolvedValue(false);
   resolveTrackPlaybackUrl.mockResolvedValue('https://example.test/audio.mp3');
@@ -225,7 +228,7 @@ test('sampling stays installed across buffering and pause while visual updates f
   mockStatus = { ...mockStatus, playing: true, currentTime: 4 };
   await act(async () => root.update(tree()));
   const onSample = mockAudio.addListener.mock.calls.find(([event]) => event === 'audioSampleUpdate')[1];
-  const sample = { channels: [{ frames: Array(16).fill(0.5) }], timestamp: 4 };
+  const sample = { channels: [{ frames: Array.from({ length: 512 }, (_, index) => 0.5 * Math.sin(2 * Math.PI * 8 * index / 512)) }], timestamp: 4 };
   await act(async () => onSample(sample));
   expect(spectrum).not.toEqual([0.36, 0.36, 0.36, 0.36]);
   mockAudio.setAudioSamplingEnabled.mockClear();
@@ -243,4 +246,54 @@ test('sampling stays installed across buffering and pause while visual updates f
   }
   expect(spectrum).toEqual([0.36, 0.36, 0.36, 0.36]);
   expect(mockAudio.setAudioSamplingEnabled).not.toHaveBeenCalled();
+});
+
+test('real spectrum updates reach every subscriber at up to 20 Hz without repainting between samples', async () => {
+  await start('spectrum-rate');
+  mockStatus = { ...mockStatus, playing: true, currentTime: 4 };
+  await act(async () => root.update(tree()));
+  const onSample = mockAudio.addListener.mock.calls.find(([event]) => event === 'audioSampleUpdate')[1];
+  const tone = (bin) => ({ channels: [{ frames: Array.from({ length: 512 }, (_, index) => 0.5 * Math.sin(2 * Math.PI * bin * index / 512)) }], timestamp: 4 });
+  await act(async () => onSample(tone(2)));
+  const bass = spectrum;
+  expect(bass[0]).toBeGreaterThan(0.9);
+  await act(async () => { jest.advanceTimersByTime(49); onSample(tone(128)); });
+  expect(spectrum).toBe(bass);
+  await act(async () => { jest.advanceTimersByTime(1); onSample(tone(128)); });
+  expect(spectrum).not.toBe(bass);
+  expect(spectrum[3]).toBeGreaterThan(0.9);
+});
+
+test('buffering freezes spectrum even when the native playing flag is still true', async () => {
+  await start('buffering-spectrum');
+  mockStatus = { ...mockStatus, playing: true, isBuffering: true, currentTime: 4 };
+  await act(async () => root.update(tree()));
+  const onSample = mockAudio.addListener.mock.calls.find(([event]) => event === 'audioSampleUpdate')[1];
+  const analyze = jest.spyOn(PlaybackSpectrumAnalyzer.prototype, 'analyze');
+  try {
+    await act(async () => onSample({ channels: [{ frames: Array(512).fill(0.5) }], timestamp: 4 }));
+    expect(analyze).not.toHaveBeenCalled();
+    expect(spectrum).toEqual([0.36, 0.36, 0.36, 0.36]);
+  } finally { analyze.mockRestore(); }
+});
+
+test.each(['reduceMotion', 'performanceMode'])('%s stops sampling work and leaves a static playback marker', async (setting) => {
+  await start('static-spectrum');
+  mockStatus = { ...mockStatus, playing: true, currentTime: 4 };
+  mockSettings = { ...mockSettings, [setting]: true };
+  await act(async () => root.update(tree()));
+  expect(mockAudio.setAudioSamplingEnabled).toHaveBeenLastCalledWith(false);
+  expect(spectrum).toEqual([0.36, 0.36, 0.36, 0.36]);
+});
+
+test('spectrum analysis does no work when no playback marker is subscribed', async () => {
+  await start('no-spectrum-subscribers');
+  mockStatus = { ...mockStatus, playing: true, currentTime: 4 };
+  await act(async () => root.update(React.createElement(PlayerProvider, null)));
+  const onSample = mockAudio.addListener.mock.calls.find(([event]) => event === 'audioSampleUpdate')[1];
+  const analyze = jest.spyOn(PlaybackSpectrumAnalyzer.prototype, 'analyze');
+  try {
+    await act(async () => onSample({ channels: [{ frames: Array(512).fill(0.5) }], timestamp: 4 }));
+    expect(analyze).not.toHaveBeenCalled();
+  } finally { analyze.mockRestore(); }
 });

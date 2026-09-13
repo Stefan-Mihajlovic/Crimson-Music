@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import FrostedSurface from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
@@ -367,7 +368,7 @@ const styles = StyleSheet.create({
   compact: { position: 'absolute', top: 0, left: miniPlayerHorizontalInset, right: miniPlayerHorizontalInset, zIndex: 4, height: MINI_PLAYER_HEIGHT, borderRadius: 26, borderCurve: 'continuous', transformOrigin: 'center', shadowColor: '#000000', shadowOpacity: 0.34, shadowRadius: 18, shadowOffset: { width: 0, height: -5 } },
   compactInterior: { position: 'absolute', inset: 0, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 14, borderRadius: 26, borderCurve: 'continuous' },
   progressTrack: { position: 'absolute', top: 0, left: 14, right: 14, height: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
-  progressFill: { height: 2, borderRadius: 1, backgroundColor: '#D0A5FF' },
+  progressFill: { height: 2, borderRadius: 1, backgroundColor: BrandAccent.dark },
   songArea: { flex: 1, minWidth: 0, height: '100%' },
   morphArtwork: { position: 'absolute', zIndex: 7 },
   artworkPager: { position: 'absolute', zIndex: 8, overflow: 'visible' },

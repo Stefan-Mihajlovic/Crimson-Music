@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import FavoritesArtwork from '@/components/favorites-artwork';
 import ArtworkImage from '@/components/artwork-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
@@ -75,7 +75,7 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
     <View onLayout={({ nativeEvent: { layout } }) => setContentWidth(layout.width)} style={styles.section}>
       <View style={styles.grid}>
         <Pressable accessibilityRole="button" onPress={() => router.push(routes.favoritesHref())} onHoverIn={() => setHovered('favorites')} onHoverOut={() => setHovered('')} style={tileStyle('favorites')}>
-          <Image contentFit="cover" source={require('@/assets/images/onboarding/favorites.webp')} style={styles.smallCover} />
+          <FavoritesArtwork style={styles.smallCover} />
           <Text numberOfLines={2} style={[styles.tileTitle, { color: colors.text }]}>Favorites</Text>
         </Pressable>
         {items.map((item) => {

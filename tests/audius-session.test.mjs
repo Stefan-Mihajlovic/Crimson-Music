@@ -124,3 +124,50 @@ test('a repeated restore cannot replace a rotated refresh token with old disk da
   assert.equal(reads, 1);
   assert.equal(client.current().refreshToken, 'rotated-refresh');
 });
+
+test('a profile read started before Save cannot overwrite the confirmed name and photo', async () => {
+  const { client, saved } = fixture(async () => json({}));
+  await client.establish(session(), 0);
+  const revision = client.version();
+  const beforeSave = client.current().account;
+  const edited = { ...account, name: 'Updated name', picture: 'https://images.example/new.jpg' };
+  await client.updateAccount(edited, revision);
+  const lateRead = await client.updateAccount({ ...beforeSave }, revision, beforeSave);
+  assert.deepEqual(lateRead, edited);
+  assert.deepEqual(client.current().account, edited);
+  assert.deepEqual(JSON.parse(saved()).account, edited);
+  // A later read still refreshes the profile once no edit has overtaken it.
+  const fresh = { ...edited, name: 'Changed in Audius' };
+  await client.updateAccount(fresh, revision, edited);
+  assert.deepEqual(client.current().account, fresh);
+});
+
+test('token refresh overlapping Save preserves the edited profile and rotated credentials', async () => {
+  const gate = deferred();
+  const started = deferred();
+  const { client, saved } = fixture(async () => {
+    started.resolve();
+    await gate.promise;
+    return json({ access_token: 'rotated', refresh_token: 'rotated-refresh', expires_in: 3600 });
+  });
+  await client.establish(session({ expiresAt: 1 }), 0);
+  const refreshing = client.accessToken();
+  await started.promise;
+  const edited = { ...account, name: 'Saved name', picture: 'https://images.example/saved.jpg' };
+  await client.updateAccount(edited, client.version());
+  gate.resolve();
+  assert.equal(await refreshing, 'rotated');
+  assert.deepEqual(client.current().account, edited);
+  assert.deepEqual(JSON.parse(saved()).account, edited);
+  assert.equal(JSON.parse(saved()).refreshToken, 'rotated-refresh');
+});
+
+test('a profile commit from a previous session cannot alter a newly connected account', async () => {
+  const { client, saved } = fixture(async () => json({}));
+  await client.establish(session(), 0);
+  const revision = client.version();
+  const next = { ...account, id: 'other', name: 'Other listener' };
+  await client.establish(session({ account: next }), revision);
+  await assert.rejects(client.updateAccount({ ...account, name: 'Late save' }, revision), { code: 'cancelled' });
+  assert.deepEqual(JSON.parse(saved()).account, next);
+});

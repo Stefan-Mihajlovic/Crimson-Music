@@ -30,6 +30,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { useDownloads } from '@/providers/download-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { createValueStore } from '@/services/value-store';
+import { PAUSED_SPECTRUM as pausedSpectrum, PlaybackSpectrumAnalyzer, SPECTRUM_UPDATE_INTERVAL_MS } from '@/services/playback-spectrum';
 import {
   CrimsonSong,
   getUserCollectionState,
@@ -82,7 +83,6 @@ type PlayerContextValue = {
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 const PlayerStatusContext = createContext<AudioStatus | null>(null);
-const pausedSpectrum = [0.36, 0.36, 0.36, 0.36];
 const PlayerSpectrumContext = createContext(createValueStore(pausedSpectrum));
 const autoplayStorageKey = 'crimson.player.autoplay.v1';
 const volumeStorageKey = 'crimson.player.volume.v1';
@@ -113,36 +113,6 @@ function ensureMusicAudioSession() {
     });
   }
   return audioSessionConfiguration;
-}
-
-function spectrumFromAudioSample(sample: AudioSample) {
-  const channels = sample.channels.filter((channel) => channel.frames.length);
-  if (!channels.length) return null;
-  const availableFrames = Math.min(...channels.map((channel) => channel.frames.length));
-  const frameCount = Math.min(512, availableFrames);
-  if (!Number.isFinite(frameCount) || frameCount < pausedSpectrum.length) return null;
-  const frameOffset = availableFrames - frameCount;
-  const segmentSize = Math.max(1, Math.floor(frameCount / pausedSpectrum.length));
-
-  return pausedSpectrum.map((_, index) => {
-    const start = frameOffset + index * segmentSize;
-    const end = index === pausedSpectrum.length - 1
-      ? availableFrames
-      : Math.min(availableFrames, start + segmentSize);
-    let energy = 0;
-    let peak = 0;
-    let values = 0;
-    channels.forEach((channel) => {
-      for (let frameIndex = start; frameIndex < end; frameIndex += 1) {
-        const amplitude = Math.abs(channel.frames[frameIndex] || 0);
-        energy += amplitude * amplitude;
-        peak = Math.max(peak, amplitude);
-        values += 1;
-      }
-    });
-    const rms = values ? Math.sqrt(energy / values) : 0;
-    return rms * 0.78 + peak * 0.22;
-  });
 }
 
 export function PlayerProvider({ children }: PropsWithChildren) {
@@ -184,8 +154,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const loadedActivationRef = useRef(0);
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSpectrumUpdateRef = useRef(0);
-  const spectrumEnvelopeRef = useRef([0, 0, 0, 0]);
-  const smoothedSpectrumRef = useRef(pausedSpectrum);
+  const [spectrumAnalyzer] = useState(() => new PlaybackSpectrumAnalyzer());
   const listeningSessionRef = useRef<{ id: string; day: string; dayEndsAt: number; song: CrimsonSong; started: boolean; clock: ListeningClock; reported: number; completed: boolean; source: string; sourceId: string; uid: string } | null>(null);
   const queueRef = useRef<CrimsonSong[]>([]);
   const indexRef = useRef(-1);
@@ -248,6 +217,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setAutoplayCandidates([]);
     setIsShuffled(false);
     setRepeatMode('none');
+    spectrumAnalyzer.reset();
+    lastSpectrumUpdateRef.current = 0;
     setSpectrumLevels(pausedSpectrum);
     snapshotRef.current = null;
     desiredPlaying.current = false;
@@ -293,52 +264,46 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       }
       configureRemoteControls(inactiveRemoteControls);
     };
-  }, [audioPlayer, flushListening, setSpectrumLevels, updateQueue, user?.uid]);
+  }, [audioPlayer, flushListening, setSpectrumLevels, spectrumAnalyzer, updateQueue, user?.uid]);
 
   const handleAudioSample = useCallback((sample: AudioSample) => {
     if (!appActiveRef.current || !playingRef.current || !spectrumStore.hasSubscribers()) return;
     const now = Date.now();
-    if (now - lastSpectrumUpdateRef.current < 100) return;
-    const spectrum = spectrumFromAudioSample(sample);
+    const elapsed = now - lastSpectrumUpdateRef.current;
+    if (elapsed < SPECTRUM_UPDATE_INTERVAL_MS) return;
+    const spectrum = spectrumAnalyzer.analyze(sample, lastSpectrumUpdateRef.current ? elapsed : SPECTRUM_UPDATE_INTERVAL_MS);
     if (!spectrum) return;
     lastSpectrumUpdateRef.current = now;
-    const strongestLevel = Math.max(...spectrum, 0.000_001);
-    const normalized = spectrum.map((level, index) => {
-      const previousEnvelope = spectrumEnvelopeRef.current[index];
-      const envelope = previousEnvelope <= 0
-        ? level
-        : previousEnvelope + (level - previousEnvelope) * (level > previousEnvelope ? 0.34 : 0.025);
-      spectrumEnvelopeRef.current[index] = Math.max(envelope, 0.000_001);
-      const adaptiveLevel = level / (spectrumEnvelopeRef.current[index] * 1.35);
-      const localContrast = level / strongestLevel;
-      return Math.max(0.16, Math.min(0.92, 0.14 + adaptiveLevel * 0.36 + localContrast * 0.18));
-    });
-    const smoothed = normalized.map((level, index) => (
-      smoothedSpectrumRef.current[index] * 0.42 + level * 0.58
-    ));
-    smoothedSpectrumRef.current = smoothed;
-    setSpectrumLevels(smoothed);
-  }, [setSpectrumLevels, spectrumStore]);
+    setSpectrumLevels(spectrum);
+  }, [setSpectrumLevels, spectrumAnalyzer, spectrumStore]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       appActiveRef.current = state === 'active';
       if (!appActiveRef.current) {
+        spectrumAnalyzer.reset();
+        lastSpectrumUpdateRef.current = 0;
         setSpectrumLevels(pausedSpectrum);
         flushListening();
         persistPlayback();
       }
     });
     return () => subscription.remove();
-  }, [flushListening, persistPlayback, setSpectrumLevels]);
+  }, [flushListening, persistPlayback, setSpectrumLevels, spectrumAnalyzer]);
 
   useEffect(() => {
-    playingRef.current = status.playing;
-    if (!status.playing) setSpectrumLevels(pausedSpectrum);
-  }, [setSpectrumLevels, status.playing]);
+    playingRef.current = status.playing && !status.isBuffering;
+    if (!playingRef.current) {
+      spectrumAnalyzer.reset();
+      lastSpectrumUpdateRef.current = 0;
+      setSpectrumLevels(pausedSpectrum);
+    }
+  }, [setSpectrumLevels, spectrumAnalyzer, status.isBuffering, status.playing]);
 
   useEffect(() => {
     if (!audioPlayer.isAudioSamplingSupported || performanceMode || reduceMotion) {
+      spectrumAnalyzer.reset();
+      lastSpectrumUpdateRef.current = 0;
       setSpectrumLevels(pausedSpectrum);
       return;
     }
@@ -351,7 +316,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       subscription.remove();
       try { audioPlayer.setAudioSamplingEnabled(false); } catch { /* Native player already disposed. */ }
     };
-  }, [audioPlayer, handleAudioSample, performanceMode, reduceMotion, setSpectrumLevels]);
+  }, [audioPlayer, handleAudioSample, performanceMode, reduceMotion, setSpectrumLevels, spectrumAnalyzer]);
 
   useEffect(() => {
     didJustFinishRef.current = status.didJustFinish;
@@ -406,8 +371,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
     autoplayRequestRef.current += 1;
     likeRequestRef.current += 1;
-    spectrumEnvelopeRef.current = [0, 0, 0, 0];
-    smoothedSpectrumRef.current = pausedSpectrum;
+    spectrumAnalyzer.reset();
+    lastSpectrumUpdateRef.current = 0;
     setSpectrumLevels(pausedSpectrum);
     handledFinishRef.current = didJustFinishRef.current;
     desiredPlaying.current = true;
@@ -469,7 +434,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
       void ready();
     }).catch(failPlayback);
-  }, [audioPlayer, flushListening, getPlaybackUri, setSpectrumLevels, user?.uid]);
+  }, [audioPlayer, flushListening, getPlaybackUri, setSpectrumLevels, spectrumAnalyzer, user?.uid]);
 
   const playSong = useCallback((song: CrimsonSong, nextQueue: CrimsonSong[] = [song], playedFrom = 'Home', playedFromId = '', shuffle = isShuffled) => {
     const unique = [...new Map(nextQueue.map((item) => [item.id, item])).values()];

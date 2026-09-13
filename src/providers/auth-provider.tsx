@@ -13,7 +13,9 @@ import {
   signOut as clearAuthSession,
   subscribeAuthSession,
   updateUserRecommendationStyle,
+  updateUserProfile,
 } from '@/services/auth';
+import type { ProfileUpdate } from '@/services/audius-profile';
 
 type AuthContextValue = {
   ready: boolean;
@@ -24,6 +26,7 @@ type AuthContextValue = {
   signInWithAudius: () => Promise<CrimsonUser>;
   signOut: () => Promise<void>;
   updateRecommendationStyle: (style: RecommendationStyle) => Promise<CrimsonUser>;
+  updateProfile: (update: ProfileUpdate) => Promise<CrimsonUser>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -78,7 +81,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       user,
       completeOnboarding: async (categories, style) => {
         if (!user) throw new Error('Sign in before personalizing Crimson.');
-        const revision = sessionRevision.current;
+        const revision = ++sessionRevision.current;
         const nextUser = await completeUserOnboarding(user.uid, categories, style);
         applyUser(nextUser, revision);
         return nextUser;
@@ -109,6 +112,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!user) throw new Error('Sign in before changing your recommendation style.');
         const revision = sessionRevision.current;
         const nextUser = await updateUserRecommendationStyle(user.uid, style);
+        applyUser(nextUser, revision);
+        return nextUser;
+      },
+      updateProfile: async (update) => {
+        if (!user) throw new Error('Sign in before editing your profile.');
+        const revision = sessionRevision.current;
+        const nextUser = await updateUserProfile(user.uid, update);
         applyUser(nextUser, revision);
         return nextUser;
       },

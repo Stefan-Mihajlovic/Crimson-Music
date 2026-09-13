@@ -1,3 +1,4 @@
+import { brandAccentTint } from '@/constants/brand-accent';
 import { SymbolView } from '@/components/app-symbol';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -86,7 +87,7 @@ const styles = StyleSheet.create({
   desktopTitle: { fontSize: 14, lineHeight: 19 },
   desktopDuration: { fontSize: 12, fontVariant: ['tabular-nums'], minWidth: 45, textAlign: 'right' },
   row: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 10, borderRadius: 16 },
-  pressed: { backgroundColor: 'rgba(185,129,255,0.12)' },
+  pressed: { backgroundColor: brandAccentTint(0.12) },
   pressedScale: { transform: [{ scale: 0.99 }] },
   copy: { flex: 1, minWidth: 0 },
   title: { color: '#F1ECFF', fontSize: 16, fontWeight: '600' },

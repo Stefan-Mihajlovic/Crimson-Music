@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { AuthProvider, useAuth } from '../src/providers/auth-provider';
-import { refreshSession, restoreSession, signOut, subscribeAuthSession, updateUserRecommendationStyle } from '../src/services/auth';
+import { completeUserOnboarding, refreshSession, restoreSession, signOut, subscribeAuthSession, updateUserRecommendationStyle } from '../src/services/auth';
 import { clearDeletedAccountData } from '../src/services/account-cleanup';
 
 jest.mock('../src/services/account-cleanup', () => ({ clearDeletedAccountData: jest.fn(async () => {}) }));
@@ -14,6 +14,7 @@ jest.mock('../src/services/auth', () => ({
   signInWithAudius: jest.fn(async () => ({ uid: 'new', onboardingComplete: false })),
   subscribeAuthSession: jest.fn(() => () => {}),
   updateUserRecommendationStyle: jest.fn(),
+  completeUserOnboarding: jest.fn(),
 }));
 
 let auth;
@@ -89,4 +90,18 @@ test('failed local cleanup stays available to retry and disconnects after succes
   expect(clearDeletedAccountData).toHaveBeenCalledTimes(2);
   expect(signOut).toHaveBeenCalledTimes(1);
   expect(auth.user).toBeNull();
+});
+
+
+test('a startup preference read that finishes after setup cannot make the completed account incomplete again', async () => {
+  const refreshing = deferred();
+  restoreSession.mockResolvedValueOnce({ uid: 'old', onboardingComplete: false });
+  refreshSession.mockReturnValueOnce(refreshing.promise);
+  completeUserOnboarding.mockResolvedValueOnce({ uid: 'old', onboardingComplete: true });
+  await act(async () => { root = create(tree()); });
+  expect(auth.onboardingComplete).toBe(false);
+  await act(async () => auth.completeOnboarding(['rock', 'pop'], 'balanced'));
+  expect(auth.onboardingComplete).toBe(true);
+  await act(async () => refreshing.resolve({ uid: 'old', onboardingComplete: false }));
+  expect(auth.onboardingComplete).toBe(true);
 });

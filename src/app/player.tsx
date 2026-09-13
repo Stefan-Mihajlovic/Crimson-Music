@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 /* eslint-disable react-hooks/immutability */
 
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
@@ -33,7 +34,7 @@ const webPlayerDragStyle: ViewStyle & { touchAction: 'none' } = {
 };
 
 const playerPalette = {
-  accent: '#A66BFF',
+  accent: BrandAccent.dark,
   muted: 'rgba(255,255,255,0.66)',
   secondary: 'rgba(255,255,255,0.80)',
   text: '#FFFFFF',
@@ -150,7 +151,7 @@ export function PlayerContent({
             <SymbolView name="chevron.down" size={20} tintColor={playerPalette.text} weight="bold" />
           </BouncyPressable>
           <View style={styles.sourceGlass}>
-            <Text numberOfLines={1} style={styles.sourceLabel}>{Platform.OS === 'web' ? 'Playing from' : 'PLAYING FROM'}</Text>
+            <Text numberOfLines={1} style={styles.sourceLabel}>Playing from</Text>
             <Text numberOfLines={1} style={styles.sourceName}>{source}</Text>
           </View>
           <BouncyPressable
@@ -208,7 +209,7 @@ export function PlayerContent({
           <View style={styles.footerActions}>
             <BouncyPressable accessibilityLabel="Show queue" accessibilityRole="button" contentStyle={[styles.footerButtonContent, styles.footerButtonLeft]} onPress={openPlayerDetails} pressedScale={0.92} style={styles.footerButton}>
               <SymbolView name="list.bullet" size={20} tintColor={playerPalette.secondary} />
-              <Text style={styles.footerText}>{Platform.OS === 'web' ? 'Up next' : 'UP NEXT'}</Text>
+              <Text style={styles.footerText}>Up next</Text>
             </BouncyPressable>
             <BouncyPressable
               accessibilityLabel={`Turn autoplay ${autoplayEnabled ? 'off' : 'on'}`}
@@ -217,7 +218,7 @@ export function PlayerContent({
               onPress={toggleAutoplay}
               pressedScale={0.92}
               style={styles.footerButton}>
-              <Text style={[styles.footerText, autoplayEnabled && styles.footerTextActive]}>{Platform.OS === 'web' ? `Autoplay ${autoplayEnabled ? 'on' : 'off'}` : `AUTOPLAY ${autoplayEnabled ? 'ON' : 'OFF'}`}</Text>
+              <Text style={[styles.footerText, autoplayEnabled && styles.footerTextActive]}>{`Autoplay ${autoplayEnabled ? 'on' : 'off'}`}</Text>
               <SymbolView name="infinity" size={20} tintColor={autoplayEnabled ? playerPalette.accent : playerPalette.muted} weight="bold" />
             </BouncyPressable>
           </View>
@@ -390,7 +391,7 @@ const styles = StyleSheet.create({
   landscapeControls: { alignSelf: 'stretch', marginLeft: 26, paddingTop: 16 },
   topButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   sourceGlass: { minWidth: 150, maxWidth: 220, minHeight: 44, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderRadius: 22, paddingHorizontal: 20 },
-  sourceLabel: { color: '#9F97AD', fontSize: 9, fontWeight: '700', letterSpacing: 1.15 },
+  sourceLabel: { color: '#9F97AD', fontSize: 9, fontWeight: '700' },
   sourceName: { marginTop: 1, color: '#F3EEFF', fontSize: 13, fontWeight: '700' },
   artworkArea: { flexGrow: 0, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
   artworkFrame: { overflow: 'visible', borderRadius: 28, shadowColor: '#000000', shadowOpacity: 0.36, shadowRadius: 28, shadowOffset: { width: 0, height: 14 } },
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
   seekArea: { marginTop: -2 },
   seekTouchArea: { height: 32, justifyContent: 'center' },
   seekTrack: { height: 7, overflow: 'hidden', borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.14)' },
-  seekFill: { height: 7, borderRadius: 4, backgroundColor: '#A66BFF' },
+  seekFill: { height: 7, borderRadius: 4, backgroundColor: BrandAccent.dark },
   times: { marginTop: -2, flexDirection: 'row', justifyContent: 'space-between' },
   time: { color: 'rgba(255,255,255,0.78)', fontSize: 13, fontVariant: ['tabular-nums'] },
   durationButton: { width: 58, height: 24, marginTop: -5, marginRight: -8 },
@@ -420,11 +421,11 @@ const styles = StyleSheet.create({
   footerButtonContent: { flexDirection: 'row', gap: 7 },
   footerButtonLeft: { justifyContent: 'flex-start', paddingLeft: 4 },
   footerButtonRight: { justifyContent: 'flex-end', paddingRight: 4 },
-  footerText: { color: 'rgba(255,255,255,0.80)', fontSize: 10, fontWeight: '700', letterSpacing: 0.55 },
-  footerTextActive: { color: '#A66BFF' },
+  footerText: { color: 'rgba(255,255,255,0.80)', fontSize: 10, fontWeight: '700' },
+  footerTextActive: { color: BrandAccent.dark },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 13, backgroundColor: '#08070B' },
   emptyTitle: { color: '#F3EEFF', fontSize: 23, fontWeight: '700' },
-  emptyClose: { color: '#B981FF', fontSize: 17, fontWeight: '600' },
+  emptyClose: { color: BrandAccent.dark, fontSize: 17, fontWeight: '600' },
   recovery: { marginTop: 8, padding: 12, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.3)' },
   recoveryText: { color: '#FFFFFF', fontSize: 13, lineHeight: 18 },
   recoveryActions: { flexDirection: 'row', gap: 12 },

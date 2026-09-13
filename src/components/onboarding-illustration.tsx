@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import Svg, {
@@ -84,7 +85,7 @@ export default function OnboardingIllustration({ scene }: OnboardingIllustration
         <Defs>
           <LinearGradient id="crimson" x1="0" x2="1" y1="0" y2="1">
             <Stop offset="0" stopColor="#F04BA8" />
-            <Stop offset="0.52" stopColor="#9A58FF" />
+            <Stop offset="0.52" stopColor={BrandAccent.dark} />
             <Stop offset="1" stopColor="#5E7BFF" />
           </LinearGradient>
           <LinearGradient id="glass" x1="0" x2="1" y1="0" y2="1">
@@ -115,16 +116,16 @@ function IdentityScene({ float, motion, pulse }: SceneAnimation) {
     <>
       <Animated.View style={[styles.fullLayer, { transform: [{ rotate: rotation }] }]}>
         <Svg height="100%" viewBox="0 0 340 310" width="100%">
-          <Circle cx="170" cy="155" fill="none" r="111" stroke="#B98AFF" strokeDasharray="5 14" strokeOpacity="0.48" strokeWidth="2" />
+          <Circle cx="170" cy="155" fill="none" r="111" stroke={BrandAccent.highlight} strokeDasharray="5 14" strokeOpacity="0.48" strokeWidth="2" />
           <Circle cx="170" cy="44" fill="#F46FAF" r="8" />
           <Circle cx="281" cy="155" fill="#6F8DFF" r="7" />
-          <Circle cx="170" cy="266" fill="#B776FF" r="9" />
+          <Circle cx="170" cy="266" fill={BrandAccent.dark} r="9" />
           <Circle cx="59" cy="155" fill="#FFB44A" r="6" />
         </Svg>
       </Animated.View>
       <Animated.View style={[styles.fullLayer, { transform: [{ translateY: floatY }] }]}>
         <Svg height="100%" viewBox="0 0 340 310" width="100%">
-          <Path d="M30 213c30-30 53-30 83 0s53 30 83 0 53-30 83 0 31 19 37 13" fill="none" stroke="#B274FF" strokeLinecap="round" strokeOpacity="0.34" strokeWidth="5" />
+          <Path d="M30 213c30-30 53-30 83 0s53 30 83 0 53-30 83 0 31 19 37 13" fill="none" stroke={BrandAccent.dark} strokeLinecap="round" strokeOpacity="0.34" strokeWidth="5" />
           <Path d="M38 232c24-18 43-18 67 0s43 18 67 0 43-18 67 0 43 18 65 1" fill="none" stroke="#EF55A5" strokeLinecap="round" strokeOpacity="0.2" strokeWidth="3" />
         </Svg>
       </Animated.View>
@@ -133,7 +134,7 @@ function IdentityScene({ float, motion, pulse }: SceneAnimation) {
           <Defs>
             <LinearGradient id="disc" x1="0" x2="1" y1="0" y2="1">
               <Stop offset="0" stopColor="#F04BA8" />
-              <Stop offset="0.55" stopColor="#9A58FF" />
+              <Stop offset="0.55" stopColor={BrandAccent.dark} />
               <Stop offset="1" stopColor="#506EFF" />
             </LinearGradient>
           </Defs>
@@ -156,10 +157,10 @@ function DiscoverScene({ float, motion, pulse }: SceneAnimation) {
   return (
     <>
       <Svg height="100%" style={styles.fullLayer} viewBox="0 0 340 310" width="100%">
-        <Circle cx="170" cy="151" fill="#0E0B15" opacity="0.76" r="95" stroke="#B879FF" strokeOpacity="0.62" strokeWidth="3" />
+        <Circle cx="170" cy="151" fill="#0E0B15" opacity="0.76" r="95" stroke={BrandAccent.dark} strokeOpacity="0.62" strokeWidth="3" />
         <Circle cx="170" cy="151" fill="none" r="72" stroke="#FFFFFF" strokeDasharray="2 10" strokeOpacity="0.28" strokeWidth="2" />
         <Circle cx="170" cy="151" fill="url(#glass)" r="48" stroke="#FFFFFF" strokeOpacity="0.34" />
-        <Path d="M170 111v80M130 151h80" stroke="#C58DFF" strokeLinecap="round" strokeOpacity="0.68" strokeWidth="4" />
+        <Path d="M170 111v80M130 151h80" stroke={BrandAccent.highlight} strokeLinecap="round" strokeOpacity="0.68" strokeWidth="4" />
         <Circle cx="170" cy="151" fill="#120D1A" r="15" stroke="#F36BAB" strokeWidth="4" />
       </Svg>
       <Animated.View style={[styles.fullLayer, { transform: [{ translateX: scanX }] }]}>
@@ -213,10 +214,10 @@ function LibraryScene({ float, motion, pulse }: SceneAnimation) {
           <Rect fill="#181321" height="220" rx="34" stroke="#7187FF" strokeOpacity="0.5" strokeWidth="2" width="232" />
         </G>
         <Rect fill="url(#glass)" height="224" rx="36" stroke="#FFFFFF" strokeOpacity="0.26" width="238" x="51" y="39" />
-        <Rect fill="#A061F7" height="88" opacity="0.34" rx="26" width="202" x="69" y="57" />
+        <Rect fill={BrandAccent.dark} height="88" opacity="0.34" rx="26" width="202" x="69" y="57" />
         <Path d="M84 173h172M84 198h132M84 223h150" stroke="#FFFFFF" strokeLinecap="round" strokeOpacity="0.35" strokeWidth="8" />
         <Circle cx="95" cy="101" fill="#FFFFFF" opacity="0.86" r="24" />
-        <Path d="M106 83v31c0 7-6 13-14 13-6 0-11-4-11-9 0-6 6-10 12-10 3 0 5 1 6 2V88l18-4v9l-11 3Z" fill="#9958F1" />
+        <Path d="M106 83v31c0 7-6 13-14 13-6 0-11-4-11-9 0-6 6-10 12-10 3 0 5 1 6 2V88l18-4v9l-11 3Z" fill={BrandAccent.glow} />
       </Svg>
       <Animated.View style={[styles.heart, { transform: [{ translateY: floatY }, { scale: heartScale }] }]}>
         <Svg height="74" viewBox="0 0 74 74" width="74">

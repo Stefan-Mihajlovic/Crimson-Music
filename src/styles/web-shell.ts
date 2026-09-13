@@ -1,3 +1,4 @@
+import { BrandAccent } from '@/constants/brand-accent';
 /** Browser-only chrome; native surfaces keep their platform styles. */
 export const webShellStyles = `
 html, body, #root { height: 100%; overscroll-behavior: none; }
@@ -9,9 +10,9 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sa
 .crimson-shell :is(button, input, [role=button], [role=tab], a):focus-visible { outline: 2px solid var(--crimson-accent); outline-offset: 3px; }
 .crimson-shell input { color: var(--crimson-text); font: inherit; }
 .crimson-shell ::selection { background: var(--crimson-active); }
-html, body * { scrollbar-width: thin; scrollbar-color: var(--crimson-accent, #A66BFF) transparent; }
+html, body * { scrollbar-width: thin; scrollbar-color: var(--crimson-accent, ${BrandAccent.dark}) transparent; }
 ::-webkit-scrollbar { width: 7px; height: 7px; }
-::-webkit-scrollbar-thumb { background: var(--crimson-accent, #A66BFF); border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: var(--crimson-accent, ${BrandAccent.dark}); border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 .crimson-shell.is-desktop { padding: 10px; gap: 10px; }
 .crimson-sidebar { width: 250px; flex: 0 0 250px; display: flex; flex-direction: column; min-height: 0; background: var(--crimson-panel); border-radius: 14px; overflow: hidden; }
@@ -27,7 +28,7 @@ html, body * { scrollbar-width: thin; scrollbar-color: var(--crimson-accent, #A6
 .crimson-small-button, .crimson-icon-button { display: inline-flex; justify-content: center; align-items: center; flex-shrink: 0; border: 0; background: transparent; color: var(--crimson-text); width: 30px; height: 30px; border-radius: 50%; }
 .crimson-small-button:hover, .crimson-icon-button:hover, .crimson-player-button:hover { background: var(--crimson-hover) !important; }
 .crimson-player-button.is-prominent:hover { background: #fff !important; transform: scale(1.04); }
-.crimson-icon-button { width: 36px; height: 36px; background: var(--crimson-panel); }
+.crimson-icon-button { width: 36px; height: 36px; }
 .crimson-library-filters { display: flex; gap: 6px; padding: 0 14px 12px; }
 .crimson-library-filters button { border: 0; padding: 7px 12px; border-radius: 20px; font-size: 12px; color: var(--crimson-muted); background: var(--crimson-surface); }
 .crimson-library-filters button.is-active { color: var(--crimson-text); background: var(--crimson-active); }
