@@ -1,26 +1,29 @@
-# Audius client release validation
+# Release validation
 
-Crimson's account and music flows now target Audius directly. The app has no Firebase SDK, deployment workflow, Cloud Functions, database rules, Google sign-in clients or native App Check requirement. Earlier backend rollout instructions and measurements do not describe this architecture.
+Record the source revision, build configuration, affected platforms, and results in the pull request or release notes. Compilation and automated tests do not establish runtime support on every device.
 
 ## Automated checks
 
-Run `npm run check`, `npm run test:unit`, `npm run test:integration`, and `npx expo-doctor`. Tests should cover account-switch races, OAuth callback validation, direct Audius library loading, local persistence, player/autoplay races, download cancellation, network recovery and native build scripts.
+```bash
+npm run check
+npm test
+npx expo-doctor
+```
 
-Configuration tests prevent accidental Firebase dependencies and ensure Crimson's OAuth callback scheme and secure storage/browser plugins remain configured. Automated tests cannot establish a successful real Audius authorization or playback on every device.
+`npm test` includes unit, shared integration, and Android/web regression suites. Native changes also require fresh Android and iOS builds from the canonical plugins and patch scripts; see [PLATFORMS.md](PLATFORMS.md). Configure the public Audius app key and registered callbacks for login checks.
 
-## Device release checks
+## Device and browser checks
 
-1. Build a fresh native app after regenerating its native project. A previously installed binary can still contain removed native modules until rebuilt.
-2. Complete Audius login in the system browser and return to Crimson. Verify cancellation, failed authorization, session restoration and sign-out.
-3. Verify that switching Audius accounts changes the displayed profile and library, with no previous account's pending request restoring stale data.
-4. Check discovery, search, favorites, follows, playlists and streaming against the signed-in Audius account. Verify permission failures and expired-session recovery are explained clearly in the interface.
-5. Exercise background playback, interruptions, lock-screen controls, offline transitions and local download handling on physical devices.
-6. Verify accessibility labels, large text, screen readers and reduced-motion behavior.
+1. Complete Audius login and return through the registered callback. Check cancellation, session restoration, expired-session recovery, and sign-out.
+2. Switch accounts and confirm profile, library, pending requests, downloads, and widget state remain isolated. Test Clear Data & Disconnect, including a failed cleanup.
+3. Exercise discovery, filtered search, Favorites, follows, playlist editing, and streaming with a test account.
+4. Check queue operations, crossfade, equalizer, sleep timer, background playback, lock-screen controls, Bluetooth/headsets, and audio interruptions. Verify both audio decks stop when a sleep timer expires.
+5. Relaunch without networking and play downloaded/imported audio. Check permission denial, Local Music rescans, interrupted downloads, and reconnecting without a false offline banner.
+6. Add each widget size and test actions with the app running and terminated.
+7. Check popup resizing, keyboard interactions, large text, screen readers, Reduce Motion, and Performance Mode. Test hosted-origin OAuth and browser suspension separately from local web builds.
 
-## Optional Sentry reporting
+## Release configuration
 
-Leave `EXPO_PUBLIC_SENTRY_DSN` empty to keep remote crash reporting disabled. If enabled, store upload credentials only as private CI/build secrets and verify a symbolicated report. These credentials are unrelated to Audius OAuth.
+Use distribution signing for published native builds; local development keys are unsuitable for store releases. Keep signing material and source-map upload tokens private.
 
-## Historical infrastructure
-
-Removing Firebase from this repository does not delete any previously deployed cloud resources or change another client's data. Local environment and secret files are left untouched; obsolete Firebase and Google client settings are no longer read by the Audius app. Any cloud billing cancellation or resource deletion is a separate account operation.
+Sentry reporting stays disabled without `EXPO_PUBLIC_SENTRY_DSN`. If enabled for a release, review the receiving project and verify a symbolicated report. See [privacy](PRIVACY.md) and [publishing](PUBLISHING.md).

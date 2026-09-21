@@ -1,5 +1,7 @@
+import LocalMusicActionsSheet from '@/components/local-music-actions-sheet';
 import { BrandAccent } from '@/constants/brand-accent';
 import ResponsivePopup from '@/components/responsive-popup';
+import PopupSheetLayout from '@/components/popup-sheet-layout';
 import { POPUP_CLOSE_CLEARANCE, POPUP_DESKTOP_INSET, POPUP_MOBILE_INSET } from '@/components/popup-layout';
 import { Image } from 'expo-image';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,17 +24,20 @@ import { Alert } from '@/services/alert';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/providers/auth-provider';
+import FavoritesArtwork from '@/components/favorites-artwork';
+import { playlistPickerArtwork } from '@/services/playlist-artwork';
+import { isLocalTrackId, removeLocalMusic } from '@/services/local-music';
 import PlaylistCover from '@/components/playlist-cover';
 import { DownloadError, useDownloads } from '@/providers/download-provider';
 import { usePlayer } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { getActionSheetAnchor, releaseWebNavigationFocus, useDetailRoutes } from '@/services/action-sheet';
-import { getAudiusTrack } from '@/services/audius';
 import {
   CrimsonCollectionField,
   CrimsonPlaylist,
   CrimsonSong,
   getUserCollectionState,
+  getMusicTrack,
   loadArtistDetail,
   loadLibraryFeed,
   loadPlaylistDetail,
@@ -46,6 +51,11 @@ type SheetType = 'song' | 'artist' | 'playlist';
 const DesktopActionsContext = createContext(false);
 
 export default function ActionSheetScreen() {
+  const { type } = useLocalSearchParams<{ type?: string }>();
+  return type === 'local-music' ? <LocalMusicActionsSheet /> : <MusicActionsSheet />;
+}
+
+function MusicActionsSheet() {
   const router = useRouter();
   const dismissSheet = (count = 1) => {
     releaseWebNavigationFocus();
@@ -74,6 +84,7 @@ export default function ActionSheetScreen() {
   }>();
   const type = (params.type || 'song') as SheetType;
   const id = String(params.id || '');
+  const localSong = type === 'song' && isLocalTrackId(id);
   const [anchor] = useState(() => Platform.OS === 'web' ? getActionSheetAnchor(id) : null);
   const title = String(params.title || 'Crimson Music');
   const subtitle = String(params.subtitle || '');
@@ -90,6 +101,7 @@ export default function ActionSheetScreen() {
     [params.coverImages],
   );
   const [selected, setSelected] = useState(false);
+  const selectionRevision = useRef(0);
   const [working, setWorking] = useState(false);
   const queuePending = useRef(false);
   const [queueFeedback, setQueueFeedback] = useState('');
@@ -114,10 +126,11 @@ export default function ActionSheetScreen() {
   useEffect(() => {
     if (!user?.uid || !id) return;
     let active = true;
+    const revision = selectionRevision.current;
     const task = InteractionManager.runAfterInteractions(() => {
       getUserCollectionState(user.uid, collectionField, id)
         .then((value) => {
-          if (active) setSelected(value);
+          if (active && revision === selectionRevision.current) setSelected(value);
         })
         .catch(() => undefined);
     });
@@ -130,7 +143,7 @@ export default function ActionSheetScreen() {
   useEffect(() => {
     if (type !== 'song' || !id) return;
     let active = true;
-    getAudiusTrack(id)
+    getMusicTrack(id)
       .then((track) => {
         if (active) setSong(track);
       })
@@ -155,6 +168,7 @@ export default function ActionSheetScreen() {
 
   const toggleCollection = async () => {
     if (!user?.uid || !id || working) return;
+    selectionRevision.current += 1;
     setWorking(true);
     try {
       setSelected(
@@ -180,7 +194,7 @@ export default function ActionSheetScreen() {
     setWorking(true);
     setQueueFeedback('');
     try {
-      const track = song || (await getAudiusTrack(id));
+      const track = song || (await getMusicTrack(id));
       if (!track.streamable)
         throw new Error('This song is not available for playback.');
       setSong(track);
@@ -207,7 +221,7 @@ export default function ActionSheetScreen() {
     if (!targetArtistId) {
       setWorking(true);
       try {
-        targetArtistId = (await getAudiusTrack(id)).artistId;
+        targetArtistId = (await getMusicTrack(id)).artistId;
       } catch {
         Alert.alert('Artist unavailable', 'Could not load this song’s artist.');
       } finally {
@@ -332,7 +346,7 @@ export default function ActionSheetScreen() {
       return;
     }
     try {
-      const target = song || (await getAudiusTrack(id));
+      const target = song || (await getMusicTrack(id));
       setSong(target);
       await downloads.downloadSong(target, 'manual');
     } catch (error) {
@@ -402,9 +416,8 @@ export default function ActionSheetScreen() {
       expanded={showPlaylists}
       onDismiss={() => dismissSheet()}>
     <DesktopActionsContext.Provider value={desktop}>
-    <View style={[styles.screen, Platform.OS === 'web' && styles.webScreen, showPlaylists && styles.flex, { backgroundColor: Platform.OS === 'ios' ? colors.elevated : 'transparent' }]}>
-      {showPlaylists ? (
-        <View style={styles.flex}>
+    <PopupSheetLayout style={[styles.screen, Platform.OS === 'web' && styles.webScreen, showPlaylists && styles.flex]}
+      header={showPlaylists ? (
           <View style={[styles.pickerHeader, Platform.OS === 'web' && [styles.webPickerHeader, { paddingVertical: popupInset, paddingHorizontal: popupInset, paddingRight: popupInset + POPUP_CLOSE_CLEARANCE }]]}>
             <Pressable
               onPress={() => setShowPlaylists(false)}
@@ -436,17 +449,24 @@ export default function ActionSheetScreen() {
               </Text>
             </Pressable> : null}
           </View>
+      ) : undefined}>
+      {(inlineHeader) => showPlaylists ? (
           <FlatList
-            contentContainerStyle={styles.playlistList}
+            style={styles.flex}
+            contentInsetAdjustmentBehavior="never"
+            automaticallyAdjustContentInsets={false}
+            contentContainerStyle={[styles.playlistList, { paddingBottom: insets.bottom + 24 }]}
             data={playlists}
             initialNumToRender={9}
             keyExtractor={(playlist, index) => `${playlist.id}-${index}`}
             ListHeaderComponent={
-              <ActionRow
-                icon="plus.circle.fill"
-                label="Create new playlist"
-                onPress={openCreatePlaylist}
-              />
+              <>
+              {inlineHeader}
+              <ActionRow icon="plus.circle.fill" label="Create new playlist" onPress={openCreatePlaylist} />
+              <PlaylistPickerRow disabled={working} favorites selected={selected} onPress={() => void toggleCollection()}
+                playlist={{ id: 'favorites', source: 'crimson', title: 'Favorites', artists: '', image: '', imageSmall: '', likes: '', songs: [], category: '' }} />
+              {localSong ? <Text style={[styles.empty, { color: colors.secondaryText }]}>Local songs in your playlists are available on this device.</Text> : null}
+              </>
             }
             ListEmptyComponent={
               loadingPlaylists ? <ActivityIndicator color={colors.accent} style={styles.empty} /> : <Text style={[styles.empty, { color: colors.secondaryText }]}>
@@ -464,9 +484,10 @@ export default function ActionSheetScreen() {
             showsVerticalScrollIndicator={false}
             windowSize={7}
           />
-        </View>
       ) : (
         <ScrollView
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
           style={Platform.OS === 'web' ? styles.webScroll : styles.flex}
           contentContainerStyle={[
             styles.actions,
@@ -533,7 +554,7 @@ export default function ActionSheetScreen() {
             selected={selected}
             onPress={() => void toggleCollection()}
           />
-          <ActionRow
+          {!localSong ? <ActionRow
             icon={type === 'song' ? 'person' : 'play.fill'}
             label={
               type === 'song'
@@ -547,7 +568,7 @@ export default function ActionSheetScreen() {
                 ? () => void openSongArtist()
                 : () => void playCollection()
             }
-          />
+          /> : null}
           {type !== 'song' ? (
             <ActionRow
               icon="arrow.up.right"
@@ -590,7 +611,7 @@ export default function ActionSheetScreen() {
               onPress={() => void openPlaylistPicker()}
             />
           ) : null}
-          {type === 'song' && downloads.supported ? (
+          {type === 'song' && !localSong && downloads.supported ? (
             <ActionRow
               disabled={downloadStatus.disabled}
               icon={downloadStatus.icon}
@@ -601,6 +622,29 @@ export default function ActionSheetScreen() {
               onPress={() => void toggleSongOffline()}
             />
           ) : null}
+          {type === 'song' && (params.playerPresentation === 'overlay' || params.playerPresentation === 'modal') ? (
+            <>
+              <ActionRow
+                icon="moon.stars.fill"
+                label="Sleep timer"
+                onPress={() => { releaseWebNavigationFocus(); router.replace('/sleep-timer' as Href); }}
+              />
+              <ActionRow
+                icon="slider.horizontal.3"
+                label="Equalizer"
+                onPress={() => { releaseWebNavigationFocus(); router.replace('/equalizer' as Href); }}
+              />
+            </>
+          ) : null}
+          {localSong && song?.local?.kind === 'import' ? <ActionRow icon="trash" label="Remove imported copy" disabled={working} onPress={() => {
+            Alert.alert('Remove imported copy?', 'The copy in Crimson will be removed. Your original file is kept.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Remove', style: 'destructive', onPress: () => {
+                setWorking(true);
+                void removeLocalMusic(song).then(() => { requestLibraryRefresh(); dismissSheet(); }).catch(() => Alert.alert('Could not remove audio', 'Try again.')).finally(() => setWorking(false));
+              } },
+            ]);
+          }} /> : null}
           {type === 'playlist' && downloads.supported ? (
             <ActionRow
               disabled={working}
@@ -611,7 +655,7 @@ export default function ActionSheetScreen() {
           ) : null}
         </ScrollView>
       )}
-    </View>
+    </PopupSheetLayout>
     </DesktopActionsContext.Provider>
     </ResponsivePopup>
   );
@@ -739,15 +783,23 @@ const PlaylistPickerRow = memo(function PlaylistPickerRow({
   onPress,
   playlist,
   selected,
+  favorites = false,
 }: {
   disabled?: boolean;
   onPress: () => void;
+  favorites?: boolean;
   playlist: CrimsonPlaylist;
   selected?: boolean;
 }) {
   const { colors } = useAppSettings();
   const desktop = useContext(DesktopActionsContext);
   const contentColor = selected ? colors.accent : colors.text;
+  const [artwork, setArtwork] = useState(playlist);
+  useEffect(() => {
+    let active = true;
+    if (!favorites) void playlistPickerArtwork(playlist).then((next) => { if (active) setArtwork(next); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [favorites, playlist]);
   return (
     <Pressable
       accessibilityLabel={`${selected ? 'Remove from' : 'Add to'} ${playlist.title}`}
@@ -762,12 +814,12 @@ const PlaylistPickerRow = memo(function PlaylistPickerRow({
         disabled && styles.disabled,
       ]}
     >
-      <PlaylistCover
+      {favorites ? <FavoritesArtwork style={[styles.playlistRowArtwork, { borderRadius: 12 }]} /> : <PlaylistCover
         borderRadius={12}
-        playlist={playlist}
+        playlist={artwork}
         showPlayingIndicator={false}
         style={styles.playlistRowArtwork}
-      />
+      />}
       <Text
         numberOfLines={1}
         style={[styles.rowLabel, desktop && styles.desktopRowLabel, { color: contentColor }]}

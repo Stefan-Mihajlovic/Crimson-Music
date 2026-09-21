@@ -23,6 +23,7 @@ jest.mock('../src/components/frosted-surface', () => ({ FrostedLayer: ({ childre
 jest.mock('../src/components/vault-glass-button', () => () => null);
 jest.mock('../src/components/home-quick-access', () => () => null);
 jest.mock('../src/components/home-discovery', () => () => null);
+jest.mock('../src/components/your-mixes', () => () => null);
 jest.mock('../src/components/app-symbol', () => ({ SymbolView: () => null }));
 jest.mock('../src/components/artwork-image', () => () => null);
 jest.mock('../src/components/now-playing-artwork', () => ({ CollectionPlayingOverlay: () => null }));

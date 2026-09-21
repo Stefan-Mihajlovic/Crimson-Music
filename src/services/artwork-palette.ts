@@ -1,10 +1,9 @@
 import { Image } from 'expo-image';
 import { NativeModules, Platform } from 'react-native';
 
-export type ArtworkPalette = readonly [string, string, string];
-
-// Used only while the first cover is loading or if its pixels are unavailable.
-export const fallbackArtworkPalette: ArtworkPalette = ['#34323B', '#252831', '#45404B'];
+import type { ArtworkPalette } from './artwork-palette-colors';
+export type { ArtworkPalette } from './artwork-palette-colors';
+export { fallbackArtworkPalette } from './artwork-palette-colors';
 
 type ArtworkPaletteModule = {
   extractArtworkPalette?: (source: string, cacheKey: string, allowNetwork: boolean) => Promise<string[]>;

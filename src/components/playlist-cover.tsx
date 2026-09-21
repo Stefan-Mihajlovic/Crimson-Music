@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import { SymbolView } from '@/components/app-symbol';
 import ArtworkImage from '@/components/artwork-image';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
@@ -7,7 +7,6 @@ import { CrimsonPlaylist } from '@/types/music';
 import { useAppSettings } from '@/providers/settings-provider';
 
 const fallbackArtwork = require('@/assets/images/home/default-song.webp');
-const crimsonLogo = require('@/assets/images/icon.png');
 
 export default function PlaylistCover({
   borderRadius = 17,
@@ -22,7 +21,7 @@ export default function PlaylistCover({
   showPlayingIndicator?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { dataSaver } = useAppSettings();
+  const { dataSaver, colors } = useAppSettings();
   const customCover = preferLarge && !dataSaver
     ? playlist.image || playlist.imageSmall
     : playlist.imageSmall || playlist.image;
@@ -32,26 +31,16 @@ export default function PlaylistCover({
     <View style={[styles.cover, { borderRadius }, style]}>
       {customCover ? (
         <ArtworkImage artwork={playlist.artwork} fallbackSource={fallbackArtwork} cachePolicy="memory-disk" contentFit="cover" source={{ uri: customCover }} style={StyleSheet.absoluteFill} />
+      ) : tiles.length >= 4 ? (
+        <View style={styles.grid}>
+          {tiles.map((uri, index) => <ArtworkImage key={`${uri}:${index}`} fallbackSource={fallbackArtwork} cachePolicy="memory-disk" contentFit="cover" source={{ uri }} style={styles.tile} />)}
+        </View>
+      ) : tiles.length ? (
+        <ArtworkImage fallbackSource={fallbackArtwork} cachePolicy="memory-disk" contentFit="cover" source={{ uri: tiles[0] }} style={StyleSheet.absoluteFill} />
       ) : (
-        <>
-          <View style={styles.grid}>
-            {[0, 1, 2, 3].map((index) => (
-              <ArtworkImage
-                fallbackSource={fallbackArtwork}
-                cachePolicy="memory-disk"
-                key={index}
-                contentFit="cover"
-                source={tiles[index] ? { uri: tiles[index] } : fallbackArtwork}
-                style={styles.tile}
-              />
-            ))}
-          </View>
-          <View style={styles.logoCenter}>
-            <View style={styles.logoShell}>
-              <Image contentFit="cover" source={crimsonLogo} style={styles.logo} />
-            </View>
-          </View>
-        </>
+        <View style={[styles.logoCenter, { backgroundColor: colors.accentSoft }]}>
+          <SymbolView name="music.note.list" size={32} tintColor={colors.accent} />
+        </View>
       )}
       {showPlayingIndicator ? <CollectionPlayingOverlay sourceName={playlist.title} /> : null}
     </View>

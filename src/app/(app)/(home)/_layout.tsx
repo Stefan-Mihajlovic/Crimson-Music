@@ -25,6 +25,7 @@ export default function HomeLayout() {
       <Stack.Screen name="index" options={{ headerShown: Platform.OS === 'ios' && !performanceMode, title: '' }} />
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="history" options={{ title: 'Listening History' }} />
+      <Stack.Screen name="mix" options={{ title: 'Your Mix' }} />
       <Stack.Screen name="settings" options={{ headerLargeTitleEnabled: true, title: 'Settings' }} />
       <Stack.Screen name="profile" options={{ title: 'Profile' }} />
       <Stack.Screen name="offline-listening" options={{ title: 'Offline Listening' }} />

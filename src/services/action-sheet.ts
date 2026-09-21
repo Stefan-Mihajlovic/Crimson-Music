@@ -6,14 +6,14 @@ export { releaseWebNavigationFocus } from '@/services/navigation-focus';
 export type AppRouteGroup = '(home)' | '(search)' | '(library)' | '(account)';
 
 export type ActionSheetItem = {
-  type: 'song' | 'artist' | 'playlist';
+  type: 'song' | 'artist' | 'playlist' | 'local-music';
   id: string;
   title: string;
   subtitle: string;
   image: string;
   artistId?: string;
   coverImages?: string[];
-  source?: 'audius' | 'crimson';
+  source?: 'audius' | 'crimson' | 'local';
   playerPresentation?: 'overlay' | 'modal';
 };
 

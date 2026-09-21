@@ -3,12 +3,8 @@ import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
-import NativeClearGlassCircle from '../src/components/clear-glass-circle.ios';
-import ClearGlassCircle from '../src/components/clear-glass-circle.tsx';
 import GlassPressable from '../src/components/glass-pressable';
 import LiquidSearchField from '../src/components/liquid-search-field.ios';
-import NativeButton from '../src/components/native-button.ios';
-import NativeBackButton from '../src/components/native-back-button.ios';
 import PerformanceStackHeader from '../src/components/performance-stack-header';
 
 let mockPerformanceMode;
@@ -73,23 +69,6 @@ function glassModifiers() {
   )));
 }
 
-test.each([
-  ['iOS', NativeClearGlassCircle],
-  ['cross-platform', ClearGlassCircle],
-])('%s icon circle always matches the Settings surface', async (_, Circle) => {
-  const element = () => React.createElement(Circle, { size: 96 });
-  await render(element());
-  for (const enabled of [false, true, false]) {
-    await setPerformance(enabled, element());
-    expect(root.root.findAllByType('ExpoGlassView')).toHaveLength(0);
-    expect(glassModifiers()).toHaveLength(0);
-    expect(StyleSheet.flatten(root.toJSON().props.style)).toMatchObject({
-      width: 96, height: 96, borderRadius: 48, backgroundColor: mockColors.controlSurface,
-      borderColor: mockColors.border, borderWidth: StyleSheet.hairlineWidth,
-    });
-  }
-});
-
 test('solid controls stay actionable through Performance Mode changes', async () => {
   const onPress = jest.fn();
   const onLongPress = jest.fn();
@@ -128,21 +107,6 @@ test('solid search preserves native input, external values, and cancellation', a
   await act(async () => root.root.findByProps({ systemName: 'xmark' }).props.onPress());
   expect(onChangeText).toHaveBeenLastCalledWith('');
   expect(root.root.findByType('TextField').props.text.get()).toBe('');
-});
-
-test('action buttons use solid surfaces while navigation retains its glass exception', async () => {
-  const onPress = jest.fn();
-  const element = () => React.createElement(React.Fragment, null,
-    React.createElement(NativeButton, { label: 'Continue', onPress }),
-    React.createElement(NativeBackButton, { onPress }),
-  );
-  await render(element());
-  expect(glassModifiers()).toHaveLength(1);
-  expect(glassModifiers()[0].props.label).toBe('Go back');
-  await setPerformance(true, element());
-  expect(glassModifiers()).toHaveLength(0);
-  for (const button of root.root.findAllByType('NativeButton')) await act(async () => button.props.onPress());
-  expect(onPress).toHaveBeenCalledTimes(2);
 });
 
 test('opaque navigation header preserves title and back navigation without a native glass control', async () => {

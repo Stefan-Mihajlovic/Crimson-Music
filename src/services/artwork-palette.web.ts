@@ -1,10 +1,6 @@
-import type { ArtworkPalette } from './artwork-palette';
-export type { ArtworkPalette } from './artwork-palette';
-export const fallbackArtworkPalette: ArtworkPalette = [
-  '#34323B',
-  '#252831',
-  '#45404B',
-];
+import type { ArtworkPalette } from './artwork-palette-colors';
+export type { ArtworkPalette } from './artwork-palette-colors';
+export { fallbackArtworkPalette } from './artwork-palette-colors';
 const palettes = new Map<string, ArtworkPalette>();
 const pending = new Map<string, Promise<ArtworkPalette | null>>();
 export const getCachedArtworkPalette = (source?: string) =>

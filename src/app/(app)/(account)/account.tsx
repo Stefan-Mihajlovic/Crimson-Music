@@ -1,3 +1,4 @@
+import { equalizerPresetName } from '@/services/equalizer';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
@@ -7,6 +8,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Switch,
@@ -35,7 +37,7 @@ export default function AccountScreen() {
   const headerScroll = useMainHeaderScroll();
   const { disconnectAndClearLocalData, signOut, user } = useAuth();
   const downloads = useDownloads();
-  const { colors, dataSaver, performanceMode, requestedReduceMotion, systemReduceMotion, settingsError, retrySaveSettings, theme, updateSettings } = useAppSettings();
+  const { colors, equalizer, playbackSpeed = 1, preservePitch = true, loudnessNormalization = false, dataSaver, performanceMode, crossfadeEnabled, crossfadeSeconds, requestedReduceMotion, systemReduceMotion, settingsError, retrySaveSettings, theme, updateSettings } = useAppSettings();
   const [clearingLocalData, setClearingLocalData] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const photo = user?.ProfilePhoto || '1';
@@ -118,7 +120,7 @@ export default function AccountScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Appearance</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Appearance & accessibility</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
           <View style={styles.themeHeader}><SymbolView name="circle.lefthalf.filled" size={21} tintColor={colors.accent} /><Text style={[styles.rowTitle, { color: colors.text }]}>Theme</Text></View>
           <PillSegmentedControl
@@ -129,21 +131,62 @@ export default function AccountScreen() {
             style={styles.segmented}
             labelStyle={styles.segmentText}
           />
-        </View>
-
-        <Text style={[styles.settingScope, { color: colors.secondaryText }]}>Appearance and playback settings apply to this device.</Text>
-
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Playback & experience</Text>
-        <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
-          <SettingsToggle icon="antenna.radiowaves.left.and.right" title="Data Saver" subtitle="Uses smaller artwork, loads less discovery data, and saves offline music only over Wi-Fi. Streaming audio quality stays the same." value={dataSaver} onValueChange={(value) => updateSettings({ dataSaver: value })} />
           <Divider />
           <SettingsToggle icon="figure.walk.motion" title="Reduce Motion" subtitle={systemReduceMotion ? 'Your device’s accessibility setting is also reducing motion.' : 'Minimizes player movement and animated transitions.'} value={requestedReduceMotion} onValueChange={(value) => updateSettings({ reduceMotion: value })} />
           <Divider />
           <SettingsToggle icon="bolt.fill" title="Performance Mode" subtitle="Uses solid controls and navigation, and reduces animated artwork and visual effects." value={performanceMode} onValueChange={(value) => updateSettings({ performanceMode: value })} />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Offline listening</Text>
+        <Text style={[styles.settingScope, { color: colors.secondaryText }]}>Appearance and playback settings apply to this device.</Text>
+
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Playback</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
+          <View style={styles.row}>
+            <SymbolView name="speedometer" size={21} tintColor={colors.accent} />
+            <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>Playback speed</Text><Text style={[styles.rowSubtitle, { color: colors.secondaryText }]}>{playbackSpeed.toFixed(2)}×</Text></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Decrease playback speed" disabled={playbackSpeed <= 0.5} onPress={() => updateSettings({ playbackSpeed: playbackSpeed - 0.05 })} style={{ padding: 12, opacity: playbackSpeed <= 0.5 ? 0.35 : 1 }}><SymbolView name="minus" size={22} tintColor={colors.accent} /></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Reset playback speed" onPress={() => updateSettings({ playbackSpeed: 1 })} style={{ padding: 12 }}><Text style={{ color: colors.accent }}>1×</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Increase playback speed" disabled={playbackSpeed >= 2} onPress={() => updateSettings({ playbackSpeed: playbackSpeed + 0.05 })} style={{ padding: 12, opacity: playbackSpeed >= 2 ? 0.35 : 1 }}><SymbolView name="plus" size={22} tintColor={colors.accent} /></Pressable>
+            </View>
+          </View>
+          <Divider />
+          <SettingsToggle icon="music.note" title="Preserve pitch" subtitle={preservePitch ? 'Keep the original tone when changing speed.' : 'Pitch rises or falls with playback speed.'} value={preservePitch} onValueChange={(value) => updateSettings({ preservePitch: value })} />
+          <Divider />
+          <SettingsToggle icon="waveform" title="Crossfade" subtitle="Blend the end of a song into the next. Short tracks use a shorter transition; repeat-one plays normally." value={crossfadeEnabled} onValueChange={(value) => updateSettings({ crossfadeEnabled: value })} />
+          {crossfadeEnabled && <>
+            <Divider />
+            <View style={styles.row}>
+              <SymbolView name="clock" size={21} tintColor={colors.accent} />
+              <View style={styles.rowCopy}>
+                <Text style={[styles.rowTitle, { color: colors.text }]}>Duration</Text>
+                <Text style={[styles.rowSubtitle, { color: colors.secondaryText }]}>{crossfadeSeconds} {crossfadeSeconds === 1 ? 'second' : 'seconds'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Shorter crossfade" disabled={crossfadeSeconds <= 1} onPress={() => updateSettings({ crossfadeSeconds: crossfadeSeconds - 1 })} style={({ pressed }) => ({ minWidth: 44, minHeight: 44, borderRadius: 22, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center', opacity: crossfadeSeconds <= 1 ? 0.35 : pressed ? 0.6 : 1 })}>
+                  <SymbolView name="minus" size={22} tintColor={colors.accent} weight="medium" />
+                </Pressable>
+                <Text accessibilityLiveRegion="polite" style={{ color: colors.text, minWidth: 28, textAlign: 'center', fontSize: 17, fontVariant: ['tabular-nums'] }}>{crossfadeSeconds}s</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Longer crossfade" disabled={crossfadeSeconds >= 12} onPress={() => updateSettings({ crossfadeSeconds: crossfadeSeconds + 1 })} style={({ pressed }) => ({ minWidth: 44, minHeight: 44, borderRadius: 22, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center', opacity: crossfadeSeconds >= 12 ? 0.35 : pressed ? 0.6 : 1 })}>
+                  <SymbolView name="plus" size={22} tintColor={colors.accent} weight="medium" />
+                </Pressable>
+              </View>
+            </View>
+          </>}
+          <Divider />
+          <SettingsLink icon="moon.stars.fill" title="Sleep timer" subtitle="Pause after a while or at the end of the current song." onPress={() => router.push('/sleep-timer' as Href)} />
+        </View>
+
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Sound</Text>
+        <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
+          <SettingsLink icon="slider.horizontal.3" title="Equalizer" subtitle={equalizer?.enabled ? equalizerPresetName(equalizer) : 'Choose a preset or fine tune your sound.'} onPress={() => router.push('/equalizer' as Href)} />
+          {Platform.OS === 'ios' ? <><Divider /><SettingsToggle icon="speaker.wave.2.fill" title="Loudness normalization" subtitle="Smooth out volume differences between songs. Adapts as each song plays." value={loudnessNormalization} onValueChange={(value) => updateSettings({ loudnessNormalization: value })} /></> : null}
+        </View>
+
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Downloads & data</Text>
+        <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
+          <SettingsToggle icon="antenna.radiowaves.left.and.right" title="Data Saver" subtitle="Uses smaller artwork, loads less discovery data, and saves offline music only over Wi-Fi. Streaming audio quality stays the same." value={dataSaver} onValueChange={(value) => updateSettings({ dataSaver: value })} />
+          <Divider />
           <SettingsLink disabled={!downloads.supported} icon="arrow.down.circle" title="Downloads" subtitle={`${downloads.downloadedCount} songs saved on this device. Manage storage and downloads.`} onPress={() => router.push('/downloads' as Href)} />
           <Divider />
           <SettingsToggle

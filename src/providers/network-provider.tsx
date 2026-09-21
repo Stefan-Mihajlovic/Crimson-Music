@@ -7,8 +7,8 @@ import {
   useMemo,
   useState,
 } from 'react';
-import { AppState } from 'react-native';
-import { networkIsOffline, networkRetryDelay } from '@/services/network-state';
+import { AppState, Platform } from 'react-native';
+import { networkStatus, networkRetryDelay } from '@/services/network-state';
 
 type NetworkContextValue = {
   isOffline: boolean;
@@ -21,11 +21,13 @@ NetInfo.configure({
   useNativeReachability: true,
   reachabilityUrl: 'https://api.audius.co/health_check',
   reachabilityMethod: 'GET',
-  reachabilityTest: async (response) => response.ok,
+  // An HTTP error is a reachable service failure, not a device disconnection.
+  reachabilityTest: async (response) => response.status >= 200 && response.status < 600,
   reachabilityShortTimeout: 15_000,
   reachabilityLongTimeout: 60_000,
   reachabilityRequestTimeout: 5_000,
-  reachabilityShouldRun: () => AppState.currentState === 'active',
+  // Do not gate reachabilityShouldRun on AppState: NetInfo 12 treats a skipped
+  // check as unreachable, including during the inactive phase of app startup.
 });
 
 export function NetworkProvider({ children }: PropsWithChildren) {
@@ -36,6 +38,7 @@ export function NetworkProvider({ children }: PropsWithChildren) {
     let offline = false;
     let attempt = 0;
     let refreshing = false;
+    let refreshAgain = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
       if (!mounted || !offline || refreshing || timer || AppState.currentState !== 'active') return;
@@ -45,16 +48,29 @@ export function NetworkProvider({ children }: PropsWithChildren) {
       }, networkRetryDelay(attempt++));
     };
     const refresh = () => {
-      if (!mounted || refreshing) return;
+      if (!mounted) return;
+      if (refreshing) {
+        refreshAgain = true;
+        return;
+      }
       refreshing = true;
       void NetInfo.refresh().catch(() => undefined).finally(() => {
         refreshing = false;
+        if (mounted && refreshAgain && AppState.currentState === 'active') {
+          refreshAgain = false;
+          refresh();
+          return;
+        }
         schedule();
       });
     };
     const unsubscribe = NetInfo.addEventListener((state) => {
-      if (!mounted) return;
-      offline = networkIsOffline(state);
+      // Background updates and in-flight checks from before foregrounding may
+      // be stale. Keep the last confirmed status until the active refresh.
+      if (!mounted || AppState.currentState !== 'active' || refreshAgain) return;
+      const status = networkStatus(state, Platform.OS === 'web' ? 'web' : 'native');
+      if (status === 'unknown') return;
+      offline = status === 'offline';
       if (!offline) {
         attempt = 0;
         clearTimeout(timer);
@@ -69,6 +85,8 @@ export function NetworkProvider({ children }: PropsWithChildren) {
       if (state === 'active') {
         attempt = 0;
         refresh();
+      } else {
+        refreshAgain = false;
       }
     });
     return () => {

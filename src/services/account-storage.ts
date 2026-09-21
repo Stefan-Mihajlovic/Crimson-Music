@@ -14,7 +14,9 @@ export function belongsToAccount(key: string, uid: string) {
     `crimson.offline.data.v1:library:${uid}`,
     `crimson.offline.data.v1:favorites:${uid}`,
     `crimson.events.outbox.v1:${uid}`,
+    `crimson.local-favorites.v1:${uid}`,
+    `crimson.personal-mix-bookmarks.v1:${encodeURIComponent(uid)}`,
   ];
   const audiusKeys = ['home', 'library', 'favorites', 'history'].map((kind) => `crimson.offline.data.v2:${kind}:${uid}`);
-  return audiusKeys.includes(key) || key.startsWith(`crimson.offline.data.v2:playlist:${uid}:`) || exact.includes(key) || key.startsWith(`crimson.offline.data.v1:playlist:${uid}:`);
+  return key.startsWith(`crimson.playlist-local-tracks.v1:${uid}:`) || audiusKeys.includes(key) || key.startsWith(`crimson.offline.data.v2:playlist:${uid}:`) || exact.includes(key) || key.startsWith(`crimson.offline.data.v1:playlist:${uid}:`) || key.startsWith(`crimson.personal-mixes.v1:${encodeURIComponent(uid)}:`);
 }

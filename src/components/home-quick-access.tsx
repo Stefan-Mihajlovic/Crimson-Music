@@ -1,8 +1,11 @@
+import PersonalMixCover from '@/components/personal-mix-cover';
+import { useBookmarkedPersonalMixes } from '@/hooks/use-personal-mixes';
+import LocalMusicArtwork from '@/components/local-music-artwork';
 import FavoritesArtwork from '@/components/favorites-artwork';
 import ArtworkImage from '@/components/artwork-image';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import PlaylistCover from '@/components/playlist-cover';
 import { useAuth } from '@/providers/auth-provider';
@@ -11,7 +14,7 @@ import { useNetwork } from '@/providers/network-provider';
 import { usePlayer } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { useDetailRoutes } from '@/services/action-sheet';
-import { buildLibraryCollection, type LibraryCollectionItem } from '@/services/library-collection';
+import { buildLibraryCollection, mergePersonalMixBookmarks, type LibraryCollectionItem } from '@/services/library-collection';
 import {
   loadListeningHistoryPage,
   readLocalListeningEvents,
@@ -36,6 +39,7 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
   const { downloadedSongs, supported: downloadsSupported } = useDownloads();
   const routes = useDetailRoutes();
   const router = useRouter();
+  const { mixes: bookmarkedMixes } = useBookmarkedPersonalMixes();
   const [recent, setRecent] = useState<CrimsonSong[]>([]);
   const [collections, setCollections] = useState<LibraryCollectionItem[]>([]);
   useFocusEffect(useCallback(() => {
@@ -55,9 +59,10 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
     return () => { active = false; };
   }, [uid]));
 
+  const liveCollections = useMemo(() => mergePersonalMixBookmarks(collections, bookmarkedMixes), [collections, bookmarkedMixes]);
   const available = isOffline ? downloadedSongs : recent;
   const items = [
-    ...(!isOffline ? collections : []),
+    ...(!isOffline ? liveCollections : liveCollections.filter((item) => item.kind === 'mix')),
     ...available,
   ].slice(0, 3);
   const fallbackShortcuts = [
@@ -81,6 +86,16 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
         {items.map((item) => {
           if ('kind' in item) {
             if (item.kind === 'favorites') return null;
+            if (item.kind === 'local-music') return (
+              <Pressable key={item.key} accessibilityRole="button" onHoverIn={() => setHovered(item.key)} onHoverOut={() => setHovered('')} style={tileStyle(item.key)}
+                onPress={() => router.push('/(app)/(library)/local-music' as Href)}>
+                <LocalMusicArtwork style={styles.smallCover} size={24} /><Text numberOfLines={2} style={[styles.tileTitle, { color: colors.text }]}>Local Music</Text>
+              </Pressable>
+            );
+            if (item.kind === 'mix') return <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={`Open ${item.title}`} onHoverIn={() => setHovered(item.key)} onHoverOut={() => setHovered('')} style={tileStyle(item.key)}
+              onPress={() => router.push({ pathname: '/mix', params: { id: item.mix.id } })}>
+              <PersonalMixCover id={item.mix.id} mix={item.mix} size={42} borderRadius={10} style={styles.smallCover} /><Text numberOfLines={2} style={[styles.tileTitle, { color: colors.text }]}>{item.title}</Text>
+            </Pressable>;
             const artist = item.kind === 'artist';
             const title = artist ? item.artist.name : item.playlist.title;
             return (

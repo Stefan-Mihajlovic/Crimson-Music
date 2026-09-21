@@ -1,9 +1,9 @@
 import { Image } from 'expo-image';
 import { requireNativeModule } from 'expo-modules-core';
 
-import type { ArtworkPalette } from './artwork-palette';
-export type { ArtworkPalette } from './artwork-palette';
-export const fallbackArtworkPalette: ArtworkPalette = ['#34323B', '#252831', '#45404B'];
+import type { ArtworkPalette } from './artwork-palette-colors';
+export type { ArtworkPalette } from './artwork-palette-colors';
+export { fallbackArtworkPalette } from './artwork-palette-colors';
 
 type AndroidPaletteModule = {
   extractCrimsonArtworkPalette?: (source: string, cacheKey: string, allowNetwork: boolean) => Promise<string[]>;

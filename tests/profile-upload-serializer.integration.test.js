@@ -101,12 +101,6 @@ test.each(['ios', 'android'])('%s production photo upload survives the actual Ex
     expect(multipart).toContain('content-type: image/png');
     expect(Buffer.from(encoded.body).includes(imageBytes)).toBe(true);
     expect(audiusRequest).toHaveBeenCalledWith('/users/test-listener', { method: 'PUT', body: { profile_picture: 'testImageCid', profile_picture_sizes: 'testImageCid' } });
-    if (process.env.CRIMSON_UPLOAD_SMOKE === '1') {
-      const destination = path.join(__dirname, '../.build/profile-upload-fix');
-      fs.mkdirSync(destination, { recursive: true });
-      fs.writeFileSync(path.join(destination, 'probe.multipart'), encoded.body);
-      fs.writeFileSync(path.join(destination, 'probe.metadata.json'), JSON.stringify({ boundary: encoded.boundary, contentType: `multipart/form-data; boundary=${encoded.boundary}`, bytes: encoded.body.length, imageBytes: imageBytes.byteLength, source: 'assets/images/favicon.png' }, null, 2));
-    }
   } finally {
     Platform.OS = originalPlatform;
     if (originalFetch) Object.defineProperty(globalThis, 'fetch', originalFetch);

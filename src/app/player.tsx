@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   footerButtonContent: { flexDirection: 'row', gap: 7 },
   footerButtonLeft: { justifyContent: 'flex-start', paddingLeft: 4 },
   footerButtonRight: { justifyContent: 'flex-end', paddingRight: 4 },
-  footerText: { color: 'rgba(255,255,255,0.80)', fontSize: 10, fontWeight: '700' },
+  footerText: { color: 'rgba(255,255,255,0.80)', fontSize: 14, lineHeight: 20, fontWeight: '700' },
   footerTextActive: { color: BrandAccent.dark },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 13, backgroundColor: '#08070B' },
   emptyTitle: { color: '#F3EEFF', fontSize: 23, fontWeight: '700' },

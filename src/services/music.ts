@@ -1,3 +1,6 @@
+import { uploadAudiusImage, type ProfilePhotoUpload } from '@/services/audius-image-upload';
+import { withLocalPlaylistTracks, withLocalPlaylistDetail, savePlaylistOrder, removePlaylistOrder } from '@/services/playlist-local-tracks';
+import { getLocalSong, isLocalTrackId, readLocalFavoriteIds, readLocalFavorites, resolveLocalPlaybackUrl, setLocalFavorite } from '@/services/local-music';
 import { musicCategories as categories } from '@/constants/music-categories';
 import { resetPlayerListeningHistory } from '@/services/playback-session';
 import { preferredGenres, rankDiscoveryTracks, type DiscoveryProfile } from '@/services/discovery-profile';
@@ -7,6 +10,7 @@ import { reportError } from '@/services/telemetry';
 import { audiusRequest, getCurrentAudiusUserId } from '@/services/audius-session';
 import { discoveryRequestLimits } from '@/services/data-usage';
 import { RequestCache } from '@/services/request-cache';
+import { playlistArtworkFromSongs, playlistPickerArtwork } from '@/services/playlist-artwork';
 
 import {
   getAudiusArtist,
@@ -27,7 +31,6 @@ import {
   mapAudiusTrack,
   clearAudiusCaches,
 } from '@/services/audius';
-import { KaraokeLine } from '@/services/karaoke';
 import {
   ArtistDetail,
   CategoryDetail,
@@ -57,8 +60,6 @@ export type {
   RelatedSong,
 } from '@/types/music';
 
-export type PlayerLyrics = { lyrics: string[]; karaoke: KaraokeLine[] };
-export type PlayerExtras = PlayerLyrics & { related: RelatedSong[] };
 export type CrimsonCollectionField = 'LikedSongs' | 'FollowedArtists' | 'LikedPlaylists';
 export type ListeningEventType = 'play' | 'complete' | 'skip' | 'like' | 'unlike' | 'playlistAdd' | 'playlistRemove' | 'searchClick' | 'sessionEnd';
 export type ListeningHistoryCursor = {
@@ -201,7 +202,7 @@ function compactObject<T extends Record<string, unknown>>(value: T): T {
 }
 
 function songSnapshot(song: CrimsonSong) {
-  return compactObject({ ...song, url: '' });
+  return compactObject({ ...song, url: song.source === 'local' ? song.url : '' });
 }
 
 function songFromData(data: Record<string, unknown>, fallbackId = ''): CrimsonSong {
@@ -210,7 +211,8 @@ function songFromData(data: Record<string, unknown>, fallbackId = ''): CrimsonSo
     : { small: String(data.imageSmall || ''), medium: String(data.image || ''), large: String(data.image || ''), mirrors: [] };
   return {
     id: String(data.id || fallbackId),
-    source: 'audius',
+    source: data.source === 'local' ? 'local' : 'audius',
+    ...(data.source === 'local' && data.local && typeof data.local === 'object' ? { local: data.local as CrimsonSong['local'] } : {}),
     title: String(data.title || 'Untitled track'),
     creator: String(data.creator || 'Unknown artist'),
     artistId: String(data.artistId || ''),
@@ -218,7 +220,7 @@ function songFromData(data: Record<string, unknown>, fallbackId = ''): CrimsonSo
     image: String(data.image || artwork.large || ''),
     imageSmall: String(data.imageSmall || artwork.small || ''),
     artwork,
-    url: '',
+    url: data.source === 'local' ? String(data.url || '') : '',
     color: String(data.color || '#251E2C'),
     categories: String(data.categories || ''),
     genre: String(data.genre || ''),
@@ -250,7 +252,11 @@ export function normalizeRemoteImageUrl(value: string) {
 }
 
 export async function resolveTrackPlaybackUrl(track: Pick<CrimsonSong, 'id' | 'source' | 'url'>) {
-  return track.source === 'audius' ? resolveAudiusStreamUrl(track.id) : track.url;
+  return track.source === 'local' ? resolveLocalPlaybackUrl(track) : resolveAudiusStreamUrl(track.id);
+}
+
+export async function getMusicTrack(id: string): Promise<CrimsonSong> {
+  return isLocalTrackId(id) ? getLocalSong(id) : getAudiusTrack(id);
 }
 
 export async function loadMusicCatalog(): Promise<MusicCatalog> {
@@ -349,14 +355,16 @@ function playlistFromAudius(record: AudiusPlaylistRecord, uid?: string) {
   };
 }
 
-export async function createOwnedPlaylist(uid: string, title: string, coverUri?: string, options: {visibility?: 'public' | 'private'; description?: string; trackIds?: string[]} = {}): Promise<CrimsonPlaylist> {
+export async function createOwnedPlaylist(uid: string, title: string, coverUri?: string, options: {visibility?: 'public' | 'private'; description?: string; trackIds?: string[]; coverPhoto?: ProfilePhotoUpload} = {}): Promise<CrimsonPlaylist> {
   requireUser(uid);
   const normalizedTitle = title.trim();
   if (!normalizedTitle) throw new Error('Give your playlist a name.');
-  if (coverUri) throw new Error('Create the playlist without a cover, then add artwork on Audius.');
+  const photo = options.coverPhoto || (coverUri ? { uri: coverUri, name: 'playlist.jpg', type: 'image/jpeg' } : undefined);
+  const cover = photo ? await uploadAudiusImage(photo, () => requireUser(uid)) : undefined;
+  requireUser(uid);
   const response = await audiusRequest<{ playlist_id?: string }>(withUser('/playlists', uid), {
     method: 'POST',
-    body: { playlist_name: normalizedTitle, description: options.description || '', is_private: options.visibility === 'private', is_album: false, playlist_contents: [...new Set(options.trackIds || [])].map((id) => ({track_id:id, timestamp:Math.floor(Date.now()/1000)})) },
+    body: { ...(cover ? { playlist_image_sizes_multihash: cover.cid } : {}), playlist_name: normalizedTitle, description: options.description || '', is_private: options.visibility === 'private', is_album: false, playlist_contents: [...new Set((options.trackIds || []).filter((id) => !isLocalTrackId(id)))].map((id) => ({track_id:id, timestamp:Math.floor(Date.now()/1000)})) },
   });
   requireUser(uid);
   if (!response.playlist_id) throw new Error('Audius did not return the new playlist ID.');
@@ -365,14 +373,20 @@ export async function createOwnedPlaylist(uid: string, title: string, coverUri?:
   const artist = await getAudiusArtist(uid).catch(() => null);
   const record: AudiusPlaylistRecord = {
     id: response.playlist_id,
+    ...(cover ? { artwork: { '150x150': cover.picture, '480x480': cover.picture, '1000x1000': cover.picture } } : {}),
     playlist_name: normalizedTitle,
     user: { id: uid, name: artist?.name || 'Audius listener', handle: artist?.handle },
     is_private: options.visibility === 'private',
     description: options.description || '',
-    playlist_contents: [...new Set(options.trackIds || [])].map((id) => ({track_id:id, timestamp:Math.floor(Date.now()/1000)})),
+    playlist_contents: [...new Set((options.trackIds || []).filter((id) => !isLocalTrackId(id)))].map((id) => ({track_id:id, timestamp:Math.floor(Date.now()/1000)})),
   };
   confirmedPlaylistEdits.set(`${uid}:${record.id}`, { expiresAt: Date.now() + 30_000, record });
-  return playlistFromAudius(record, uid);
+  if (options.trackIds?.some(isLocalTrackId)) await savePlaylistOrder(uid, response.playlist_id, options.trackIds);
+  return withLocalPlaylistTracks(playlistFromAudius(record, uid), uid);
+}
+
+async function withLocalLibrary(feed: LibraryFeed, uid: string): Promise<LibraryFeed> {
+  return { ...feed, playlists: await Promise.all(feed.playlists.map((playlist) => withLocalPlaylistTracks(playlist, uid))) };
 }
 
 export async function loadLibraryFeed(
@@ -382,7 +396,7 @@ export async function loadLibraryFeed(
   requireUser(uid);
   const scope = `library:${uid}`;
   if (options.offlineOnly) {
-    return (await readOfflineData<LibraryFeed>(scope)) || { playlists: [], likedPlaylists: [], followedArtists: [] };
+    return withLocalLibrary((await readOfflineData<LibraryFeed>(scope)) || { playlists: [], likedPlaylists: [], followedArtists: [] }, uid);
   }
   try {
     const [owned, liked, followed] = await Promise.all([
@@ -403,19 +417,25 @@ export async function loadLibraryFeed(
       likedPlaylists: liked.filter(({ item }) => (deletedPlaylists.get(`${uid}:${item.id}`) || 0) <= Date.now()).map(({ item }) => playlistFromAudius(item, uid)),
       followedArtists: followed.map(mapAudiusArtist),
     };
+    // Older Crimson mix saves did not upload artwork. Give those library cards
+    // real song art immediately; uploading a replacement requires a user action.
+    feed.playlists = await Promise.all(feed.playlists.map((playlist) => /\[Crimson mix [a-z-]+ [\d-]+\]/.test(playlist.description || '') ? playlistPickerArtwork(playlist) : playlist));
+    requireUser(uid);
+    feed.playlists = await Promise.all(feed.playlists.map((playlist) => withLocalPlaylistTracks(playlist, uid)));
     // playlist_contents includes every track ID, so picker membership uses the full collection.
     await saveOfflineData(scope, feed);
     return feed;
   } catch (error) {
-    if (options.selectedTrackId) throw error;
+    if (options.selectedTrackId && !isLocalTrackId(options.selectedTrackId)) throw error;
     const cached = await readOfflineData<LibraryFeed>(scope);
-    if (cached) return cached;
+    if (cached) return withLocalLibrary(cached, uid);
     throw error;
   }
 }
 
 export async function getUserCollectionState(uid: string, field: CrimsonCollectionField, id: string) {
   requireUser(uid);
+  if (field === 'LikedSongs' && isLocalTrackId(id)) return (await readLocalFavoriteIds(uid)).includes(id);
   const confirmed = confirmedCollectionStates.get(`${uid}:${field}:${id}`);
   if (confirmed && confirmed.expiresAt > Date.now()) return confirmed.value;
   const segment = field === 'LikedSongs' ? 'tracks' : field === 'LikedPlaylists' ? 'playlists' : 'users';
@@ -448,6 +468,10 @@ export async function toggleUserCollectionItem(
   return serializeLibraryWrite(`${uid}:${field}:${id}`, async () => {
     requireUser(uid);
     const existing = await getUserCollectionState(uid, field, id);
+    if (field === 'LikedSongs' && isLocalTrackId(id)) {
+      await setLocalFavorite(uid, id, !existing);
+      return !existing;
+    }
     const path = field === 'FollowedArtists'
       ? `/users/${encodeURIComponent(id)}/follow`
       : `/${field === 'LikedSongs' ? 'tracks' : 'playlists'}/${encodeURIComponent(id)}/favorites`;
@@ -476,6 +500,16 @@ export async function setSongInOwnedPlaylist(
   requireUser(uid);
   return serializeLibraryWrite(`${uid}:playlist:${playlistId}`, async () => {
     requireUser(uid);
+    if (isLocalTrackId(songId)) {
+      const library = await loadLibraryFeed(uid);
+      const playlist = library.playlists.find((item) => item.id === playlistId && item.owned);
+      if (!playlist) throw new Error('You can only edit your own playlists.');
+      if (!(await getLocalSong(songId))) throw new Error('This local file is no longer available.');
+      const included = shouldInclude ?? !playlist.songs.includes(songId);
+      requireUser(uid);
+      await savePlaylistOrder(uid, playlistId, included ? [...playlist.songs, songId] : playlist.songs.filter((id) => id !== songId));
+      return included;
+    }
     const record = await readAudiusPlaylist(playlistId, uid);
     if (record.user?.id !== uid) throw new Error('You can only edit playlists owned by your Audius account.');
     const contents = record.playlist_contents || [];
@@ -505,20 +539,21 @@ export async function updateOwnedPlaylist(uid: string, playlistId: string, updat
     requireUser(uid);
     if (record.user?.id !== uid) throw new Error('You can only edit your own Audius playlists.');
     if (update.title !== undefined && !update.title.trim()) throw new Error('Give your playlist a name.');
-    if (update.expectedTrackIds && JSON.stringify((record.playlist_contents || []).map((item) => item.track_id)) !== JSON.stringify(update.expectedTrackIds)) throw new Error('This playlist changed on Audius. Reload it before saving your edits.');
+    if (update.expectedTrackIds && JSON.stringify((record.playlist_contents || []).map((item) => item.track_id)) !== JSON.stringify(update.expectedTrackIds.filter((id) => !isLocalTrackId(id)))) throw new Error('This playlist changed on Audius. Reload it before saving your edits.');
     const oldContents = new Map((record.playlist_contents || []).map((item) => [item.track_id, item]));
     const patch = {
       ...(update.title !== undefined ? { playlist_name: update.title.trim() } : {}),
       ...(update.description !== undefined ? { description: update.description } : {}),
       ...(update.visibility !== undefined ? { is_private: update.visibility === 'private' } : {}),
-      ...(update.trackIds ? { playlist_contents: [...new Set(update.trackIds)].map((id) => oldContents.get(id) || { track_id: id, timestamp: Math.floor(Date.now() / 1000) }) } : {}),
+      ...(update.trackIds ? { playlist_contents: [...new Set(update.trackIds.filter((id) => !isLocalTrackId(id)))].map((id) => oldContents.get(id) || { track_id: id, timestamp: Math.floor(Date.now() / 1000) }) } : {}),
     };
     await audiusRequest(withUser(`/playlists/${encodeURIComponent(playlistId)}`, uid), { method: 'PUT', body: patch });
     requireUser(uid);
     const next = { ...record, ...patch };
     confirmedPlaylistEdits.set(`${uid}:${playlistId}`, { expiresAt: Date.now() + 60_000, record: next });
     clearAudiusCaches();
-    return playlistFromAudius(next, uid);
+    if (update.trackIds) await savePlaylistOrder(uid, playlistId, update.trackIds);
+    return withLocalPlaylistTracks(playlistFromAudius(next, uid), uid);
   });
 }
 export async function deleteOwnedPlaylist(uid: string, playlistId: string): Promise<void> {
@@ -531,6 +566,7 @@ export async function deleteOwnedPlaylist(uid: string, playlistId: string): Prom
     requireUser(uid);
     confirmedPlaylistEdits.delete(`${uid}:${playlistId}`);
     deletedPlaylists.set(`${uid}:${playlistId}`, Date.now() + 5 * 60_000);
+    await removePlaylistOrder(uid, playlistId);
     clearAudiusCaches();
     const cached = await readOfflineData<LibraryFeed>(`library:${uid}`);
     if (cached) await saveOfflineData(`library:${uid}`, { ...cached, playlists: cached.playlists.filter((p) => p.id !== playlistId), likedPlaylists: cached.likedPlaylists.filter((p) => p.id !== playlistId) });
@@ -567,7 +603,8 @@ async function loadPlaylistDetailOnline(playlistId: string, uid?: string, owned 
   if (owned && !playlist.owned) throw new Error('This playlist is not owned by your Audius account.');
   const trackMap = new Map(songs.map((song) => [song.id, song]));
   const ordered = playlist.songs.flatMap((id) => trackMap.has(id) ? [trackMap.get(id)!] : []);
-  return { playlist, songs: ordered };
+  const detail = await withLocalPlaylistDetail({ playlist, songs: ordered }, uid);
+  return { ...detail, playlist: playlistArtworkFromSongs(detail.playlist, detail.songs) };
 }
 
 export async function loadPlaylistDetail(
@@ -581,7 +618,7 @@ export async function loadPlaylistDetail(
   const scope = `playlist:${uid || 'public'}:${sourceHint || 'unknown'}:${playlistId}`;
   if (options.offlineOnly) {
     const cached = await readOfflineData<PlaylistDetail>(scope);
-    if (cached) return cached;
+    if (cached) return withLocalPlaylistDetail(cached, uid);
     throw new Error('This playlist is not cached for offline listening.');
   }
   try {
@@ -590,7 +627,7 @@ export async function loadPlaylistDetail(
     return detail;
   } catch (error) {
     const cached = await readOfflineData<PlaylistDetail>(scope);
-    if (cached) return cached;
+    if (cached) return withLocalPlaylistDetail(cached, uid);
     throw error;
   }
 }
@@ -614,17 +651,18 @@ export async function loadFavoriteSongs(
   options: { offlineOnly?: boolean } = {},
 ): Promise<CrimsonSong[]> {
   requireUser(uid);
+  const local = await readLocalFavorites(uid);
   if (options.offlineOnly) {
-    return (await readOfflineData<CrimsonSong[]>(`favorites:${uid}`)) || [];
+    return [...local, ...((await readOfflineData<CrimsonSong[]>(`favorites:${uid}`)) || [])];
   }
   try {
     const records = await readAudiusList<AudiusActivity<AudiusTrackRecord>>(withUser(userPath(uid, '/library/tracks?type=favorite&sort_method=added_date&sort_direction=desc'), uid));
     const songs = records.map(({ item }) => mapAudiusTrack(item)).filter((song) => song.id);
     await saveOfflineData(`favorites:${uid}`, songs);
-    return songs;
+    return [...local, ...songs];
   } catch (error) {
     const cached = await readOfflineData<CrimsonSong[]>(`favorites:${uid}`);
-    if (cached) return cached;
+    if (cached || local.length) return [...local, ...(cached || [])];
     throw error;
   }
 }
@@ -666,7 +704,7 @@ export async function loadAutomaticDownloadTargets(uid: string) {
     playlist.source,
   ).catch(() => null)));
   return {
-    favorites,
+    favorites: favorites.filter((song) => song.source === 'audius'),
     playlists: playlistDetails.flatMap((detail, index) => detail
       ? [{
           id: playlists[index].playlist.id,
@@ -676,12 +714,8 @@ export async function loadAutomaticDownloadTargets(uid: string) {
   };
 }
 
-export async function loadPlayerLyrics(_songId: string): Promise<PlayerLyrics> {
-  // Audius does not currently expose licensed lyrics or timed lyric data.
-  return { lyrics: [], karaoke: [] };
-}
-
 export async function loadRelatedSongs(songId: string, count = 8): Promise<RelatedSong[]> {
+  if (isLocalTrackId(songId)) return [];
   const current = await getAudiusTrack(songId);
   const [artistTracks, genreTracks, recommendedTracks] = await Promise.all([
     current.artistId ? getAudiusArtistTracks(current.artistId, 18).catch(() => []) : Promise.resolve([]),
@@ -702,14 +736,6 @@ export async function loadRelatedSongs(songId: string, count = 8): Promise<Relat
   }
   for (const [items, reason] of sources) items.forEach((song) => add(song, reason));
   return related;
-}
-
-export async function loadPlayerExtras(songId: string, count = 8): Promise<PlayerExtras> {
-  const [lyrics, related] = await Promise.all([
-    loadPlayerLyrics(songId),
-    loadRelatedSongs(songId, count),
-  ]);
-  return { ...lyrics, related };
 }
 
 const discoveryCache = new RequestCache(24);

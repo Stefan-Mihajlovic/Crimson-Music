@@ -34,6 +34,7 @@ Available checks are:
 npm run check
 npm run test:unit
 npm run test:integration
+npm run test:platforms
 npx expo-doctor
 ```
 

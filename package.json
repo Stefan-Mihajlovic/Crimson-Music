@@ -86,6 +86,7 @@
     "ios:device": "expo prebuild --platform ios && node scripts/fix-expo-ios-paths.js && expo run:ios --device --configuration Release --no-install",
     "ios:device:dev": "expo prebuild --platform ios && node scripts/fix-expo-ios-paths.js && expo run:ios --device --configuration Debug --no-install",
     "web": "expo start --web",
+    "build:web": "expo export --platform web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint",

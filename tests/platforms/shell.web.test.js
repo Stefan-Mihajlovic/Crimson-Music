@@ -6,6 +6,7 @@ import { loadLibraryFeed } from '../../src/services/music';
 import { requestSearchQuery, subscribeToSearchQuery } from '../../src/services/navigation-events';
 
 let mockWidth = 1440;
+let mockMixes = [];
 let mockPathname = '/';
 let mockSegments = ['(app)', '(home)'];
 let mockRootState = { index: 0, routes: [{ name: '(app)' }] };
@@ -25,6 +26,9 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('../../src/components/app-symbol', () => ({ SymbolView: () => null }));
 jest.mock('../../src/components/frosted-surface', () => ({ FrostedBackdrop: () => null }));
+jest.mock('../../src/components/personal-mix-cover', () => () => null);
+jest.mock('../../src/hooks/use-personal-mixes', () => ({ useBookmarkedPersonalMixes: () => ({ mixes: mockMixes }) }));
+jest.mock('../../src/services/personal-mixes', () => ({ personalMixDefinition: (id) => ({ title: id === 'daily' ? 'Daily Mix' : 'Weekly Mix' }) }));
 jest.mock('../../src/components/playlist-cover', () => () => null);
 jest.mock('../../src/components/main-header-actions', () => function MockHeaderActions() { return <><button aria-label="Open listening history" /><button aria-label="Open notifications" /></>; });
 jest.mock('../../src/components/web-player-bar', () => function MockWebPlayerBar({ hidden, mobileBottom }) { return <output data-player-hidden={String(hidden)} data-player-bottom={mobileBottom} />; });
@@ -48,7 +52,7 @@ const artistFeed = (id) => ({ ...emptyFeed, followedArtists: [{ id, name: `${id}
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  mockComplete = true;
+  mockComplete = true; mockMixes = [];
   mockWidth = 1440;
   mockPathname = '/';
   mockSegments = ['(app)', '(home)'];
@@ -189,4 +193,22 @@ test('required setup cannot expose desktop navigation or the player before prefe
   expect(container.querySelector('aside')).toBeNull();
   expect(container.querySelector('output')).toBeNull();
   expect(container.querySelector('[data-testid="route-content"]')).not.toBeNull();
+});
+
+
+test('sidebar bookmarks survive failed Audius refreshes and participate in playlist filtering', async () => {
+  mockMixes = [{ id: 'daily', bookmarked: true, owner: 'first', periodKey: 'today', songs: [] }];
+  loadLibraryFeed.mockRejectedValueOnce(new Error('offline'));
+  await render();
+  expect(button('Open Daily Mix')).toBeDefined();
+  await act(async () => button('Playlists').click());
+  expect(button('Open Daily Mix')).toBeDefined();
+  await act(async () => button('Open Daily Mix').click());
+  expect(mockRouter.navigate).toHaveBeenLastCalledWith({ pathname: '/mix', params: { id: 'daily' } });
+  await act(async () => button('Artists').click());
+  expect(button('Open Daily Mix')).toBeUndefined();
+  await act(async () => button('All').click());
+  mockMixes = [];
+  await render();
+  expect(button('Open Daily Mix')).toBeUndefined();
 });

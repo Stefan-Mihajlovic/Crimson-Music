@@ -1,9 +1,13 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigation } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
+import ResponsivePopup from '@/components/responsive-popup';
+import PopupSheetLayout from '@/components/popup-sheet-layout';
+import { POPUP_CLOSE_CLEARANCE } from '@/components/popup-layout';
+import { usePopupLauncher } from '@/components/use-popup-session';
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -25,6 +29,7 @@ export default function PlaylistEditor({
   onClose,
   onSaved,
   onDeleted,
+  isActive,
 }: {
   uid: string;
   playlist: CrimsonPlaylist;
@@ -32,8 +37,14 @@ export default function PlaylistEditor({
   onClose: () => void;
   onSaved: (playlist: CrimsonPlaylist) => void;
   onDeleted: () => void;
+  isActive: () => boolean;
 }) {
   const { colors } = useAppSettings();
+  const navigation = useNavigation();
+  const [finished, setFinished] = useState(false);
+  const dismissedAfterWrite = useRef(false);
+  const allowDiscard = useRef(false);
+  const confirming = useRef<Promise<boolean> | null>(null);
   const insets = useSafeAreaInsets();
   const originalIds = playlist.songs.length
     ? playlist.songs
@@ -53,22 +64,38 @@ export default function PlaylistEditor({
     description !== (playlist.description || '') ||
     visibility !== (playlist.visibility || 'public') ||
     trackIds.join('|') !== originalIds.join('|');
-  const close = () => {
-    if (busy.current) return;
-    if (!dirty) {
-      onClose();
-      return;
+  const canDismiss = (): boolean | Promise<boolean> => {
+    if (!isActive() || finished) return true;
+    if (busy.current) return false;
+    if (!dirty || allowDiscard.current) return true;
+    if (!confirming.current) {
+      confirming.current = confirmAction(
+        'Discard changes?',
+        'Your playlist has not been changed yet.',
+        'Discard',
+      ).then((confirmed) => {
+        if (confirmed && !busy.current && isActive()) allowDiscard.current = true;
+        return allowDiscard.current;
+      }).finally(() => { confirming.current = null; });
     }
-    void confirmAction(
-      'Discard changes?',
-      'Your playlist has not been changed yet.',
-      'Discard',
-    ).then((confirmed) => {
-      if (confirmed && !busy.current) onClose();
-    });
+    return confirming.current;
   };
+  usePreventRemove(isActive() && !finished && (dirty || saving), ({ data }) => {
+    void Promise.resolve(canDismiss()).then((allowed) => {
+      if (allowed && isActive()) navigation.dispatch(data.action);
+    });
+  });
+  // Disable the navigator guard in a committed render before dismissing after
+  // a successful write. Cancel, swipe, Escape and browser back keep the guard.
+  useEffect(() => {
+    if (finished && isActive() && !dismissedAfterWrite.current) {
+      dismissedAfterWrite.current = true;
+      onClose();
+    }
+  }, [finished, isActive, onClose]);
+  const close = () => { if (!busy.current) onClose(); };
   const save = async () => {
-    if (busy.current || !title.trim()) return;
+    if (busy.current || !title.trim() || !isActive()) return;
     busy.current = true;
     setSaving(true);
     setError('');
@@ -80,14 +107,14 @@ export default function PlaylistEditor({
         trackIds,
         expectedTrackIds: originalIds,
       });
-      onSaved(next);
+      if (isActive()) { onSaved(next); setFinished(true); }
     } catch (reason) {
-      setError(
+      if (isActive()) setError(
         reason instanceof Error ? reason.message : 'Could not save. Try again.',
       );
     } finally {
       busy.current = false;
-      setSaving(false);
+      if (isActive()) setSaving(false);
     }
   };
   const removePlaylist = () => {
@@ -96,22 +123,22 @@ export default function PlaylistEditor({
       `“${playlist.title}” will be deleted from your Audius account. This cannot be undone.`,
       'Delete playlist',
     ).then((confirmed) => {
-      if (!confirmed || busy.current) return;
+      if (!confirmed || busy.current || !isActive()) return;
       busy.current = true;
       setSaving(true);
       setError('');
       void deleteOwnedPlaylist(uid, playlist.id)
-        .then(onDeleted)
-        .catch((reason) =>
-          setError(
+        .then(() => { if (isActive()) { onDeleted(); setFinished(true); } })
+        .catch((reason) => {
+          if (isActive()) setError(
             reason instanceof Error
               ? reason.message
               : 'Could not delete the playlist.',
-          ),
-        )
+          );
+        })
         .finally(() => {
           busy.current = false;
-          setSaving(false);
+          if (isActive()) setSaving(false);
         });
     });
   };
@@ -124,21 +151,12 @@ export default function PlaylistEditor({
       return next;
     });
   return (
-    <Modal
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={close}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[
-          styles.screen,
-          { backgroundColor: colors.background, paddingTop: insets.top + 8 },
-        ]}
-      >
-        <View style={styles.nav}>
+    <ResponsivePopup label="Edit playlist" onDismiss={onClose} beforeDismiss={canDismiss} width={600} expanded>
+      <PopupSheetLayout style={styles.screen} header={
+        <View style={[styles.nav, Platform.OS === 'web' && { paddingRight: 20 + POPUP_CLOSE_CLEARANCE }]}>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Cancel playlist editing"
             disabled={saving}
             onPress={close}
             style={styles.navAction}
@@ -150,6 +168,7 @@ export default function PlaylistEditor({
           </Text>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Save playlist changes"
             disabled={saving || !title.trim()}
             onPress={() => void save()}
             style={styles.navAction}
@@ -162,16 +181,23 @@ export default function PlaylistEditor({
               </Text>
             )}
           </Pressable>
-        </View>
-        <FlatList
+        </View>}>
+        {(inlineHeader) => <FlatList
+          style={styles.screen}
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
           data={trackIds}
           keyExtractor={(id, index) => `${id}:${index}`}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: insets.bottom + 24,
           }}
           ListHeaderComponent={
+            <>
+            {inlineHeader ? <View style={{ marginHorizontal: -20 }}>{inlineHeader}</View> : null}
             <View style={{ gap: 12, paddingVertical: 20 }}>
               <Text style={[styles.label, { color: colors.secondaryText }]}>
                 Name
@@ -272,6 +298,7 @@ export default function PlaylistEditor({
                 Use the arrows to change the order. Changes are saved together.
               </Text>
             </View>
+            </>
           }
           renderItem={({ item, index }) => (
             <View style={styles.track}>
@@ -349,6 +376,7 @@ export default function PlaylistEditor({
           ListFooterComponent={
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Delete playlist"
               disabled={saving}
               onPress={removePlaylist}
               style={[styles.deleteButton, { borderColor: colors.border }]}
@@ -358,14 +386,15 @@ export default function PlaylistEditor({
               </Text>
             </Pressable>
           }
-        />
-      </KeyboardAvoidingView>
-    </Modal>
+        />}
+      </PopupSheetLayout>
+    </ResponsivePopup>
   );
 }
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
+  screen: { flex: 1, minHeight: 0 },
   nav: {
+    paddingTop: 16,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -412,3 +441,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+/** Opening is a user action, so React effect replay cannot stack two editors. */
+export function usePlaylistEditor(uid: string | undefined) {
+  const { launch } = usePopupLauncher(uid);
+  return (payload: {
+    playlist: CrimsonPlaylist;
+    songs: CrimsonSong[];
+    onSaved: (playlist: CrimsonPlaylist) => void;
+    onDeleted: () => void;
+  }) => launch('playlist-editor', payload);
+}

@@ -2,21 +2,26 @@
 
 An open-source Audius music player built with Expo 57, React Native, and TypeScript. Sign in with **Log in with Audius** to listen and manage your Audius library. Crimson uses Audius accounts directly; it has no Firebase dependency or separate account server.
 
-**iOS, Android, and web are supported targets.** Platform-specific features and the devices/browsers used for validation are listed in [platform support and build instructions](docs/PLATFORMS.md). iPhone uses Liquid Glass; Android and web use translucent frosted glass with backdrop blur. Offline downloads are available in the mobile apps.
+**iOS, Android, and web are supported targets.** See [platform support and build instructions](docs/PLATFORMS.md) for features, requirements, and limitations. iPhone uses Liquid Glass; Android and web use translucent frosted glass with backdrop blur. Offline downloads are available in the mobile apps.
 
 ## Features
 
 - Discover music matched to saved genres and listening habits, continue recent listening, and catch new tracks from followed artists.
+- Open **Your Mixes** for Daily, Weekly, Monthly, Release Radar, Rediscover, and Hidden Gems editions. Like a mix to bookmark it in Crimson Library; its songs keep updating on schedule.
 - Explore artist spotlights and Underground gems with direct track playback.
-- Search Audius tracks, artists, and playlists with recent searches, type filters, and paginated results.
-- Play music with one ordered queue, queue editing, playback recovery, and a paused session restore.
-- Manage Audius favorites, follows, and playlists, including privacy, titles, descriptions, track order, and deletion.
+- Search Audius tracks, artists, and playlists with recent searches and pagination. Expand song filters for genre, mood, key, BPM range, and downloadable tracks, with or without a search term.
+- Play music with one ordered queue, queue editing, playback recovery, and a paused session restore. Optional crossfade is off by default and adjustable from 1–12 seconds in Settings.
+- Set a sleep timer for 5–90 minutes or the end of the current song, from the player's three-dot menu or Account → Sound & sleep.
+- Adjust a five-band equalizer with presets and custom controls. It starts off and remembers settings on this device.
+- Manage Audius favorites, follows, and playlists, including privacy, titles, descriptions, track order, and deletion. The Add to playlist picker includes Favorites and playlist covers.
+- Keep device audio in the default **Local Music** collection: import files on every platform, scan permitted media libraries on mobile, or import a folder on web. Access and format limits are described in [platform support](docs/PLATFORMS.md).
 - Generate a Vault mood mix and save it to your Audius library.
 - Personalize discovery with device-local music preferences.
 - Edit your Audius display name and profile photo inside Crimson. New listeners complete music preferences before entering the app.
 - View local listening history and statistics, and Audius notifications.
 - Save music for offline listening on native platforms, with storage controls and a visible download queue, Wi-Fi waiting, retry, and cancellation.
 - Use a persistent desktop web player with browser media commands, keyboard shortcuts, seeking, and volume.
+- Add small, medium, or large [home-screen widgets](docs/WIDGETS.md) on iOS and Android. Widget controls open Crimson to perform playback or collection actions.
 - Use Data Saver, Reduce Motion, and Performance Mode to adjust the experience.
 
 Audius supplies the catalog, streams, identity, and account permissions. Availability and API limits remain subject to Audius. Crimson is an independent client, not an official Audius application.
@@ -58,7 +63,7 @@ For forks, optional `IOS_BUNDLE_IDENTIFIER`, `ANDROID_PACKAGE`, and `IOS_APPLE_T
 
 ## Accounts and privacy
 
-Favorites, follows, and playlists belong to the listener's Audius account. Music preferences, listening history, cached data, and download settings live on the device or browser. Native OAuth sessions use SecureStore; web sessions use the current tab's `sessionStorage`.
+Audius favorites, follows, and playlists belong to the listener's Audius account. Music preferences, mix editions and bookmarks, listening history, local-file favorites, cached data, and download settings live on the device or browser. Imported audio stays local; the Local Music collection is shared across accounts on that installation. Native OAuth sessions use SecureStore; web sessions use the current tab's `sessionStorage`.
 
 Optional Sentry reporting is disabled unless `EXPO_PUBLIC_SENTRY_DSN` is configured, and remains disabled in development builds. See [privacy and data storage](docs/PRIVACY.md) for retention, network requests, and clearing local data.
 
