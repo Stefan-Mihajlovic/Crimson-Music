@@ -2,6 +2,8 @@ import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { FrostedLayer } from '@/components/frosted-surface';
 import HomeQuickAccess from '@/components/home-quick-access';
 import HomeDiscovery from '@/components/home-discovery';
+import YourMixes from '@/components/your-mixes';
+import HomePlaylistCard, { homePlaylistArtworkStyle } from '@/components/home-playlist-card';
 import {
   preferredGenres,
   type DiscoveryProfile,
@@ -700,6 +702,7 @@ export default function HomeScreen({
             </View>
           </>
         ) : null}
+        <YourMixes desktopCardWidth={desktopCardWidth} />
         <SectionHeader title="Artists worth checking out" />
         <ScrollView
           horizontal
@@ -820,51 +823,15 @@ export default function HomeScreen({
             <PlaylistListSkeleton shimmer={skeletonShimmer} />
           ) : (
             playlists.map((playlist) => (
-              <Pressable
+              <HomePlaylistCard
                 key={playlist.id}
-                onHoverIn={() => setHoveredCard(`playlist:${playlist.id}`)}
-                onHoverOut={() => setHoveredCard('')}
-                accessibilityRole="button"
-                onPress={() =>
-                  router.push(
-                    playlistHref(
-                      playlist.id,
-                      false,
-                      playlist.source,
-                      playlist.title,
-                    ),
-                  )
-                }
+                title={playlist.title}
+                subtitle={playlist.artists}
+                desktopWidth={desktopCardWidth}
+                onPress={() => router.push(playlistHref(playlist.id, false, playlist.source, playlist.title))}
                 onLongPress={() => openPlaylistActions(playlist)}
-                delayLongPress={350}
-                style={({ pressed }) => [
-                  styles.playlistCard,
-                  desktop && [styles.desktopCard, { width: desktopCardWidth }],
-                  desktop && hoveredCard === `playlist:${playlist.id}` && { backgroundColor: colors.controlSurface },
-                  pressed && styles.artistPressed,
-                  pressed && !reduceMotion && styles.artistPressedScale,
-                ]}
-              >
-                <PlaylistCover
-                  playlist={playlist}
-                  style={[styles.playlistArtwork, desktop && { width: desktopCardWidth - 16, height: desktopCardWidth - 16 }]}
-                />
-                <Text
-                  numberOfLines={1}
-                  style={[styles.playlistTitle, { color: colors.text }]}
-                >
-                  {playlist.title}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.playlistSubtitle,
-                    { color: colors.secondaryText },
-                  ]}
-                >
-                  {playlist.artists}
-                </Text>
-              </Pressable>
+                cover={(size) => <PlaylistCover playlist={playlist} style={[homePlaylistArtworkStyle, { width: size, height: size }]} />}
+              />
             ))
           )}
         </ScrollView>

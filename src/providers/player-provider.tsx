@@ -5,8 +5,6 @@ import {
   AudioSample,
   AudioStatus,
   setAudioModeAsync,
-  useAudioPlayer,
-  useAudioPlayerStatus as useExpoAudioPlayerStatus,
 } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -43,12 +41,19 @@ import {
 import { configureRemoteControls, subscribeToRemoteControls } from '@/services/remote-controls';
 import { requestLibraryRefresh } from '@/services/navigation-events';
 import { ListeningClock, restorePlaybackSession, savePlaybackSession, shuffledSongs, subscribeToListeningHistoryReset, type PlaybackSnapshot } from '@/services/playback-session';
-import { isAccountDeleted } from '@/services/account-lifecycle';
+import { isAccountDeleted, registerAccountCleanup } from '@/services/account-lifecycle';
+import { useCrossfadePlayer } from '@/hooks/use-crossfade-player';
+import { crossfadeWindow } from '@/services/crossfade-player';
+import { SleepTimerController, type SleepTimerMinutes } from '@/services/sleep-timer';
+import { setNativeSleepDeadline, nativeSleepExpired } from '@/services/sleep-timer-platform';
 
 type RepeatMode = 'none' | 'all' | 'one';
 export type PlaybackState = 'idle' | 'restored' | 'loading' | 'playing' | 'paused' | 'buffering' | 'error';
 
 type PlayerContextValue = {
+  ready: boolean;
+  sleepTimer: SleepTimerController;
+  startSleepTimer: (minutes: SleepTimerMinutes | 'end-of-track') => void;
   autoplayEnabled: boolean;
   currentSong: CrimsonSong | null;
   playbackError: string | null;
@@ -118,14 +123,9 @@ function ensureMusicAudioSession() {
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const { getPlaybackUri } = useDownloads();
-  const { performanceMode, reduceMotion } = useAppSettings();
+  const { performanceMode, reduceMotion, crossfadeEnabled, crossfadeSeconds } = useAppSettings();
   const appActiveRef = useRef(AppState.currentState === 'active');
-  const audioPlayer = useAudioPlayer(null, {
-    keepAudioSessionActive: true,
-    preferredForwardBufferDuration: 4,
-    updateInterval: 100,
-  });
-  const status = useExpoAudioPlayerStatus(audioPlayer);
+  const { audioPlayer, status, mixer } = useCrossfadePlayer();
   const playingRef = useRef(status.playing);
   const didJustFinishRef = useRef(status.didJustFinish);
   const [currentSong, setCurrentSong] = useState<CrimsonSong | null>(null);
@@ -142,6 +142,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [restoredPosition, setRestoredPosition] = useState<number | null>(null);
   const [resumeReady, setResumeReady] = useState(false);
+  const [playbackGeneration, setPlaybackGeneration] = useState(0);
   const [autoplayCandidates, setAutoplayCandidates] = useState<CrimsonSong[]>([]);
   const autoplayCandidatesRef = useRef<CrimsonSong[]>([]);
   const [spectrumStore] = useState(() => createValueStore(pausedSpectrum));
@@ -163,6 +164,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const lastSavedAt = useRef(0);
   const desiredPlaying = useRef(false);
   const restoreRevision = useRef(0);
+  const sleepPauseRef = useRef<() => void>(() => {});
+  // The controller invokes this callback only at expiry, never in its constructor.
+  // eslint-disable-next-line react-hooks/refs
+  const [sleepTimer] = useState(() => new SleepTimerController({ onExpire: () => sleepPauseRef.current() }));
+  const sleepState = useSyncExternalStore(sleepTimer.subscribe, sleepTimer.getSnapshot, sleepTimer.getSnapshot);
 
   const flushListening = useCallback(() => {
     const session = listeningSessionRef.current;
@@ -182,6 +188,40 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     lastSavedAt.current = Date.now();
   }, [audioPlayer, restoredPosition, user]);
 
+  useEffect(() => {
+    sleepPauseRef.current = () => {
+      desiredPlaying.current = false;
+      autoplayRequestRef.current += 1;
+      audioPlayer.pause();
+      mixer.cancel();
+      // Clearing the web deadline restores its gain gate; pause media first.
+      setNativeSleepDeadline([mixer.active, mixer.inactive], 0);
+      flushListening();
+      persistPlayback();
+    };
+  }, [audioPlayer, mixer, flushListening, persistPlayback]);
+
+  const reconcileSleepTimer = useCallback(() => {
+    const timer = sleepTimer.getSnapshot();
+    if (timer.deadlineAt && nativeSleepExpired([mixer.active, mixer.inactive], timer.deadlineAt)) return sleepTimer.expire(timer.id);
+    return sleepTimer.check();
+  }, [mixer, sleepTimer]);
+
+  useEffect(() => {
+    setNativeSleepDeadline([mixer.active, mixer.inactive], sleepState.deadlineAt ?? 0);
+    return () => { setNativeSleepDeadline([mixer.active, mixer.inactive], 0); };
+  }, [mixer, sleepState.deadlineAt]);
+  useEffect(() => () => sleepTimer.cancel(), [sleepTimer]);
+  useEffect(() => { reconcileSleepTimer(); }, [reconcileSleepTimer, status.currentTime, status.playing, status.didJustFinish]);
+
+  const startSleepTimer = useCallback((minutes: SleepTimerMinutes | 'end-of-track') => {
+    if (minutes === 'end-of-track') {
+      if (!currentSong) return;
+      mixer.cancel();
+      sleepTimer.startEndOfTrack(String(activationRef.current), currentSong.title);
+    } else sleepTimer.startMinutes(minutes);
+  }, [currentSong, mixer, sleepTimer]);
+
   const updateQueue = useCallback((songs: CrimsonSong[], index: number) => {
     // A late autoplay response must not overwrite songs manually inserted or
     // reordered while its request was in flight.
@@ -191,6 +231,26 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setQueue(songs);
     setQueueIndex(index);
   }, []);
+
+  useEffect(() => registerAccountCleanup((uid) => {
+    if (uid !== user?.uid) return;
+    // Cleanup can fail before sign-out. Stop playback and invalidate work before
+    // its files disappear, without waiting for the authenticated UID to change.
+    sleepTimer.cancel();
+    sleepPauseRef.current();
+    activationRef.current += 1;
+    restoreRevision.current += 1;
+    likeRequestRef.current += 1;
+    loadedActivationRef.current = 0;
+    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    listeningSessionRef.current = null;
+    snapshotRef.current = null;
+    setCurrentSong(null);
+    updateQueue([], -1);
+    setIsPreparing(false);
+    setRestoredPosition(null);
+    setResumeReady(true);
+  }), [sleepTimer, updateQueue, user?.uid]);
 
   useEffect(() => subscribeToListeningHistoryReset((uid) => {
     const session = listeningSessionRef.current;
@@ -204,6 +264,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     // A queue and its pending requests belong to one authenticated session.
+    sleepTimer.cancel();
+    mixer.cancel();
     setCurrentSong(null);
     updateQueue([], -1);
     setSource('Home');
@@ -257,6 +319,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       listeningSessionRef.current = null;
       if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
       try {
+        mixer.cancel();
         audioPlayer.pause();
         audioPlayer.clearLockScreenControls();
       } catch {
@@ -264,7 +327,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       }
       configureRemoteControls(inactiveRemoteControls);
     };
-  }, [audioPlayer, flushListening, setSpectrumLevels, spectrumAnalyzer, updateQueue, user?.uid]);
+  }, [audioPlayer, flushListening, mixer, setSpectrumLevels, sleepTimer, spectrumAnalyzer, updateQueue, user?.uid]);
 
   const handleAudioSample = useCallback((sample: AudioSample) => {
     if (!appActiveRef.current || !playingRef.current || !spectrumStore.hasSubscribers()) return;
@@ -280,6 +343,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       appActiveRef.current = state === 'active';
+      if (appActiveRef.current) reconcileSleepTimer();
       if (!appActiveRef.current) {
         spectrumAnalyzer.reset();
         lastSpectrumUpdateRef.current = 0;
@@ -289,7 +353,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       }
     });
     return () => subscription.remove();
-  }, [flushListening, persistPlayback, setSpectrumLevels, spectrumAnalyzer]);
+  }, [flushListening, persistPlayback, reconcileSleepTimer, setSpectrumLevels, spectrumAnalyzer]);
 
   useEffect(() => {
     playingRef.current = status.playing && !status.isBuffering;
@@ -346,11 +410,23 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     void AsyncStorage.setItem(volumeStorageKey, String(next)).catch(() => undefined);
   }, []);
 
-  const activateSong = useCallback((song: CrimsonSong, index: number, playedFrom: string, playedFromId = '', resumeAt = 0, preserveSession = false) => {
+  const activateSong = useCallback((song: CrimsonSong, index: number, playedFrom: string, playedFromId = '', resumeAt = 0, preserveSession = false, preparedKey?: string, fadeSeconds = 0, resumeSleepTimer = false) => {
+    mixer.unlock();
+    const outgoingPosition = audioPlayer.currentTime;
+    const overlapping = Boolean(preparedKey && mixer.begin(preparedKey, fadeSeconds));
+    if (!overlapping) mixer.cancel();
     restoreRevision.current += 1;
     setResumeReady(true);
     const previousSession = listeningSessionRef.current;
     if (!preserveSession) {
+      if (overlapping && previousSession?.started && !previousSession.completed) {
+        previousSession.clock.sample(outgoingPosition, true);
+        previousSession.completed = true;
+        void recordListeningEvent(previousSession.uid, 'complete', previousSession.song.id, previousSession.song, {
+          sessionId: previousSession.id, source: previousSession.source, playlistId: previousSession.sourceId,
+          playedSeconds: previousSession.clock.seconds, duration: previousSession.song.duration,
+        }).catch(() => undefined);
+      }
       flushListening();
       if (previousSession?.started && !previousSession.completed
         && previousSession.clock.seconds < Math.min(30, Math.max(10, previousSession.song.duration * 0.5))) {
@@ -365,7 +441,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         source: playedFrom, sourceId: playedFromId, uid: user.uid,
       } : null;
     } else previousSession?.clock.seek();
+    const continueEndTimer = resumeSleepTimer && sleepTimer.inhibitsNextTrack(String(activationRef.current));
     const activation = ++activationRef.current;
+    if (continueEndTimer) sleepTimer.startEndOfTrack(String(activation), song.title);
+    else sleepTimer.onTrackChanged(String(activation));
+    reconcileSleepTimer();
+    setPlaybackGeneration(activation);
     autoplayCandidatesRef.current = [];
     setAutoplayCandidates([]);
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
@@ -376,15 +457,23 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setSpectrumLevels(pausedSpectrum);
     handledFinishRef.current = didJustFinishRef.current;
     desiredPlaying.current = true;
-    setIsPreparing(true);
+    setIsPreparing(!overlapping);
     setPlaybackError(null);
-    setRestoredPosition(Math.max(0, resumeAt));
+    setRestoredPosition(overlapping ? null : Math.max(0, resumeAt));
     setCurrentSong(song);
     setIsLiked(false);
     indexRef.current = index;
     setQueueIndex(index);
     setSource(playedFrom);
     setSourceId(playedFromId);
+    if (overlapping) {
+      loadedActivationRef.current = activation;
+      if (Platform.OS !== 'web') audioPlayer.setActiveForLockScreen(true, {
+        title: song.title, artist: song.creator, albumTitle: `Playing from ${playedFrom}`,
+        artworkUrl: normalizeRemoteImageUrl(song.image || song.imageSmall),
+      }, { isLiveStream: false });
+      return;
+    }
     audioPlayer.pause();
     const failPlayback = () => {
       if (activation !== activationRef.current) return;
@@ -404,7 +493,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     ]).then(async ([, audioUrl]) => {
       if (activation !== activationRef.current) return;
       if (!audioUrl) { failPlayback(); return; }
-      const headers = await audiusMediaHeaders(audioUrl);
+      const headers = song.source === 'local' ? undefined : await audiusMediaHeaders(audioUrl);
       if (activation !== activationRef.current) return;
       audioPlayer.replace({ uri: audioUrl, name: song.title, ...(headers ? { headers } : {}) });
       audioPlayer.loop = false;
@@ -428,13 +517,16 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           loadedActivationRef.current = activation;
           setRestoredPosition(null);
           setIsPreparing(false);
+          // Promises can resume before an overdue JS timer after suspension.
+          // Reconcile immediately before any automatic start, including web.
+          reconcileSleepTimer();
           if (desiredPlaying.current) audioPlayer.play();
         } catch { failPlayback(); }
       };
       if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
       void ready();
     }).catch(failPlayback);
-  }, [audioPlayer, flushListening, getPlaybackUri, setSpectrumLevels, spectrumAnalyzer, user?.uid]);
+  }, [audioPlayer, flushListening, getPlaybackUri, mixer, reconcileSleepTimer, setSpectrumLevels, sleepTimer, spectrumAnalyzer, user?.uid]);
 
   const playSong = useCallback((song: CrimsonSong, nextQueue: CrimsonSong[] = [song], playedFrom = 'Home', playedFromId = '', shuffle = isShuffled) => {
     const unique = [...new Map(nextQueue.map((item) => [item.id, item])).values()];
@@ -472,13 +564,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!songs.length) return;
     if (index + 1 < songs.length) { activateSong(songs[index + 1], index + 1, source, sourceId); return; }
     if (repeatMode === 'all') { activateSong(songs[0], 0, source, sourceId); return; }
-    if (autoplayEnabled && currentSong) {
+    if (autoplayEnabled && currentSong && currentSong.source !== 'local') {
       const activation = activationRef.current;
       const request = ++autoplayRequestRef.current;
       const requestSongs = autoplayCandidatesRef.current.length
         ? Promise.resolve(autoplayCandidatesRef.current)
         : loadRelatedSongs(currentSong.id);
       void requestSongs.then((related) => {
+        reconcileSleepTimer();
         if (activation !== activationRef.current || request !== autoplayRequestRef.current) return;
         const heard = new Set(songs.map((song) => song.id));
         const candidates = related.filter((song) => song.streamable && !heard.has(song.id));
@@ -498,10 +591,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         }
       });
     } else { desiredPlaying.current = false; audioPlayer.pause(); flushListening(); }
-  }, [activateSong, audioPlayer, autoplayEnabled, currentSong, flushListening, repeatMode, source, sourceId, updateQueue]);
+  }, [activateSong, audioPlayer, autoplayEnabled, currentSong, flushListening, reconcileSleepTimer, repeatMode, source, sourceId, updateQueue]);
 
   useEffect(() => {
-    if (!currentSong || !autoplayEnabled || isPreparing || repeatMode === 'all' || queueIndex < queue.length - 1) {
+    if (!currentSong || currentSong.source === 'local' || !autoplayEnabled || isPreparing || repeatMode === 'all' || queueIndex < queue.length - 1) {
       autoplayCandidatesRef.current = [];
       setAutoplayCandidates([]);
       return;
@@ -585,9 +678,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         playedSeconds: session.clock.seconds, duration: session.song.duration,
       }).catch(() => undefined);
     }
+    if (sleepTimer.onTrackEnded(String(activationRef.current)) || sleepTimer.check() || !desiredPlaying.current) return;
     if (repeatMode === 'one' && currentSong) activateSong(currentSong, queueIndex, source, sourceId);
     else playNext();
-  }, [activateSong, currentSong, flushListening, isPreparing, playNext, queueIndex, repeatMode, source, sourceId, status.currentTime, status.didJustFinish]);
+  }, [activateSong, currentSong, flushListening, isPreparing, playNext, queueIndex, repeatMode, sleepTimer, source, sourceId, status.currentTime, status.didJustFinish]);
 
   useEffect(() => {
     const request = ++likeRequestRef.current;
@@ -604,14 +698,17 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const retryPlayback = useCallback(() => {
     if (!currentSong) return;
     const position = restoredPosition ?? (Number.isFinite(audioPlayer.currentTime) ? audioPlayer.currentTime : 0);
-    activateSong(currentSong, indexRef.current, source, sourceId, position, Boolean(listeningSessionRef.current));
+    activateSong(currentSong, indexRef.current, source, sourceId, position, Boolean(listeningSessionRef.current), undefined, 0, true);
   }, [activateSong, audioPlayer, currentSong, restoredPosition, source, sourceId]);
 
   const togglePlay = useCallback(() => {
     if (!currentSong) return;
+    reconcileSleepTimer();
     autoplayRequestRef.current += 1;
     if (isPreparing) {
-      activationRef.current += 1;
+      const retainEndTimer = sleepTimer.inhibitsNextTrack(String(activationRef.current));
+      const activation = ++activationRef.current;
+      if (retainEndTimer) sleepTimer.startEndOfTrack(String(activation), currentSong.title);
       if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
       desiredPlaying.current = false;
       audioPlayer.pause();
@@ -635,7 +732,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     desiredPlaying.current = !isActuallyPlaying;
     if (isActuallyPlaying) { audioPlayer.pause(); flushListening(); persistPlayback(); }
     else audioPlayer.play();
-  }, [audioPlayer, currentSong, flushListening, isPreparing, persistPlayback, playbackError, restoredPosition, retryPlayback, status.isBuffering, status.playing]);
+  }, [audioPlayer, currentSong, flushListening, isPreparing, persistPlayback, playbackError, reconcileSleepTimer, restoredPosition, retryPlayback, sleepTimer, status.isBuffering, status.playing]);
 
   const seekTo = useCallback((seconds: number) => {
     const duration = audioPlayer.duration || currentSong?.duration || seconds;
@@ -741,10 +838,57 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   const nextSong = queue[queueIndex + 1] || (repeatMode === 'all' ? queue[0] : autoplayEnabled ? autoplayCandidates[0] : null) || null;
   const previousSong = queue[queueIndex - 1] || (repeatMode === 'all' ? queue[queue.length - 1] : null) || null;
+  const fadeDuration = crossfadeEnabled && sleepState.mode !== 'end-of-track' && repeatMode !== 'one' && nextSong && currentSong
+    ? crossfadeWindow(crossfadeSeconds, status.duration || currentSong.duration, nextSong.duration) : 0;
+  const preloadKey = currentSong && nextSong ? `${user?.uid}:${playbackGeneration}:${queueIndex}:${nextSong.id}` : '';
+  const shouldPreload = fadeDuration > 0 && !isPreparing && restoredPosition === null && !playbackError
+    && status.isLoaded && status.currentTime >= Math.max(0, (status.duration || currentSong?.duration || 0) - fadeDuration - 15);
+
+  useEffect(() => {
+    if (!crossfadeEnabled) mixer.cancel();
+  }, [crossfadeEnabled, mixer]);
+
+  const isCrossfading = mixer.isTransitioning;
+  useEffect(() => {
+    if (!shouldPreload || !preloadKey || !nextSong || isCrossfading) return;
+    let active = true;
+    const offlineUri = getPlaybackUri(nextSong.id);
+    void (offlineUri ? Promise.resolve(offlineUri) : resolveTrackPlaybackUrl(nextSong)).then(async (uri) => {
+      if (!active || !uri) return;
+      const headers = nextSong.source === 'local' ? undefined : await audiusMediaHeaders(uri);
+      if (active) mixer.prepare(preloadKey, { uri, name: nextSong.title, ...(headers ? { headers } : {}) });
+    }).catch(() => { /* A failed preload falls back to ordinary next-track loading. */ });
+    return () => { active = false; mixer.clearPrepared(preloadKey); };
+  }, [getPlaybackUri, isCrossfading, mixer, nextSong, preloadKey, shouldPreload]);
+
+  useEffect(() => {
+    if (reconcileSleepTimer()) return;
+    if (!shouldPreload || !desiredPlaying.current || !status.playing || status.isBuffering || !nextSong || !mixer.ready(preloadKey)) return;
+    const remaining = (status.duration || currentSong?.duration || 0) - status.currentTime;
+    if (!(remaining > 0) || remaining > fadeDuration) return;
+    let destination = queueIndex + 1;
+    let playedFrom = source;
+    let playedFromId = sourceId;
+    if (destination >= queue.length) {
+      if (repeatMode === 'all') destination = 0;
+      else {
+        const upcoming = autoplayCandidatesRef.current;
+        if (!autoplayEnabled || upcoming[0]?.id !== nextSong.id) return;
+        originalOrderRef.current.push(...upcoming.map((song) => song.id));
+        updateQueue([...queueRef.current, ...upcoming], destination);
+        playedFrom = 'Autoplay';
+        playedFromId = '';
+      }
+    }
+    activateSong(nextSong, destination, playedFrom, playedFromId, 0, false, preloadKey, Math.min(fadeDuration, remaining));
+  }, [activateSong, autoplayEnabled, currentSong?.duration, fadeDuration, mixer, nextSong, preloadKey, queue.length, queueIndex, reconcileSleepTimer, repeatMode, shouldPreload, source, sourceId, status.currentTime, status.duration, status.isBuffering, status.playing, updateQueue]);
   const playbackState: PlaybackState = !currentSong ? 'idle' : playbackError ? 'error' : isPreparing ? 'loading'
     : restoredPosition !== null ? 'restored' : status.isBuffering ? 'buffering' : status.playing ? 'playing' : 'paused';
 
   const value = useMemo<PlayerContextValue>(() => ({
+    ready: resumeReady,
+    sleepTimer,
+    startSleepTimer,
     autoplayEnabled,
     currentSong,
     playbackError,
@@ -775,7 +919,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     togglePlay,
     toggleRepeat,
     toggleShuffle,
-  }), [addToQueue, autoplayEnabled, currentSong, playbackError, playbackState, volume, setVolume, nextSong, previousSong, isLiked, isShuffled, moveQueueItem, playNext, playNextInQueue, playPrevious, playQueueIndex, playSong, queue, queueIndex, removeFromQueue, repeatMode, retryPlayback, seekTo, source, sourceId, toggleAutoplay, toggleLike, togglePlay, toggleRepeat, toggleShuffle]);
+  }), [addToQueue, autoplayEnabled, currentSong, playbackError, playbackState, volume, setVolume, nextSong, previousSong, isLiked, isShuffled, moveQueueItem, playNext, playNextInQueue, playPrevious, playQueueIndex, playSong, queue, queueIndex, removeFromQueue, repeatMode, resumeReady, retryPlayback, seekTo, sleepTimer, startSleepTimer, source, sourceId, toggleAutoplay, toggleLike, togglePlay, toggleRepeat, toggleShuffle]);
   const publicStatus = useMemo<AudioStatus>(() => {
     if (playbackError) return { ...status, currentTime: restoredPosition ?? status.currentTime, duration: currentSong?.duration || status.duration, playing: false, isBuffering: false };
     if (isPreparing) {
@@ -822,4 +966,10 @@ export function usePlayerStatus() {
 export function usePlayerSpectrum() {
   const store = useContext(PlayerSpectrumContext);
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}
+
+/** Timer updates do not invalidate every component subscribed to player controls. */
+export function useSleepTimer() {
+  const { sleepTimer } = usePlayer();
+  return useSyncExternalStore(sleepTimer.subscribe, sleepTimer.getSnapshot, sleepTimer.getSnapshot);
 }

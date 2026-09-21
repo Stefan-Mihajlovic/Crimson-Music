@@ -100,7 +100,7 @@ export default function FavoritesScreen() {
           offlineOnly: isOffline,
         });
         const items = isOffline
-          ? cachedItems.filter((song) => isDownloaded(song.id))
+          ? cachedItems.filter((song) => song.source === 'local' || isDownloaded(song.id))
           : cachedItems;
         const offlineFallback = songsForCollection(favoritesDownloadKey);
         if (request === reloadRequest.current) {
@@ -140,6 +140,7 @@ export default function FavoritesScreen() {
         artistId: song.artistId,
       }),
     );
+  const remoteSongs = songs.filter((song) => song.source === 'audius');
   const downloadRequested =
     downloads.isCollectionRequested(favoritesDownloadKey);
   const allDownloaded = downloads.isCollectionDownloaded(favoritesDownloadKey);
@@ -155,7 +156,7 @@ export default function FavoritesScreen() {
       return;
     }
     const result = await downloads.downloadSongs(
-      songs,
+      remoteSongs,
       'favorite',
       favoritesDownloadKey,
     );
@@ -240,7 +241,7 @@ export default function FavoritesScreen() {
                   {collectionDuration(songs)}
                 </Text>
                 <View style={[styles.actions, desktop && styles.desktopActions]}>
-                  {downloads.supported ? (
+                  {downloads.supported && remoteSongs.length > 0 ? (
                     <BouncyPressable
                       accessibilityLabel={
                         allDownloaded

@@ -1,7 +1,11 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
+import { uploadAudiusImage } from '../src/services/audius-image-upload';
+jest.mock('../src/services/audius-image-upload', () => ({ uploadAudiusImage: jest.fn() }));
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createOwnedPlaylist,
+  updateOwnedPlaylist,
+  loadPlaylistDetail,
   getUserCollectionState,
   loadFavoriteSongs,
   loadHomeFeed,
@@ -14,7 +18,7 @@ import {
 } from '../src/services/music';
 import { audiusRequest, getCurrentAudiusUserId } from '../src/services/audius-session';
 import { reportError } from '../src/services/telemetry';
-import { getAudiusArtist, getTopAudiusArtists, getRecommendedAudiusTracks, getTrendingAudiusTracks } from '../src/services/audius';
+import { getAudiusArtist, getTopAudiusArtists, getRecommendedAudiusTracks, getTrendingAudiusTracks, getAudiusTrack, getAudiusPlaylistTracks } from '../src/services/audius';
 import { setDataSaverEnabled } from '../src/services/data-usage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
@@ -26,6 +30,8 @@ jest.mock('../src/services/audius', () => ({
   getTopAudiusArtists: jest.fn(),
   getTrendingAudiusTracks: jest.fn(),
   getRecommendedAudiusTracks: jest.fn(),
+  getAudiusTrack: jest.fn(),
+  getAudiusPlaylistTracks: jest.fn(),
 }));
 
 const artwork = { small: '', medium: '', large: '', mirrors: [] };
@@ -109,7 +115,10 @@ test('playlist creation uses Audius server ID and never uploads a cover to an ap
   expect(audiusRequest).toHaveBeenCalledWith('/playlists?user_id=owner', {
     method: 'POST', body: { playlist_name: 'My mix', description: '', is_private: false, is_album: false, playlist_contents: [] },
   });
-  await expect(createOwnedPlaylist('owner', 'Cover mix', 'file:///cover.jpg')).rejects.toThrow('add artwork on Audius');
+  uploadAudiusImage.mockResolvedValueOnce({ cid: 'QmCover', picture: 'https://creatornode.audius.co/content/QmCover/480x480.jpg' });
+  audiusRequest.mockResolvedValueOnce({ playlist_id: 'with-cover' });
+  await expect(createOwnedPlaylist('owner', 'Cover mix', 'file:///cover.jpg')).resolves.toMatchObject({ id: 'with-cover', image: 'https://creatornode.audius.co/content/QmCover/480x480.jpg' });
+  expect(audiusRequest).toHaveBeenLastCalledWith('/playlists?user_id=owner', expect.objectContaining({ body: expect.objectContaining({ playlist_image_sizes_multihash: 'QmCover' }) }));
 });
 
 test('history persists simultaneous plays locally, deduplicates across pages and counts completed minutes once', async () => {
@@ -191,4 +200,42 @@ test('successive playlist edits preserve acknowledged additions while Audius ind
   const writes = audiusRequest.mock.calls.filter(([, options]) => options?.method === 'PUT');
   expect(writes).toHaveLength(2);
   expect(writes[1][1].body.playlist_contents.map(({ track_id }) => track_id)).toEqual(['original', 'first-addition', 'second-addition']);
+});
+
+test('ordinary playlist edits preserve existing artwork immediately and after an Audius reload', async () => {
+  const image = (size) => `https://creatornode.audius.co/content/existingPlaylistCover/${size}x${size}.jpg`;
+  let record = { ...playlist('durable-cover', ['cover-track']), artwork: { '150x150': image(150), '480x480': image(480), '1000x1000': image(1000) } };
+  audiusRequest.mockImplementation(async (path, options) => {
+    if (options?.method === 'PUT') {
+      record = { ...record, ...options.body };
+      return { transaction_hash: 'accepted' };
+    }
+    if (path.includes('/library/playlists') || path.includes('/following')) return { data: [] };
+    return { data: [record] };
+  });
+  getAudiusPlaylistTracks.mockResolvedValue([song('cover-track')]);
+  const edited = await updateOwnedPlaylist('owner', 'durable-cover', { title: 'New title' });
+  expect(edited).toMatchObject({ title: 'New title', songs: ['cover-track'], image: image(1000), imageSmall: image(150) });
+  expect(audiusRequest).toHaveBeenLastCalledWith('/playlists/durable-cover?user_id=owner', { method: 'PUT', body: { playlist_name: 'New title' } });
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 61_000);
+  try {
+    const library = await loadLibraryFeed('owner');
+    const detail = await loadPlaylistDetail('durable-cover', 'owner', true, 'audius');
+    expect(library.playlists.find((item) => item.id === 'durable-cover')).toMatchObject({ image: image(1000), imageSmall: image(150) });
+    expect(detail.playlist).toMatchObject({ image: image(1000), imageSmall: image(150) });
+    expect(audiusRequest).toHaveBeenCalledWith('/playlists/durable-cover?user_id=owner');
+    expect(audiusRequest.mock.calls.filter(([, options]) => options?.method)).toHaveLength(1);
+  } finally { clock.mockRestore(); }
+});
+
+test('older coverless saved mixes show real song artwork in the Library and detail without a remote mutation', async () => {
+  getAudiusTrack.mockResolvedValue({ ...song('legacy-track'), image: 'https://track/large', imageSmall: 'https://track/small' });
+  getAudiusPlaylistTracks.mockResolvedValue([{ ...song('legacy-track'), image: 'https://track/large', imageSmall: 'https://track/small' }]);
+  const oldMix = { ...playlist('legacy-cover', ['legacy-track']), description: '[Crimson mix daily 2026-09-15]' };
+  audiusRequest.mockImplementation(async (path) => ({ data: path.includes('/library/playlists') || path.includes('/following') ? [] : [oldMix] }));
+  const library = await loadLibraryFeed('owner');
+  const detail = await loadPlaylistDetail('legacy-cover', 'owner', true, 'audius');
+  expect(library.playlists.find((item) => item.id === 'legacy-cover').coverImages).toEqual(['https://track/large']);
+  expect(detail.playlist.coverImagesSmall).toEqual(['https://track/small']);
+  expect(audiusRequest.mock.calls.every(([, options]) => !options?.method)).toBe(true);
 });

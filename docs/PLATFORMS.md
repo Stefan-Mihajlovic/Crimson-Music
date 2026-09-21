@@ -1,28 +1,46 @@
 # Platform support and builds
 
-Crimson uses Expo 57 and React Native and supports iOS, Android, and web. The core Audius account, catalog, and playback flows share an implementation, with platform-specific controls and the limits below. Support does not imply identical OS features or validation on every device/browser. See the [runtime validation record](PLATFORM-VALIDATION.md).
+Crimson uses Expo 57 and React Native and supports iOS, Android, and web. The core Audius account, catalog, and playback flows share an implementation, with platform-specific controls and the limits below. Support does not imply identical OS features or validation on every device/browser.
 
 ## Current support
 
 | Capability | iOS | Android | Web |
 | --- | --- | --- | --- |
 | Audius login, catalog, streaming, library actions | Supported | Supported | Supported |
+| Your Mixes; advanced song filters; Favorites and covers in playlist picker | Shared implementation | Shared implementation | Shared implementation |
+| Optional crossfade | Off by default; 1–12 seconds | Off by default; 1–12 seconds | Off by default; 1–12 seconds |
+| Sleep timer | Native deadline on both audio decks; end of song | Native deadline on both audio decks; end of song | Web Audio deadline mute and player pause; end of song |
+| Five-band equalizer and presets | Float32 audio-tap processing | PCM16 audio-processor processing | Shared Web Audio graph |
 | Session storage | SecureStore | SecureStore | Tab-scoped `sessionStorage` |
 | Glass surfaces and controls | Native Liquid Glass and SwiftUI | Frosted glass with live native backdrop blur; bundled icons | Frosted glass with CSS backdrop blur; bundled icons |
 | Crimson previous/next/like remote controls | Native integration | Expo Audio foreground service and MediaSession adapter | Browser Media Session previous/next; favorite in player |
 | Cover-pixel palette extraction | Native integration | Native bitmap sampling | Canvas sampling when image CORS permits |
 | Circular tab artwork | Native integration | Shared image control | Shared image control |
 | Persistent desktop player and keyboard shortcuts | — | — | Responsive sidebar, bottom player, seek and volume |
-| Offline downloads | Native implementation | Native downloads; offline device playback validated | Unsupported |
+| Offline downloads | Native implementation | Native implementation | Unsupported |
+| Local Music | Files imports; permitted downloaded media-library audio | File imports; permitted MediaStore audio scan | Selected files/folders copied to browser storage |
+| Home-screen widgets | Small, medium, large; opens app for actions | Small, medium, large; opens app for actions | Unsupported |
 | Voice search | OS speech recognition | Device/service dependent | Browser dependent |
 
 Navigation, mini players, menus, and queue sheets use frosted backdrops. Vault actions use a darker blurred surface with a light border; main-page header actions display bare icons. Welcome and onboarding primary actions use white fills. Performance Mode removes blur and uses opaque surfaces on every platform.
 
-Android uses `expo-blur` with separate `BlurTargetView` layers, including the legacy RenderScript path for Android 7–11. This provides actual blur on the Moto G5 Plus; it costs more GPU/CPU work than the Android 12+ path. Targets exclude the controls that sample them to avoid recursive rendering. Web uses `backdrop-filter` and its WebKit counterpart through the same shared material component.
+Android uses `expo-blur` with separate `BlurTargetView` layers, including the legacy RenderScript path for Android 7–11. Legacy blur costs more GPU/CPU work than the Android 12+ path; Performance Mode uses opaque surfaces. Targets exclude the controls that sample them to avoid recursive rendering. Web uses `backdrop-filter` and its WebKit counterpart through the same shared material component.
 
 Basic audio functionality comes from `expo-audio`; the custom remote-control row above describes Crimson's additional native integration. Browser autoplay rules and tab suspension can limit web playback. Mobile web shares Android's bottom navigation, mini player, and player sheets. At widths of 960 px and above, web uses a persistent library sidebar, global search, a floating player, and an expanded player with integrated Up Next and Related panels. Desktop song menus open as compact anchored popups. Web icons use bundled SVG paths without icon-font loading.
 
+Your Mixes appears below followed-artist releases. Daily editions change at local midnight, weekly editions on Monday, and monthly editions on the first day of the month. Release Radar, Rediscover, and Hidden Gems refresh weekly. Editions and bookmarks are cached per account/device. Liking a mix adds its live entry to Crimson Library, and removing the like removes that bookmark; opening it always loads the current edition. Previously created Audius playlists remain unchanged. Advanced song filters support genre, mood, key, BPM range, and downloadable tracks, including browsing without a search term.
+
+Crossfade is configured in Settings and overlaps the current song with the next queued song. Short tracks use a shorter overlap; repeat-one uses normal playback. Browser playback policies still apply.
+
+The player's three-dot song menu and Account → Sound & sleep open the sleep timer and equalizer. The [sleep timer](SLEEP-TIMER.md) offers 5, 15, 30, 45, 60, or 90 minutes and End of current song. Timed sessions keep counting while paused; timers are not restored after process termination. The [equalizer](EQUALIZER.md) starts disabled, remembers its preset and five band levels on the device, and applies to both crossfade decks. iOS processing targets normal progressive streams and local files; protected/HLS processing is not claimed. Android uses PCM16 so Media3 can run the custom processor, including for higher-resolution sources.
+
+Local Music is always present in the library but populates after an import or scan. Android scans indexed music, recordings, and other audio with Music and audio/storage permission; app-private files remain outside its access. iOS can import selected Files documents, discover audio copied into Crimson's `CrimsonLocalMusic` folder, or scan downloaded, unprotected audio exposed by the system media library with permission. It cannot scan the whole iPhone filesystem or play protected subscription downloads. Browsers access only selected files/folders and retain imported copies in IndexedDB; clearing site data removes those copies. Playback formats depend on the OS/browser decoder. Local files can join Favorites but are not uploaded into Audius playlists.
+
+Native widgets display the last supplied playback snapshot. Tapping a control opens Crimson and performs the requested action; widgets do not operate the React Native player from a separate widget process. See [widget sizes, actions, and signing requirements](WIDGETS.md). Adding widgets or Local Music native integration requires a rebuilt native app, not only a JavaScript update.
+
 Notifications are loaded from Audius inside the app. This repository does not implement push notification delivery. Reading notifications in Crimson updates a device-local seen cursor; it does not mark the notifications read in the Audius app. Unsupported destinations open Audius.
+
+Queue drag handles reorder visible rows and offer accessible move actions; edge auto-scroll is not implemented. Downloads interrupted by Wi-Fi policy restart when eligible; byte-range resume is not implemented. Bluetooth/headset controls, audio interruptions, speech services, vendor battery policies, screen readers, and browser background suspension need checks on the affected devices.
 
 ## Prerequisites
 
@@ -67,7 +85,7 @@ npm run android:device
 npm run android:device:dev
 ```
 
-The release variant bundles JavaScript and artwork and runs without Metro. A Moto G5 Plus running 32-bit Android needs `armeabi-v7a`; an arm64-only APK cannot be installed on it. The generated project's release variant uses a development signing key for local device builds. Configure your own release signing before distributing through an app store.
+The release variant bundles JavaScript and artwork and runs without Metro. A 32-bit Android device needs `armeabi-v7a`; an arm64-only APK cannot be installed on it. The generated project's release variant uses a development signing key for local device builds. Configure your own release signing before distributing through an app store.
 
 For your own fork, configure `IOS_BUNDLE_IDENTIFIER` and `ANDROID_PACKAGE` in `.env`. `IOS_APPLE_TEAM_ID` is optional and selects your iOS signing team. These are read by `app.config.js`; the checked-in defaults are not a grant to use someone else's signing identity. Changing the bundle/package identifier does not change the `crimsonmusic` callback scheme.
 
@@ -98,7 +116,7 @@ Host the generated `dist/` output with HTTPS and ensure a direct request to `/oa
 
 ## Native adapter maintenance
 
-Android's adapter extends the existing Expo Audio foreground service and MediaSession. It does not create a second player. The plugin validates its source anchors and pins the supported `expo-audio` version; dependency upgrades need an adapter review before native generation succeeds. See [Android media adapter](../plugins/crimson-android-media/README.md).
+Android's adapter extends the existing Expo Audio foreground service and MediaSession. It routes media commands to the active player; the shared crossfade layer manages two audio players for transitions. The plugin validates its source anchors and pins the supported `expo-audio` version; dependency upgrades need an adapter review before native generation succeeds. See [Android media adapter](../plugins/crimson-android-media/README.md).
 
 Browser media controls are owned by the web player. Space toggles playback, arrows seek ten seconds, and Shift+arrows change tracks when focus is outside another interactive control. Palette extraction uses already loaded artwork in Data Saver mode and falls back when a browser blocks cross-origin pixel access.
 
@@ -110,4 +128,4 @@ The iOS job selects GitHub's `xcode-27` runner and compiles the layered icon bef
 
 ## Release validation
 
-Use the [release validation checklist](RELIABILITY-RELEASE.md) for releases and add the actual device, browser, and result to [PLATFORM-VALIDATION.md](PLATFORM-VALIDATION.md). Automated Android/web regression tests run with `npm run test:platforms`; `npm test` includes them alongside the shared suites. Browser background suspension, device-specific speech services, audio interruptions, and new OS versions still require targeted runtime checks.
+Use the [release validation checklist](RELIABILITY-RELEASE.md) and record the tested revision, device/browser, and results in the pull request or release notes. Automated Android/web regression tests run with `npm run test:platforms`; `npm test` includes them alongside the shared suites. Compilation and automated tests do not replace runtime checks.

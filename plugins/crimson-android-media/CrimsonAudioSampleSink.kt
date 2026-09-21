@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference
 /** Observes this player's decoded output; never uses a microphone or a second player. */
 @UnstableApi
 class CrimsonAudioSampleSink(looper: Looper) : TeeAudioProcessor.AudioBufferSink {
+  val equalizer = CrimsonEqualizerProcessor()
   private val handler = Handler(looper)
   private val generation = AtomicInteger(0)
   private val pending = AtomicReference<Any?>(null)
@@ -36,9 +37,11 @@ class CrimsonAudioSampleSink(looper: Looper) : TeeAudioProcessor.AudioBufferSink
         enableFloatOutput: Boolean,
         enableAudioOutputPlaybackParams: Boolean
       ): AudioSink = DefaultAudioSink.Builder(context)
-        .setEnableFloatOutput(enableFloatOutput)
+        // Media3's float-output path bypasses custom processors. Decode to PCM16
+        // so EQ and spectrum remain in the same permanent signal path.
+        .setEnableFloatOutput(false)
         .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-        .setAudioProcessors(arrayOf(TeeAudioProcessor(this@CrimsonAudioSampleSink)))
+        .setAudioProcessors(arrayOf(equalizer, TeeAudioProcessor(this@CrimsonAudioSampleSink)))
         .build()
     }
 

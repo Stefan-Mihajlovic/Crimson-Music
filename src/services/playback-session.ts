@@ -44,7 +44,7 @@ export function savePlaybackSession(uid: string, snapshot: PlaybackSnapshot) {
     const entries: [string, string][] = [[progressKey(uid), serializedProgress]];
     // Position checkpoints are tiny. A large queue is serialized only when its
     // immutable array changes, rather than on every five-second progress save.
-    if (savedQueues.get(uid) !== queue) entries.push([key(uid), JSON.stringify({ queue: queue.map((song) => ({ ...song, url: '' })) })]);
+    if (savedQueues.get(uid) !== queue) entries.push([key(uid), JSON.stringify({ queue: queue.map((song) => ({ ...song, url: song.source === 'local' ? song.url : '' })) })]);
     await AsyncStorage.multiSet(entries);
     savedQueues.set(uid, queue);
   });
@@ -60,7 +60,7 @@ export async function restorePlaybackSession(uid: string): Promise<PlaybackSnaps
     const storedProgress = await AsyncStorage.getItem(progressKey(uid));
     const data = { ...JSON.parse(stored), ...(storedProgress ? JSON.parse(storedProgress) : {}) } as Partial<PlaybackSnapshot>;
     if (!Array.isArray(data.queue) || !data.queue.length || data.queue.length > 5000) return null;
-    if (!data.queue.every((song) => song && typeof song.id === 'string' && song.source === 'audius'
+    if (!data.queue.every((song) => song && typeof song.id === 'string' && (song.source === 'audius' || song.source === 'local')
       && typeof song.title === 'string' && typeof song.creator === 'string')) return null;
     const index = Number.isInteger(data.index) ? Number(data.index) : 0;
     if (index < 0 || index >= data.queue.length) return null;

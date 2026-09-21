@@ -14,6 +14,7 @@ import PerformanceTabs from '@/components/performance-tabs';
 import { useAccountTabIcon } from '@/hooks/use-account-tab-icon';
 import { MINI_PLAYER_HEIGHT } from '@/components/player-layout';
 import { requestSearchFocus, subscribeToPlayerCollapse } from '@/services/navigation-events';
+import { subscribeToWidgetPlayerPresentation } from '@/services/widget-navigation';
 import { AppRouteGroup } from '@/services/action-sheet';
 import { useAppSettings } from '@/providers/settings-provider';
 import { PlayerOverlayVisibilityProvider } from '@/providers/player-overlay-visibility-provider';
@@ -82,6 +83,7 @@ export default function AppTabs() {
   }, [animatePlayerTo]);
 
   useEffect(() => subscribeToPlayerCollapse(collapse), [collapse]);
+  useEffect(() => subscribeToWidgetPlayerPresentation((visible) => visible ? expand() : collapse()), [collapse, expand]);
 
   useFocusEffect(useCallback(() => {
     if (Platform.OS !== 'android' || !expanded) return;

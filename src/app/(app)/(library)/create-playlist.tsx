@@ -1,3 +1,6 @@
+import * as ImagePicker from 'expo-image-picker';
+import type { ProfilePhotoUpload } from '@/services/audius-image-upload';
+import { SymbolView } from '@/components/app-symbol';
 import { BrandAccent } from '@/constants/brand-accent';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,7 +24,6 @@ import { useDetailRoutes } from '@/services/action-sheet';
 import { createOwnedPlaylist, setSongInOwnedPlaylist } from '@/services/music';
 import { requestLibraryRefresh } from '@/services/navigation-events';
 
-const defaultArtwork = require('@/assets/images/home/default-song.webp');
 
 export default function CreatePlaylistScreen() {
   const router = useRouter();
@@ -32,6 +34,18 @@ export default function CreatePlaylistScreen() {
   const [title, setTitle] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [saving, setSaving] = useState(false);
+  const [coverPhoto, setCoverPhoto] = useState<ProfilePhotoUpload>();
+  const picking = useRef(false);
+  const pickCover = async () => {
+    if (picking.current || saving) return;
+    picking.current = true;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.85 });
+      const asset = result.canceled ? undefined : result.assets[0];
+      if (asset) setCoverPhoto({ uri: asset.uri, name: asset.fileName || 'playlist.jpg', type: asset.mimeType || 'image/jpeg', size: asset.fileSize, file: asset.file });
+    } catch { Alert.alert('Could not select photo', 'Please try again.'); }
+    finally { picking.current = false; }
+  };
   const titleInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -55,6 +69,7 @@ export default function CreatePlaylistScreen() {
     try {
       const playlist = await createOwnedPlaylist(user.uid, title, undefined, {
         visibility,
+        coverPhoto,
       });
       let songAdded = true;
       if (trackId) {
@@ -128,13 +143,11 @@ export default function CreatePlaylistScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
       >
-        <View style={styles.coverButton}>
-          <Image
-            contentFit="cover"
-            source={defaultArtwork}
-            style={styles.cover}
-          />
-        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Choose playlist photo" disabled={saving} onPress={() => void pickCover()} style={[styles.coverButton, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft }]}>
+          {coverPhoto ? <Image contentFit="cover" source={{ uri: coverPhoto.uri }} style={styles.cover} /> : <SymbolView name="camera.fill" size={44} tintColor={colors.accent} />}
+        </Pressable>
+        <Pressable accessibilityRole="button" disabled={saving} onPress={() => void pickCover()} style={{ padding: 12 }}><Text style={{ color: colors.accent }}>{coverPhoto ? 'Change photo' : 'Add photo'}</Text></Pressable>
+
 
         <Text
           style={[styles.previewTitle, { color: colors.text }]}

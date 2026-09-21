@@ -76,6 +76,21 @@ test('phone menu is a bounded bottom sheet with an explicit close control', () =
   expect(onDismiss).toHaveBeenCalledTimes(1);
 });
 
+test('cancelled editor discard preserves the popup and a later Escape can dismiss it', async () => {
+  const beforeDismiss = jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  const onDismiss = jest.fn();
+  act(() => root.render(<ResponsivePopup label="Edit playlist" beforeDismiss={beforeDismiss} onDismiss={onDismiss}><input aria-label="Playlist name" defaultValue="Changed" /></ResponsivePopup>));
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+  expect(beforeDismiss).toHaveBeenCalledTimes(1);
+  expect(onDismiss).not.toHaveBeenCalled();
+  const dialog = document.querySelector('[aria-label="Edit playlist"]');
+  expect(dialog.style.pointerEvents).toBe('auto');
+  expect(dialog.querySelector('input').value).toBe('Changed');
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+  expect(beforeDismiss).toHaveBeenCalledTimes(2);
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+});
+
 test('Escape closes only the top popup and restores its trigger without closing the full player', () => {
   const closeDetails = jest.fn();
   const closeSong = jest.fn();

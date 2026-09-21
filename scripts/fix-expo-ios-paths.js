@@ -5,6 +5,11 @@ const { fixSentryBuildScript, fixSceneStartup, fixSceneDelegate } = require('./l
 
 const projectRoot = path.join(__dirname, '..');
 
+// Also runs during npm postinstall: keep the installed Expo Audio DSP adapter
+// identical to the canonical config plugin before either native build begins.
+require('../plugins/with-crimson-equalizer').patchEqualizer(projectRoot);
+require('../plugins/with-crimson-sleep-timer').patchCrimsonSleepTimer(projectRoot);
+
 function replaceOnce(filePath, brokenValue, fixedValue, label, { optional = false } = {}) {
   if (!fs.existsSync(filePath)) {
     if (optional) return;

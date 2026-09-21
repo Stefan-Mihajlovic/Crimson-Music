@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import OfflineModeBanner from '@/components/offline-mode-banner';
 import PerformanceStackHeader from '@/components/performance-stack-header';
 import WebAppShell from '@/components/web-app-shell';
+import WidgetSync from '@/components/widget-sync';
 import { AuthProvider, useAuth } from '@/providers/auth-provider';
 import { DownloadProvider } from '@/providers/download-provider';
 import { NetworkProvider, useNetwork } from '@/providers/network-provider';
@@ -16,6 +17,7 @@ import { PlayerProvider } from '@/providers/player-provider';
 import { SettingsProvider, useAppSettings } from '@/providers/settings-provider';
 import { configureAppTypography } from '@/styles/typography';
 import { reportError, wrap } from '@/services/telemetry';
+import { popupPresentationOptions, popupRouteNames } from '@/services/popup-presentation';
 
 SplashScreen.preventAutoHideAsync();
 configureAppTypography();
@@ -62,6 +64,7 @@ function ThemedApp() {
 
   return (
     <PlayerProvider>
+      <WidgetSync />
       <ThemeProvider value={navigationTheme}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
         <ModalBackdropProvider><WebAppShell><RootNavigator /></WebAppShell></ModalBackdropProvider>
@@ -88,7 +91,7 @@ function RootNavigator() {
 
   return (
     <Stack
-      screenLayout={({ children, route }) => ['action-sheet', 'player-details'].includes(route.name)
+      screenLayout={({ children, route }) => popupRouteNames.includes(route.name)
         ? children : <ModalBackdropScene>{children}</ModalBackdropScene>}
       screenOptions={{
         header: performanceMode || Platform.OS !== 'ios' ? (props) => <PerformanceStackHeader {...props} /> : undefined,
@@ -99,6 +102,7 @@ function RootNavigator() {
       }}>
       <Stack.Screen name="index" options={{ animation: 'none' }} />
       <Stack.Screen name="oauth/callback" options={{ animation: 'none' }} />
+      <Stack.Screen name="widget" options={{ animation: 'none', headerShown: false }} />
       <Stack.Screen
         name="onboarding"
         options={({ route }) => {
@@ -152,7 +156,7 @@ function RootNavigator() {
             contentStyle: { backgroundColor: colors.background },
           }}
         />
-        {['category', 'favorites', 'downloads'].map((name) => (
+        {['category', 'favorites', 'downloads', 'local-music', 'mix'].map((name) => (
           <Stack.Screen
             key={name}
             name={name}
@@ -171,30 +175,19 @@ function RootNavigator() {
             }}
           />
         ))}
-        <Stack.Screen
-          name="action-sheet"
-          options={{
-            presentation: Platform.OS === 'web' ? 'transparentModal' : 'formSheet',
-            animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
-            contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : Platform.OS === 'ios' || performanceMode ? colors.elevated : 'transparent' },
-            sheetAllowedDetents: [0.5, 1.0],
-            sheetInitialDetentIndex: 0,
-            sheetGrabberVisible: true,
-            sheetExpandsWhenScrolledToEdge: true,
-          }}
-        />
-        <Stack.Screen
-          name="player-details"
-          options={{
-            presentation: Platform.OS === 'web' ? 'transparentModal' : 'formSheet',
-            animation: Platform.OS === 'web' || reduceMotion ? 'none' : 'slide_from_bottom',
-            contentStyle: { backgroundColor: Platform.OS === 'web' ? 'transparent' : Platform.OS === 'ios' || performanceMode ? colors.elevated : 'transparent' },
-            sheetAllowedDetents: [0.62, 1.0],
-            sheetInitialDetentIndex: 0,
-            sheetGrabberVisible: true,
-            sheetExpandsWhenScrolledToEdge: true,
-          }}
-        />
+        {popupRouteNames.map((name) => (
+          <Stack.Screen
+            key={name}
+            name={name}
+            options={popupPresentationOptions({
+              platform: Platform.OS,
+              elevated: colors.elevated,
+              performanceMode,
+              reduceMotion,
+              detent: name === 'player-details' ? 0.62 : name === 'playlist-editor' || name === 'equalizer' ? 0.75 : 0.5,
+            })}
+          />
+        ))}
         <Stack.Screen
           name="player"
           options={{

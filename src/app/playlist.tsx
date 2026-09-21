@@ -1,39 +1,22 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { SymbolView } from '@/components/app-symbol';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
-  Platform,
-  useWindowDimensions,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Alert } from '@/services/alert';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import CollectionTools, {
-  collectionSongs,
-  collectionDuration,
-  type SongSort,
-} from '@/components/collection-tools';
-import PlaylistEditor from '@/components/playlist-editor';
-import DetailSongRow from '@/components/detail-song-row';
+import type { SongSort } from '@/components/collection-tools';
+import PlaylistCollectionScreen, { type PlaylistCollectionAction } from '@/components/playlist-collection-screen';
+import { usePlaylistEditor } from '@/components/playlist-editor';
 import BouncyPressable from '@/components/bouncy-pressable';
-import CollectionHeaderPlayButton, {
-  useCollectionHeaderPlaybackVisibility,
-} from '@/components/collection-header-play-button';
-import PlaylistCover from '@/components/playlist-cover';
-import { useCollectionPlayback } from '@/hooks/use-collection-playback';
 import { useAuth } from '@/providers/auth-provider';
 import { useDownloads } from '@/providers/download-provider';
 import { useNetwork } from '@/providers/network-provider';
-import { usePlayer } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
-import { actionSheetHref } from '@/services/action-sheet';
 import {
   getUserCollectionState,
   loadPlaylistDetail,
@@ -53,25 +36,16 @@ export default function PlaylistDetailScreen() {
     title?: string;
   }>();
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const desktop = Platform.OS === 'web' && width >= 960;
-  const coverSize = width >= 1200 ? 208 : 180;
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const downloads = useDownloads();
   const { isDownloaded, ready: downloadsReady, songsForCollection } = downloads;
   const { isOffline } = useNetwork();
   const uid = user?.uid;
-  const { playSong } = usePlayer();
   const { colors } = useAppSettings();
   const [detail, setDetail] = useState<PlaylistDetail | null>(null);
   const [liked, setLiked] = useState(false);
   const [sort, setSort] = useState<SongSort>('original');
-  const [editing, setEditing] = useState(false);
-  const visibleSongs = useMemo(
-    () => collectionSongs(detail?.songs || [], '', sort),
-    [detail?.songs, sort],
-  );
+  const openEditor = usePlaylistEditor(uid);
   const [loadError, setLoadError] = useState(false);
   const reloadRequest = useRef(0);
   const likeRequest = useRef(0);
@@ -79,33 +53,6 @@ export default function PlaylistDetailScreen() {
   const isOwned = detail?.playlist.owned ?? owned === '1';
   const playlistSource =
     source === 'audius' || source === 'crimson' ? source : undefined;
-  const collectionPlayback = useCollectionPlayback(
-    visibleSongs,
-    detail?.playlist.title ?? '',
-    String(id),
-  );
-  const headerPlayback = useCollectionHeaderPlaybackVisibility(
-    Boolean(detail?.songs.length),
-    insets.top,
-  );
-  const renderHeaderPlayback = useCallback(
-    () => (
-      <CollectionHeaderPlayButton
-        collectionId={String(id)}
-        collectionName={detail?.playlist.title ?? ''}
-        songs={visibleSongs}
-      />
-    ),
-    [detail?.playlist.title, visibleSongs, id],
-  );
-  const screenOptions = useMemo(
-    () => ({
-      title: detail?.playlist.title ?? '',
-      headerRight: headerPlayback.visible ? renderHeaderPlayback : undefined,
-    }),
-    [detail?.playlist.title, headerPlayback.visible, renderHeaderPlayback],
-  );
-
   const reload = useCallback(
     async (_showError: boolean) => {
       const request = ++reloadRequest.current;
@@ -245,17 +192,6 @@ export default function PlaylistDetailScreen() {
       likePending.current = false;
     }
   };
-  const openSongActions = (song: PlaylistDetail['songs'][number]) =>
-    router.push(
-      actionSheetHref({
-        type: 'song',
-        id: song.id,
-        title: song.title,
-        subtitle: song.creator,
-        image: song.imageSmall || song.image,
-        artistId: song.artistId,
-      }),
-    );
   const savePlaylistOffline = async () => {
     if (!downloads.enabled) {
       Alert.alert(
@@ -273,235 +209,10 @@ export default function PlaylistDetailScreen() {
     }
   };
 
-  return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <Stack.Screen options={screenOptions} />
-      <FlatList
-        data={visibleSongs}
-        keyExtractor={(song) => song.id}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={7}
-        renderItem={({ item: song }) => (
-          <View style={{ paddingHorizontal: desktop ? 22 : 12 }}>
-            <DetailSongRow
-              expectedOffline={downloadRequested}
-              song={song}
-              unavailableForOffline={downloads.isTrackUnavailableForCollection(
-                downloadKey,
-                song.id,
-              )}
-              onPress={() =>
-                playSong(song, visibleSongs, playlist.title, playlist.id)
-              }
-              onLongPress={() => openSongActions(song)}
-            />
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={[styles.empty, { color: colors.secondaryText }]}>
-            {isOffline
-                ? 'No saved songs from this playlist are available offline.'
-                : 'This playlist does not have any playable songs yet.'}
-          </Text>
-        }
-        showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[{ paddingBottom: insets.bottom + 120 }, desktop && styles.desktopContent]}
-        onScroll={headerPlayback.onScroll}
-        scrollsToTop={false}
-        scrollEventThrottle={16}
-        ListHeaderComponent={
-          <>
-            <View style={[styles.hero, desktop && [styles.desktopHero, { backgroundColor: colors.elevated }]]}>
-              <PlaylistCover
-                borderRadius={desktop ? 10 : 0}
-                playlist={playlist}
-                preferLarge
-                showPlayingIndicator={false}
-                style={desktop ? [styles.desktopCover, { width: coverSize, height: coverSize }] : StyleSheet.absoluteFill}
-              />
-              <LinearGradient
-                colors={desktop ? [colors.accentSoft, colors.background] : [
-                  'transparent',
-                  'rgba(14,13,19,0.62)',
-                  colors.background,
-                ]}
-                style={StyleSheet.absoluteFill}
-              />
-              <View style={[styles.heroCopy, desktop && styles.desktopHeroCopy]}>
-                {desktop ? <Text style={[styles.desktopEyebrow, { color: colors.secondaryText }]}>Playlist</Text> : null}
-                <Text numberOfLines={desktop ? 2 : undefined} style={[styles.name, desktop && [styles.desktopName, { color: colors.text, fontSize: width >= 1200 ? 48 : 36 }]]}>{playlist.title}</Text>
-                <Text style={[styles.metadata, desktop && { color: colors.secondaryText }]}>
-                  {playlist.artists} · {songs.length} songs ·{' '}
-                  {collectionDuration(songs)}
-                </Text>
-                {playlist.description ? (
-                  <Text numberOfLines={2} style={[styles.metadata, desktop && { color: colors.secondaryText }]}>
-                    {playlist.description}
-                  </Text>
-                ) : null}
-                <View style={[styles.actions, desktop && styles.desktopActions]}>
-                  {isOwned && !isOffline ? (
-                    <BouncyPressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Edit playlist"
-                      onPress={() => setEditing(true)}
-                      style={[
-                        styles.iconButton,
-                        {
-                          backgroundColor: colors.controlSurface,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <SymbolView
-                        name="pencil"
-                        size={20}
-                        tintColor={colors.text}
-                      />
-                    </BouncyPressable>
-                  ) : null}
-                  {!isOwned ? (
-                    <BouncyPressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        liked
-                          ? 'Remove playlist from library'
-                          : 'Save playlist to library'
-                      }
-                      onPress={() => void toggleLike()}
-                      style={[
-                        styles.iconButton,
-                        {
-                          backgroundColor: colors.controlSurface,
-                          borderColor: liked ? colors.accent : colors.border,
-                        },
-                      ]}
-                    >
-                      <SymbolView
-                        name={liked ? 'heart.fill' : 'heart'}
-                        size={21}
-                        tintColor={liked ? colors.accent : colors.text}
-                      />
-                    </BouncyPressable>
-                  ) : null}
-                  {downloads.supported ? (
-                    <BouncyPressable
-                      accessibilityLabel={
-                        allDownloaded
-                          ? `${playlist.title} is available offline`
-                          : `Make ${playlist.title} available offline`
-                      }
-                      disabled={!songs.length || downloading || allDownloaded}
-                      onPress={() => void savePlaylistOffline()}
-                      style={[
-                        styles.iconButton,
-                        {
-                          backgroundColor: colors.controlSurface,
-                          borderColor: allDownloaded
-                            ? colors.accent
-                            : colors.border,
-                        },
-                      ]}
-                    >
-                      {downloading ? (
-                        <ActivityIndicator color={colors.text} size="small" />
-                      ) : (
-                        <SymbolView
-                          name={
-                            allDownloaded
-                              ? 'checkmark.circle.fill'
-                              : 'icloud.and.arrow.down'
-                          }
-                          size={21}
-                          tintColor={allDownloaded ? colors.accent : colors.text}
-                        />
-                      )}
-                    </BouncyPressable>
-                  ) : null}
-                  <BouncyPressable
-                    accessibilityLabel={
-                      collectionPlayback.playing
-                        ? `Pause ${playlist.title}`
-                        : `Play ${playlist.title}`
-                    }
-                    disabled={
-                      !visibleSongs.length || collectionPlayback.loading
-                    }
-                    onPress={collectionPlayback.toggleCollectionPlayback}
-                    contentStyle={styles.playButtonContent}
-                    pressedScale={0.9}
-                    style={[
-                      styles.playButton,
-                      desktop ? styles.desktopPlayButton : styles.mobilePlayButton,
-                      { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
-                    ]}
-                  >
-                    {collectionPlayback.loading ? (
-                      <ActivityIndicator color="#17121D" size="small" />
-                    ) : (
-                      <SymbolView
-                        name={
-                          collectionPlayback.playing
-                            ? 'pause.fill'
-                            : 'play.fill'
-                        }
-                        size={18}
-                        tintColor="#17121D"
-                        weight="bold"
-                      />
-                    )}
-                    <Text style={styles.playText}>
-                      {collectionPlayback.loading
-                        ? 'Loading'
-                        : collectionPlayback.playing
-                          ? 'Pause'
-                          : 'Play'}
-                    </Text>
-                  </BouncyPressable>
-                </View>
-              </View>
-            </View>
-            <CollectionTools
-              showSearch={false}
-              sort={sort}
-              onSortChange={setSort}
-              disabled={!visibleSongs.length}
-              onShuffle={() => {
-                const first =
-                  visibleSongs[Math.floor(Math.random() * visibleSongs.length)];
-                if (first)
-                  playSong(
-                    first,
-                    visibleSongs,
-                    playlist.title,
-                    playlist.id,
-                    true,
-                  );
-              }}
-            />
-            {loadError ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void reload(false)}
-                style={{ padding: 20 }}
-              >
-                <Text style={{ color: colors.accent }}>
-                  Could not refresh this playlist. Tap to retry.
-                </Text>
-              </Pressable>
-            ) : null}
-          </>
-        }
-      />
-      {editing && uid ? (
-        <PlaylistEditor
-          uid={uid}
-          playlist={playlist}
-          songs={songs}
-          onClose={() => setEditing(false)}
-          onSaved={(next) => {
+  const editPlaylist = () => {
+    if (!uid) return;
+    openEditor({ playlist, songs,
+      onSaved: (next) => {
             const byId = new Map(songs.map((song) => [song.id, song]));
             setDetail({
               playlist: next,
@@ -511,72 +222,31 @@ export default function PlaylistDetailScreen() {
                   Boolean(song),
                 ),
             });
-            setEditing(false);
             requestLibraryRefresh();
-          }}
-          onDeleted={() => {
-            setEditing(false);
+      },
+      onDeleted: () => {
             requestLibraryRefresh();
             router.back();
-          }}
-        />
-      ) : null}
-    </View>
+      },
+    });
+  };
+
+  const actions: PlaylistCollectionAction[] = [
+    ...(isOwned && !isOffline ? [{ label: 'Edit playlist', icon: 'pencil' as const, iconSize: 20, onPress: editPlaylist }] : []),
+    ...(!isOwned ? [{ label: liked ? 'Remove playlist from library' : 'Save playlist to library', icon: liked ? 'heart.fill' as const : 'heart' as const, selected: liked, onPress: () => void toggleLike() }] : []),
+    ...(downloads.supported ? [{ label: allDownloaded ? `${playlist.title} is available offline` : `Make ${playlist.title} available offline`, icon: allDownloaded ? 'checkmark.circle.fill' as const : 'icloud.and.arrow.down' as const, selected: allDownloaded, disabled: !songs.length || downloading || allDownloaded, loading: downloading, onPress: () => void savePlaylistOffline() }] : []),
+  ];
+  return (
+    <PlaylistCollectionScreen playlist={playlist} songs={songs} sort={sort} onSortChange={setSort} actions={actions}
+      expectedOffline={downloadRequested}
+      unavailableForOffline={(songId) => downloads.isTrackUnavailableForCollection(downloadKey, songId)}
+      emptyMessage={isOffline ? 'No saved songs from this playlist are available offline.' : 'This playlist does not have any playable songs yet.'}
+      notice={loadError ? <Pressable accessibilityRole="button" onPress={() => void reload(false)} style={{ padding: 20 }}><Text style={{ color: colors.accent }}>Could not refresh this playlist. Tap to retry.</Text></Pressable> : null}>
+    </PlaylistCollectionScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  desktopContent: { width: '100%', maxWidth: 1440, alignSelf: 'center' },
-  desktopHero: { height: 'auto', minHeight: 252, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', padding: 28, gap: 28 },
-  desktopCover: { borderRadius: 10, flexShrink: 0, zIndex: 1, boxShadow: '0 12px 32px rgba(0,0,0,0.2)' },
-  desktopHeroCopy: { flex: 1, minWidth: 0, paddingHorizontal: 0, paddingBottom: 0, zIndex: 1 },
-  desktopEyebrow: { fontSize: 10, fontWeight: '700', marginBottom: 8 },
-  desktopName: { letterSpacing: -1.4, fontWeight: '800' },
-  desktopActions: { flexWrap: 'wrap', marginTop: 20 },
-  desktopPlayButton: { flexGrow: 0, flexShrink: 0, flexBasis: 132, width: 132 },
-  mobilePlayButton: { flex: 1 },
-
-  screen: { flex: 1, backgroundColor: '#0E0D13' },
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0E0D13',
-  },
-  hero: { height: 390, justifyContent: 'flex-end', backgroundColor: '#201A29' },
-  heroCopy: { paddingHorizontal: 22, paddingBottom: 12 },
-  name: {
-    color: '#FFFFFF',
-    fontSize: 38,
-    fontWeight: '900',
-    letterSpacing: -1.2,
-  },
-  metadata: { marginTop: 5, color: '#C0B8CA', fontSize: 14 },
-  actions: { marginTop: 18, flexDirection: 'row', gap: 10 },
-  iconButton: {
-    width: 50,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  playButton: {
-    height: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  playButtonContent: { flexDirection: 'row', gap: 7 },
-  playText: { color: '#17121D', fontSize: 15, fontWeight: '800' },
-  list: { paddingHorizontal: 12, paddingTop: 10 },
-  empty: {
-    paddingHorizontal: 10,
-    paddingVertical: 35,
-    color: '#918A9D',
-    fontSize: 15,
-  },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0E0D13' },
+  empty: { paddingHorizontal: 10, paddingVertical: 35, color: '#918A9D', fontSize: 15 },
 });

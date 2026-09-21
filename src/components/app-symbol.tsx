@@ -57,6 +57,7 @@ export const symbolIcons = {
   lock: 'lock-closed-outline',
   magnifyingglass: 'search',
   'mic.fill': 'mic',
+  minus: 'remove',
   'minus.circle': 'remove-circle-outline',
   'moon.stars.fill': 'moon',
   'music.note': 'musical-note',

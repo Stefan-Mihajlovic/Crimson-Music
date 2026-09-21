@@ -1,6 +1,6 @@
 # Dependency security status
 
-Reviewed **2026-09-10** against the committed dependency graph, installed caller source, official advisories/releases, and npm registry metadata. This is a targeted dependency review, not a full security audit. No application tests, builds, or exploit demonstrations were run locally. The lockfile was updated with lifecycle scripts disabled; CI and platform validation remain separate.
+Dependency review dated **2026-09-10**. These notes explain known alerts and compatibility constraints at that date, not a current exhaustive audit. Recheck the installed lockfile and upstream advisories before a release.
 
 ## Released fix applied: uuid
 
@@ -21,7 +21,7 @@ Both advisories list releases through 2.0.2 as affected and no patched version. 
 
 The traced caller is Metro's Node-side `src/Assets.js`: `getAssetSize` passes project asset bytes to `image-size` during asset processing. No direct import was found in the application's `src/` tree. This trace identifies build/development tooling exposure; it is not a comprehensive shipped-bundle audit or a claim that every runtime path is unaffected. A malicious image added to the project can reach the parser under a recognized asset extension, so extension checks alone are not a mitigation.
 
-Review contributed assets before processing them, keep development servers off untrusted networks, and retain bounded CI job timeouts. These measures limit exposure or duration; they do not repair the parser. Keep both alerts open pending a compatible upstream replacement or separately reviewed remediation. This change does not vendor a parser, introduce an unofficial fork, or upgrade Expo/React Native to another major version.
+Review contributed assets before processing them, keep development servers off untrusted networks, and retain bounded CI job timeouts. These measures limit exposure or duration; they do not repair the parser. Keep both alerts open pending a compatible upstream replacement or separately reviewed remediation.
 
 ## Open: decode-uri-component
 

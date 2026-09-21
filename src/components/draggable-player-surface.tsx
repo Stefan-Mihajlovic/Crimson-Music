@@ -3,7 +3,7 @@ import FrostedSurface from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
-import { Image } from 'expo-image';
+import ArtworkImage from '@/components/artwork-image';
 import { SymbolView } from '@/components/app-symbol';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View, ViewStyle } from 'react-native';
@@ -274,7 +274,8 @@ export default function DraggablePlayerSurface({
             morphArtworkVisibilityStyle,
           ]}>
           <Animated.View style={[styles.artworkClip, artworkClipAnimatedStyle]}>
-            <Image
+            <ArtworkImage
+              artwork={currentSong.artwork}
               contentFit="cover"
               onLoad={() => setArtworkLoaded((value) => value + 1)}
               recyclingKey={currentSong.id}

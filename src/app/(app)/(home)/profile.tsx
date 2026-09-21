@@ -190,7 +190,8 @@ export default function ProfileSettingsScreen() {
             <SymbolView name="play.fill" size={16} tintColor={colors.text} />
           </Pressable>)}
           {!!stats.topArtists?.length && <SectionLabel title="Your top artists" />}
-          {stats.topArtists?.map((artist) => <Pressable key={artist.id || artist.name} accessibilityRole="button" accessibilityLabel={`Open ${artist.name}`} disabled={!artist.id} onPress={() => router.push(artistHref(artist.id))} style={styles.topRow}>
+          {stats.topArtists?.map((artist, index) => <Pressable key={artist.id || artist.name} accessibilityRole="button" accessibilityLabel={`Open ${artist.name}`} disabled={!artist.id} onPress={() => router.push(artistHref(artist.id))} style={styles.topRow}>
+            <Text style={{ color: colors.mutedText, width: 20 }}>{index + 1}</Text>
             <Image source={profileImageSource(artist.imageSmall || artist.image || '1')} contentFit="cover" style={[styles.topArtwork, { borderRadius: 24 }]} />
             <View style={{ flex: 1 }}><Text style={{ color: colors.text, fontWeight: '600' }}>{artist.name}</Text><Text style={{ color: colors.secondaryText, marginTop: 3 }}>{artist.plays} plays</Text></View><SymbolView name="chevron.right" size={14} tintColor={colors.secondaryText} />
           </Pressable>)}

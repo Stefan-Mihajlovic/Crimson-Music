@@ -10,7 +10,7 @@ Include the affected revision, platform and build type, reproduction steps, pote
 
 ## Scope and expectations
 
-This is an actively developed client, with iOS as the primary target and Android/web still experimental. There is no published long-term support schedule, guaranteed response time, or claim of a completed independent security audit. Report issues against the current development branch and identify the exact affected revision.
+This is an actively developed client for iOS, Android, and web; see [platform support](docs/PLATFORMS.md). There is no published long-term support schedule, guaranteed response time, or claim of a completed independent security audit. Report issues against the current development branch and identify the exact affected revision.
 
 Relevant areas include OAuth callback validation, credential storage, account switching, authenticated request destinations, local data cleanup, dependency vulnerabilities, and native integrations. Issues in Audius itself should also be reported through Audius's own reporting channels.
 

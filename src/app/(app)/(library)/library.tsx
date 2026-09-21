@@ -1,8 +1,12 @@
+import PersonalMixCover from '@/components/personal-mix-cover';
+import { useBookmarkedPersonalMixes } from '@/hooks/use-personal-mixes';
+import type { PersonalMix } from '@/services/personal-mixes';
+import LocalMusicArtwork from '@/components/local-music-artwork';
 import FavoritesArtwork from '@/components/favorites-artwork';
 import { registerAccountCleanup } from '@/services/account-lifecycle';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ArtworkImage from '@/components/artwork-image';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -46,6 +50,7 @@ import {
 import {
   buildLibraryCollection,
   filterLibraryCollection,
+  mergePersonalMixBookmarks,
   type LibraryCollectionItem,
   type LibraryFilter,
   type LibrarySort,
@@ -84,6 +89,7 @@ export default function LibraryScreen() {
   const headerScroll = useMainHeaderScroll();
   const { user } = useAuth();
   const uid = user?.uid;
+  const { mixes: bookmarkedMixes } = useBookmarkedPersonalMixes();
   const { isOffline } = useNetwork();
   const downloads = useDownloads();
   const { colors, reduceMotion, performanceMode } = useAppSettings();
@@ -184,13 +190,13 @@ export default function LibraryScreen() {
   const visible = useMemo(
     () =>
       filterLibraryCollection(
-        collection.uid === uid ? collection.items : emptyCollection,
+        mergePersonalMixBookmarks(collection.uid === uid ? collection.items : emptyCollection, bookmarkedMixes),
         query,
         {
           filter,
           sort,
           isOffline: (item) =>
-            item.kind === 'favorites'
+            item.kind === 'mix' ? item.mix.songs.some((song) => downloads.isDownloaded(song.id)) : item.kind === 'local-music' ? true : item.kind === 'favorites'
               ? downloads.hasCollectionOfflineSongs('favorites')
               : item.kind === 'playlist'
                 ? downloads.hasCollectionOfflineSongs(
@@ -201,7 +207,7 @@ export default function LibraryScreen() {
                   ),
         },
       ),
-    [collection, downloads, filter, query, sort, uid],
+    [collection, bookmarkedMixes, downloads, filter, query, sort, uid],
   );
   const rows = useMemo<LibraryRow[]>(() => {
     const columns = layout === 'grid' ? gridColumns : 1;
@@ -230,6 +236,12 @@ export default function LibraryScreen() {
         />
       );
     }
+    if (item.kind === 'local-music') {
+      return <LibraryItem key={item.key} localMusic layout={layout} desktop={desktop} gridWidth={gridWidth}
+        onPress={() => router.push('/(app)/(library)/local-music' as Href)} subtitle="Music on this device" title="Local Music" />;
+    }
+    if (item.kind === 'mix') return <LibraryItem key={item.key} mix={item.mix} layout={layout} desktop={desktop} gridWidth={gridWidth}
+      onPress={() => router.push({ pathname: '/mix', params: { id: item.mix.id } })} subtitle="Made for you" title={item.title} />;
     if (item.kind === 'artist') {
       const { artist } = item;
       return (
@@ -293,7 +305,7 @@ export default function LibraryScreen() {
       <MainNativeHeader offset={headerScroll.offset} title="Library" />
       <AnimatedFlatList
         onLayout={({ nativeEvent: { layout: bounds } }) => setAvailableWidth(bounds.width)}
-        data={loading ? [] : rows}
+        data={loading && !bookmarkedMixes.length ? [] : rows}
         keyExtractor={(item) => item.key}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
@@ -496,6 +508,8 @@ function LibraryItem({
   gridWidth,
   downloadCollectionKey,
   favorites = false,
+  localMusic = false,
+  mix,
   layout,
   onLongPress,
   onPress,
@@ -508,6 +522,8 @@ function LibraryItem({
   gridWidth?: number;
   downloadCollectionKey?: string;
   favorites?: boolean;
+  localMusic?: boolean;
+  mix?: PersonalMix;
   layout: LibraryLayout;
   onLongPress?: () => void;
   onPress: () => void;
@@ -518,15 +534,16 @@ function LibraryItem({
   const { colors, reduceMotion } = useAppSettings();
   const [hovered, setHovered] = useState(false);
   const downloads = useDownloads();
-  const sourceName = playlist?.title || artist?.name || title;
+  const sourceName = mix ? `${title} · ${mix.periodKey}` : playlist?.title || artist?.name || title;
   const image = artist?.imageSmall || artist?.image;
   const collectionKey =
     downloadCollectionKey || (playlist ? `playlist:${playlist.id}` : '');
   const collectionHasOfflineSongs = Boolean(
     (collectionKey && downloads.hasCollectionOfflineSongs(collectionKey)) ||
-      playlist?.songs.some((trackId) => downloads.isDownloaded(trackId)),
+      playlist?.songs.some((trackId) => downloads.isDownloaded(trackId)) || mix?.songs.some((song) => downloads.isDownloaded(song.id)),
   );
   const collectionDownloaded = Boolean(
+    (mix?.songs.length && mix.songs.every((song) => downloads.isDownloaded(song.id))) ||
     (downloadCollectionKey &&
       downloads.isCollectionDownloaded(downloadCollectionKey)) ||
       (playlist &&
@@ -552,7 +569,7 @@ function LibraryItem({
           styles.artworkClip,
         ]}
       >
-        {favorites ? <FavoritesArtwork style={StyleSheet.absoluteFill} /> : <ArtworkImage
+        {mix ? <PersonalMixCover id={mix.id} mix={mix} size={layout === 'grid' ? gridWidth || 180 : 60} borderRadius={borderRadius} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} /> : localMusic ? <LocalMusicArtwork style={StyleSheet.absoluteFill} /> : favorites ? <FavoritesArtwork style={StyleSheet.absoluteFill} /> : <ArtworkImage
           artwork={artist?.artwork}
           fallbackSource={(artist ? defaultArtist : defaultArtwork)}
           contentFit="cover"

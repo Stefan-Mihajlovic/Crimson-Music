@@ -38,13 +38,16 @@ type SheetDrag = {
 };
 
 /** A viewport overlay: anchored desktop popover and Android-like phone sheet. */
-export default function ResponsivePopup({ children, onDismiss, label, anchor, width = 340, expanded }: ResponsivePopupProps) {
+export default function ResponsivePopup({ children, onDismiss, beforeDismiss, label, anchor, width = 340, expanded }: ResponsivePopupProps) {
   const { colors, isDark, reduceMotion } = useAppSettings();
   const viewport = useWindowDimensions();
   const desktop = viewport.width >= 960;
   const contentInset = desktop ? POPUP_DESKTOP_INSET : POPUP_MOBILE_INSET;
   const panel = useRef<HTMLDivElement>(null);
   const dismiss = useRef(onDismiss);
+  const guard = useRef(beforeDismiss);
+  const checkingDismiss = useRef(false);
+  const mounted = useRef(true);
   const closingRef = useRef(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [panelHeight, setPanelHeight] = useState(340);
@@ -54,19 +57,33 @@ export default function ResponsivePopup({ children, onDismiss, label, anchor, wi
   const [entered, setEntered] = useState(reduceMotion);
 
   useLayoutEffect(() => { dismiss.current = onDismiss; }, [onDismiss]);
+  useLayoutEffect(() => { guard.current = beforeDismiss; }, [beforeDismiss]);
+  useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   const requestDismiss = useCallback(() => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    const finish = () => {
-      if (document.activeElement instanceof HTMLElement && panel.current?.contains(document.activeElement)) document.activeElement.blur();
-      dismiss.current();
+    if (closingRef.current || checkingDismiss.current) return;
+    const close = () => {
+      if (!mounted.current) return;
+      closingRef.current = true;
+      const finish = () => {
+        if (document.activeElement instanceof HTMLElement && panel.current?.contains(document.activeElement)) document.activeElement.blur();
+        dismiss.current();
+      };
+      if (reduceMotion) finish();
+      else {
+        setClosing(true);
+        closeTimer.current = setTimeout(finish, desktop ? 150 : 220);
+      }
     };
-    if (reduceMotion) finish();
-    else {
-      setClosing(true);
-      closeTimer.current = setTimeout(finish, desktop ? 150 : 220);
-    }
+    if (!guard.current) { close(); return; }
+    // A rejected discard returns the sheet to its resting position before any
+    // closing animation, keeping browser Escape/backdrop/drag usable afterward.
+    checkingDismiss.current = true;
+    void Promise.resolve().then(() => guard.current?.()).then((allowed) => {
+      if (!mounted.current) return;
+      if (allowed) close();
+      else setDragOffset(0);
+    }).catch(() => { if (mounted.current) setDragOffset(0); }).finally(() => { checkingDismiss.current = false; });
   }, [desktop, reduceMotion]);
 
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);

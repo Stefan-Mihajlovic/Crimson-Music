@@ -6,12 +6,17 @@ import HomeQuickAccess from '../src/components/home-quick-access';
 import { loadListeningHistoryPage } from '../src/services/music';
 
 let mockUser;
+let mockMixes = [];
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
   useFocusEffect: (callback) => require('react').useEffect(callback, [callback]),
 }));
 jest.mock('expo-image', () => ({ Image: 'Image' }));
 jest.mock('expo-symbols', () => ({ SymbolView: 'SymbolView' }));
+jest.mock('../src/components/personal-mix-cover', () => 'PersonalMixCover');
+jest.mock('../src/hooks/use-personal-mixes', () => ({ useBookmarkedPersonalMixes: () => ({ mixes: mockMixes }) }));
+jest.mock('../src/services/personal-mixes', () => ({ personalMixDefinition: (id) => ({ title: id === 'daily' ? 'Daily Mix' : 'Weekly Mix' }) }));
 jest.mock('../src/components/playlist-cover', () => 'PlaylistCover');
 jest.mock('../src/providers/auth-provider', () => ({ useAuth: () => ({ user: mockUser }) }));
 jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ colors: {} }) }));
@@ -30,7 +35,7 @@ const page = (id) => ({ items: [{ song: { id, title: id, image: '' } }] });
 const titles = () => root.root.findAllByType(Text).map((node) => node.props.children);
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  mockUser = { uid: 'first' };
+  mockUser = { uid: 'first' }; mockMixes = [];
   loadListeningHistoryPage.mockImplementation(async (uid) => page(`${uid}-song`));
 });
 afterEach(async () => { await act(async () => root.unmount()); });
@@ -57,4 +62,17 @@ test('a delayed response from the previous account cannot replace current shortc
   await act(async () => finishOld(page('first-song')));
   expect(titles()).toContain('second-song');
   expect(titles()).not.toContain('first-song');
+});
+
+
+test('bookmarked live mixes appear without a cached library or successful history and use the stable mix route', async () => {
+  mockMixes = [{ id: 'daily', bookmarked: true, owner: 'first', periodKey: 'today', songs: [] }];
+  loadListeningHistoryPage.mockRejectedValueOnce(new Error('offline'));
+  await act(async () => { root = create(<HomeQuickAccess />); });
+  expect(titles()).toContain('Daily Mix');
+  await act(async () => root.root.findAll((node) => node.props.accessibilityLabel === 'Open Daily Mix' && typeof node.props.onPress === 'function')[0].props.onPress());
+  expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/mix', params: { id: 'daily' } });
+  mockMixes = [];
+  await act(async () => root.update(<HomeQuickAccess />));
+  expect(titles()).not.toContain('Daily Mix');
 });

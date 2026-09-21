@@ -1,8 +1,11 @@
+import { normalizePlaybackSpeed } from '@/services/playback-controls';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, useColorScheme } from 'react-native';
 import { setDataSaverEnabled } from '@/services/data-usage';
+import { normalizeCrossfadeSeconds } from '@/services/crossfade-player';
+import { DEFAULT_EQUALIZER, normalizeEqualizer, type EqualizerSettings } from '@/services/equalizer';
 
 export type AppThemeMode = 'Light' | 'Dark' | 'Auto';
 
@@ -11,6 +14,12 @@ type AppSettings = {
   dataSaver: boolean;
   reduceMotion: boolean;
   performanceMode: boolean;
+  crossfadeEnabled: boolean;
+  crossfadeSeconds: number;
+  equalizer: EqualizerSettings;
+  playbackSpeed: number;
+  preservePitch: boolean;
+  loudnessNormalization: boolean;
 };
 
 export type ResolvedAppTheme = 'Light' | 'Dark';
@@ -75,6 +84,12 @@ const defaults: AppSettings = {
   dataSaver: false,
   reduceMotion: false,
   performanceMode: false,
+  crossfadeEnabled: false,
+  crossfadeSeconds: 3,
+  equalizer: DEFAULT_EQUALIZER,
+  playbackSpeed: 1,
+  preservePitch: true,
+  loudnessNormalization: false,
 };
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -100,7 +115,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
 
   const saveSettings = useCallback((next: AppSettings) => {
     const revision = ++saveRevision.current;
-    persistence.current = persistence.current.catch(() => undefined).then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)));
+    persistence.current = persistence.current.catch(() => undefined).then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...next, crossfadeDefaultsVersion: 2 })));
     void persistence.current.then(() => {
       if (revision === saveRevision.current) setSettingsError(null);
     }).catch(() => {
@@ -110,6 +125,9 @@ export function SettingsProvider({ children }: PropsWithChildren) {
 
   const updateSettings = useCallback((patch: Partial<AppSettings>) => {
     const next = { ...settingsRef.current, ...patch };
+    next.crossfadeSeconds = Math.max(1, normalizeCrossfadeSeconds(next.crossfadeSeconds));
+    next.equalizer = normalizeEqualizer(next.equalizer);
+    next.playbackSpeed = normalizePlaybackSpeed(next.playbackSpeed);
     settingsRef.current = next;
     if (typeof patch.dataSaver === 'boolean') setDataSaverEnabled(patch.dataSaver);
     setSettings(next);
@@ -122,12 +140,18 @@ export function SettingsProvider({ children }: PropsWithChildren) {
     AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
       if (!active || !stored) return;
       try {
-        const parsed = JSON.parse(stored) as Partial<AppSettings> | null;
+        const parsed = JSON.parse(stored) as (Partial<AppSettings> & { crossfadeDefaultsVersion?: number }) | null;
         const restored = {
           theme: parsed?.theme === 'Light' || parsed?.theme === 'Dark' ? parsed.theme : 'Auto' as const,
           dataSaver: parsed?.dataSaver === true,
           reduceMotion: parsed?.reduceMotion === true,
           performanceMode: parsed?.performanceMode === true,
+          crossfadeEnabled: parsed?.crossfadeEnabled === true,
+          equalizer: normalizeEqualizer(parsed?.equalizer),
+          playbackSpeed: normalizePlaybackSpeed(parsed?.playbackSpeed),
+          preservePitch: parsed?.preservePitch !== false,
+          loudnessNormalization: parsed?.loudnessNormalization === true,
+          crossfadeSeconds: Math.max(1, normalizeCrossfadeSeconds(parsed?.crossfadeDefaultsVersion !== 2 && parsed?.crossfadeSeconds === 6 ? defaults.crossfadeSeconds : parsed?.crossfadeSeconds ?? defaults.crossfadeSeconds)),
         };
         setDataSaverEnabled(restored.dataSaver);
         settingsRef.current = restored;

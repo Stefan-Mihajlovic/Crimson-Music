@@ -19,7 +19,7 @@ jest.mock('../src/services/auth', () => ({
 
 let auth;
 let root;
-function Probe() { auth = useAuth(); return null; }
+function Probe() { const value = useAuth(); React.useEffect(() => { auth = value; }, [value]); return null; }
 const tree = () => React.createElement(AuthProvider, null, React.createElement(Probe));
 function deferred() {
   let resolve;
@@ -32,6 +32,17 @@ beforeEach(() => {
   refreshSession.mockResolvedValue(null);
 });
 afterEach(async () => { if (root) await act(async () => root.unmount()); });
+
+test('a cached session finishes startup while its network refresh is still pending', async () => {
+  const refreshing = deferred();
+  refreshSession.mockReturnValueOnce(refreshing.promise);
+  await act(async () => { root = create(tree()); });
+  expect(auth.ready).toBe(true);
+  expect(auth.user.uid).toBe('old');
+  expect(auth.onboardingComplete).toBe(true);
+  await act(async () => refreshing.resolve(null));
+  expect(auth.user.uid).toBe('old');
+});
 
 test('a delayed background profile refresh cannot sign an old user back in', async () => {
   const refreshing = deferred();

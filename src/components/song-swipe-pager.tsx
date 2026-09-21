@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/immutability */
 
-import { Image } from 'expo-image';
+import ArtworkImage from '@/components/artwork-image';
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -186,7 +186,8 @@ function ArtworkPage({
     <View style={[styles.artworkPage, { width: pageWidth, height: size }]}>
       <Animated.View style={[styles.artworkCard, { width: size, height: size, borderRadius }, animatedStyle]}>
         {song ? (
-          <Image
+          <ArtworkImage
+            artwork={song.artwork}
             contentFit="cover"
             recyclingKey={song.id}
             source={artworkSource(song, dataSaver)}

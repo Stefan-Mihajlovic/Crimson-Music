@@ -13,7 +13,7 @@ const mockAudio = {
   id: 1, isLoaded: true, playing: false, currentTime: 0, duration: 180,
   isAudioSamplingSupported: true,
   pause: jest.fn(), play: jest.fn(), replace: jest.fn(), seekTo: jest.fn(),
-  setActiveForLockScreen: jest.fn(), setAudioSamplingEnabled: jest.fn(),
+  setActiveForLockScreen: jest.fn(), setAudioSamplingEnabled: jest.fn(), setPlaybackRate: jest.fn(), setCrimsonNormalization: jest.fn(),
   clearLockScreenControls: jest.fn(),
   addListener: jest.fn(() => ({ remove: jest.fn() })),
 };

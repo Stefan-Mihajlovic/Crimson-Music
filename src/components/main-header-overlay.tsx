@@ -1,4 +1,5 @@
-import { useIsFocused } from 'expo-router';
+import { useIsFocused, useNavigationContainerRef, useRoute } from 'expo-router';
+import { useCallback, useSyncExternalStore } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +10,7 @@ import MainHeaderActions from '@/components/main-header-actions';
 import MainScreenHeader from '@/components/main-screen-header';
 import { usePlayerOverlayPosition, usePlayerOverlayVisible } from '@/providers/player-overlay-visibility-provider';
 import { useAppSettings } from '@/providers/settings-provider';
+import { isMainHeaderBehindPopup } from '@/services/main-header-visibility';
 
 const expandedHeaderHeight = 80;
 const desktopMainTitles = new Set(['Home', 'Library', 'Search']);
@@ -31,11 +33,22 @@ export default function MainHeaderOverlay({ title, offset, horizontalInset = 20,
 }) {
   const insets = useSafeAreaInsets();
   const focused = useIsFocused();
+  const route = useRoute();
+  const navigation = useNavigationContainerRef();
+  // Expo's useRootNavigationState reads a shallow navigator snapshot. The
+  // container hydrates nested tab/page states and notifies after blur commits.
+  const subscribe = useCallback((changed: () => void) => navigation.addListener('state', changed), [navigation]);
+  const getCovered = useCallback(() => isMainHeaderBehindPopup(
+    navigation.isReady() ? navigation.getRootState() : undefined, route.key,
+  ), [navigation, route.key]);
+  const coveredByPopup = useSyncExternalStore(subscribe, getCovered, () => false);
   const playerVisible = usePlayerOverlayVisible();
   const playerPosition = usePlayerOverlayPosition();
   const { height, width } = useWindowDimensions();
   const { performanceMode } = useAppSettings();
   const active = !compact || focused;
+  const behindPopup = compact && !focused && coveredByPopup;
+  const sceneVisible = active || behindPopup;
   const style = useAnimatedStyle(() => ({
     transform: [{ translateY: -offset.value }],
   }));
@@ -45,8 +58,11 @@ export default function MainHeaderOverlay({ title, offset, horizontalInset = 20,
   const coverageStyle = useAnimatedStyle(() => ({
     height: active ? Math.max(0, Math.min(height, playerPosition?.value ?? height) - insets.top) : 0,
   }));
+  const sceneCoverageStyle = useAnimatedStyle(() => ({
+    height: sceneVisible ? Math.max(0, Math.min(height, playerPosition?.value ?? height) - insets.top) : 0,
+  }));
   if (Platform.OS === 'web' && width >= 960 && desktopMainTitles.has(title)) return null;
-  // Keep the window mounted and hide through clipping on blur/scroll.
+  // Keep the window mounted and hide through clipping on navigation/scroll.
   const expandedRow = (
     <Animated.View
       pointerEvents="box-none"
@@ -68,11 +84,18 @@ export default function MainHeaderOverlay({ title, offset, horizontalInset = 20,
         </Animated.View>
       </FullWindowOverlay>
     ) : (
-      <Animated.View pointerEvents="box-none" style={[styles.windowClip, { top: insets.top }, coverageStyle]}>
+      <Animated.View pointerEvents={active ? 'box-none' : 'none'} accessibilityElementsHidden={!active || playerVisible}
+        importantForAccessibility={!active || playerVisible ? 'no-hide-descendants' : 'auto'}
+        style={[styles.windowClip, { top: insets.top }, sceneCoverageStyle]}>
         {expandedRow}
       </Animated.View>
     )}
-    {active && compact && (performanceMode || Platform.OS !== 'ios') ? <MainCompactHeader title={title} offset={offset} /> : null}
+    {/* A sheet blurs its source route, but that page remains visible. Render its
+        header inside the scene so UIKit can dim/cover it, never above the sheet. */}
+    {windowOverlay && behindPopup ? <Animated.View testID="main-header-popup-background" pointerEvents="none"
+      accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+      style={[styles.windowClip, { top: insets.top }, sceneCoverageStyle]}>{expandedRow}</Animated.View> : null}
+    {sceneVisible && compact && (performanceMode || Platform.OS !== 'ios') ? <MainCompactHeader title={title} offset={offset} /> : null}
     </>
   );
 }

@@ -1,0 +1,71 @@
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
+import LibraryScreen from '../src/app/(app)/(library)/library';
+import { buildLibraryCollection, filterLibraryCollection, mergePersonalMixBookmarks } from '../src/services/library-collection';
+import { loadLibraryFeed } from '../src/services/music';
+let mockMixes = [];
+const mockPush = jest.fn();
+const mockDownloads = { supported: false, downloadedSongs: [], hasCollectionOfflineSongs: () => false, isCollectionDownloaded: () => false, isDownloaded: () => false };
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }), useFocusEffect: (effect) => require('react').useEffect(effect, [effect]) }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
+jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { createAnimatedComponent: (component) => component, View: 'AnimatedView' }, LinearTransition: { duration: () => undefined } }));
+jest.mock('../src/components/app-symbol', () => ({ SymbolView: 'Symbol' }));
+jest.mock('../src/components/playlist-cover', () => 'PlaylistCover');
+jest.mock('../src/components/personal-mix-cover', () => 'PersonalMixCover');
+jest.mock('../src/components/favorites-artwork', () => 'FavoritesArtwork');
+jest.mock('../src/components/local-music-artwork', () => 'LocalMusicArtwork');
+jest.mock('../src/components/artwork-image', () => 'ArtworkImage');
+jest.mock('../src/components/now-playing-artwork', () => ({ CollectionPlayingOverlay: () => null }));
+jest.mock('../src/components/load-failure', () => 'LoadFailure');
+jest.mock('../src/components/glass-pressable', () => 'GlassPressable');
+jest.mock('../src/components/liquid-search-field', () => 'Search');
+jest.mock('../src/components/main-native-header', () => () => null);
+jest.mock('../src/components/main-header-overlay', () => ({ __esModule: true, default: () => null, MainHeaderSpacer: () => null }));
+jest.mock('../src/components/main-screen-background', () => function Background({ children }) { return children; });
+jest.mock('../src/hooks/use-main-header-scroll', () => ({ useMainHeaderScroll: () => ({ offset: 0, onScroll: jest.fn() }) }));
+jest.mock('../src/hooks/use-personal-mixes', () => ({ useBookmarkedPersonalMixes: () => ({ mixes: mockMixes }) }));
+jest.mock('../src/providers/auth-provider', () => ({ useAuth: () => ({ user: { uid: 'listener' } }) }));
+jest.mock('../src/providers/network-provider', () => ({ useNetwork: () => ({ isOffline: false }) }));
+jest.mock('../src/providers/download-provider', () => ({ useDownloads: () => mockDownloads }));
+jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ colors: {}, reduceMotion: true, performanceMode: true }) }));
+jest.mock('../src/services/account-lifecycle', () => ({ registerAccountCleanup: () => undefined }));
+jest.mock('../src/services/action-sheet', () => ({ useDetailRoutes: () => ({ favoritesHref: () => '/favorites', playlistHref: () => '/playlist' }), actionSheetHref: (value) => value }));
+jest.mock('../src/services/navigation-events', () => ({ subscribeToLibraryRefresh: () => () => undefined }));
+jest.mock('../src/services/personal-mixes', () => ({ personalMixDefinition: (id) => ({ title: id === 'daily' ? 'Daily Mix' : 'Weekly Mix' }) }));
+jest.mock('../src/services/music', () => ({ loadLibraryFeed: jest.fn(), readOfflineData: async () => null, readLocalListeningEvents: async () => [] }));
+const emptyFeed = { playlists: [], likedPlaylists: [], followedArtists: [] };
+const mix = (id = 'daily') => ({ id, owner: 'listener', periodKey: 'today', bookmarked: true, songs: [{ id: 'track' }] });
+let root;
+beforeEach(() => { globalThis.IS_REACT_ACT_ENVIRONMENT = true; mockMixes = [mix()]; loadLibraryFeed.mockRejectedValue(new Error('offline')); });
+afterEach(async () => { if (root) await act(async () => root.unmount()); root = undefined; });
+
+test('live mix bookmarks keep defaults first, deduplicate IDs, and remove prior bookmark entries', () => {
+  const original = buildLibraryCollection(emptyFeed, []);
+  const merged = mergePersonalMixBookmarks(original, [mix(), mix(), { ...mix('weekly'), bookmarked: false }]);
+  expect(merged.map((item) => item.kind)).toEqual(['favorites', 'local-music', 'mix']);
+  expect(merged[2].key).toBe('mix:daily');
+  expect(mergePersonalMixBookmarks(merged, [])).toEqual(original);
+});
+
+test('mixes are searchable and sort/filter as playlists while remaining live mix entries', () => {
+  const items = mergePersonalMixBookmarks(buildLibraryCollection(emptyFeed, []), [mix('weekly'), mix()]);
+  expect(filterLibraryCollection(items, 'daily', { filter: 'playlists' }).map((item) => item.key)).toEqual(['mix:daily']);
+  expect(filterLibraryCollection(items, '', { filter: 'artists' }).some((item) => item.kind === 'mix')).toBe(false);
+  expect(filterLibraryCollection(items, '', { sort: 'title' }).map((item) => item.key)).toEqual(['favorites', 'local-music', 'mix:daily', 'mix:weekly']);
+});
+
+test('Library displays bookmarks through a failed feed request, opens their stable route and updates their live edition', async () => {
+  await act(async () => { root = create(<LibraryScreen />); });
+  expect(root.root.findAllByType('LoadFailure')).toHaveLength(1);
+  expect(root.root.findAllByType('PersonalMixCover')).toHaveLength(1);
+  await act(async () => root.root.findByProps({ accessibilityLabel: 'Open Daily Mix' }).props.onPress());
+  expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/mix', params: { id: 'daily' } });
+  mockMixes = [{ ...mix(), periodKey: 'tomorrow', songs: [{ id: 'next-edition' }] }];
+  await act(async () => root.update(<LibraryScreen />));
+  expect(root.root.findByType('PersonalMixCover').props.mix.songs[0].id).toBe('next-edition');
+  mockMixes = [];
+  await act(async () => root.update(<LibraryScreen />));
+  expect(root.root.findAllByType('PersonalMixCover')).toHaveLength(0);
+});

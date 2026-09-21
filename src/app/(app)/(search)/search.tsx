@@ -10,7 +10,6 @@ import {
   FlatList,
   Pressable,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -30,13 +29,14 @@ import MainNativeHeader from '@/components/main-native-header';
 import MainScreenBackground from '@/components/main-screen-background';
 import SongListRow from '@/components/song-list-row';
 import SearchDiscovery from '@/components/search-discovery';
+import SearchFilterBar, { type SearchResultFilter } from '@/components/search-filter-bar';
+import { hasSearchFilters, type AdvancedSearchFilters } from '@/services/search-filters';
 import { BROWSE_TILE_GAP, BROWSE_TILE_HEIGHT, BROWSE_TILE_RADIUS, browseTileWidth } from '@/styles/browse-tiles';
 import { useAuth } from '@/providers/auth-provider';
 import { usePlayer } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { actionSheetHref, useDetailRoutes } from '@/services/action-sheet';
 import {
-  AudiusSearchKind,
   getAudiusEvents,
   searchAudiusPage,
 } from '@/services/audius';
@@ -61,19 +61,12 @@ registerAccountCleanup(async (uid) => {
 });
 const defaultSongImage = require('@/assets/images/home/default-song.webp');
 const defaultArtistImage = require('@/assets/images/home/default-artist.webp');
-type SearchFilter = 'all' | AudiusSearchKind | 'events';
+type SearchFilter = SearchResultFilter;
 type MixedSearchResult =
   | { kind: 'artist'; item: CrimsonArtist; score: number }
   | { kind: 'event'; item: CrimsonEvent; score: number }
   | { kind: 'playlist'; item: CrimsonPlaylist; score: number }
   | { kind: 'song'; item: CrimsonSong; score: number };
-const filters: { id: SearchFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'songs', label: 'Songs' },
-  { id: 'artists', label: 'Artists' },
-  { id: 'playlists', label: 'Playlists' },
-  { id: 'events', label: 'Events' },
-];
 const emptyCatalog: DiscoveryCatalog = {
   songs: [],
   artists: [],
@@ -101,7 +94,13 @@ export default function SearchScreen() {
     if (Platform.OS === 'web') requestSearchQuery(value);
     else setQuery(value);
   };
-  const [filter, setFilter] = useState<SearchFilter>('all');
+  const [selectedFilter, setFilter] = useState<SearchFilter>('all');
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedSearchFilters>({});
+  const advancedKey = JSON.stringify(advancedFilters);
+  const advancedActive = hasSearchFilters(advancedFilters);
+  const filter: SearchFilter = advancedActive ? 'songs' : selectedFilter;
+  const isSearching = Boolean(query.trim() || advancedActive);
+  const [resolvedAdvancedKey, setResolvedAdvancedKey] = useState('{}');
   const [catalog, setCatalog] = useState<DiscoveryCatalog>(emptyCatalog);
   const [resolvedQuery, setResolvedQuery] = useState('');
   const [resolvedFilter, setResolvedFilter] = useState<SearchFilter>('all');
@@ -168,7 +167,7 @@ export default function SearchScreen() {
         pending.current = true;
         try {
           let next: DiscoveryCatalog;
-          if (!normalized || filter === 'all')
+          if ((!normalized && !advancedActive) || filter === 'all')
             next = await loadDiscoveryCatalog(normalized);
           else if (filter === 'events')
             next = {
@@ -176,7 +175,7 @@ export default function SearchScreen() {
               events: await getAudiusEvents(30, normalized),
             };
           else {
-            const page = await searchAudiusPage(normalized, filter, 0, 30);
+            const page = await searchAudiusPage(normalized, filter, 0, 30, advancedFilters);
             next = { ...emptyCatalog, [filter]: page.items };
             if (request.current === token) {
               nextOffset.current = page.nextOffset;
@@ -187,12 +186,14 @@ export default function SearchScreen() {
             setCatalog(next);
             setResolvedQuery(normalized);
             setResolvedFilter(filter);
+            setResolvedAdvancedKey(advancedKey);
           }
         } catch {
           if (request.current === token) {
             setCatalog(emptyCatalog);
             setResolvedQuery(normalized);
             setResolvedFilter(filter);
+            setResolvedAdvancedKey(advancedKey);
             setError(true);
           }
         } finally {
@@ -208,7 +209,7 @@ export default function SearchScreen() {
       clearTimeout(timer);
       request.current += 1;
     };
-  }, [query, filter, retry]);
+  }, [query, filter, retry, advancedFilters, advancedKey, advancedActive]);
   useEffect(
     () => subscribeToSearchFocus(() => searchFieldRef.current?.focus()),
     [],
@@ -228,9 +229,10 @@ export default function SearchScreen() {
       !hasMore ||
       filter === 'all' ||
       filter === 'events' ||
-      !query.trim() ||
+      (!query.trim() && !advancedActive) ||
       query.trim() !== resolvedQuery ||
-      filter !== resolvedFilter
+      filter !== resolvedFilter ||
+      advancedKey !== resolvedAdvancedKey
     )
       return;
     const token = request.current;
@@ -243,6 +245,7 @@ export default function SearchScreen() {
         filter,
         nextOffset.current,
         30,
+        advancedFilters,
       );
       if (request.current !== token) return;
       nextOffset.current = page.nextOffset;
@@ -263,13 +266,13 @@ export default function SearchScreen() {
         setLoadingMore(false);
       }
     }
-  }, [filter, hasMore, loading, query, resolvedFilter, resolvedQuery]);
+  }, [filter, hasMore, loading, query, resolvedFilter, resolvedQuery, advancedActive, advancedFilters, advancedKey, resolvedAdvancedKey]);
   const awaitingQuery =
-    query.trim() !== resolvedQuery || filter !== resolvedFilter;
+    query.trim() !== resolvedQuery || filter !== resolvedFilter || advancedKey !== resolvedAdvancedKey;
   const results = useMemo(
     () =>
-      query.trim() && !awaitingQuery ? rankSearchResults(catalog, query) : [],
-    [awaitingQuery, catalog, query],
+      isSearching && !awaitingQuery ? rankSearchResults(catalog, query) : [],
+    [awaitingQuery, catalog, query, isSearching],
   );
   const activate = (action: () => void) => {
     rememberQuery();
@@ -399,46 +402,11 @@ export default function SearchScreen() {
                 onChangeText={changeQuery}
               />
             </View>}
-            {!query.trim() ? <SearchDiscovery /> : null}
-            {query.trim() ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.fullBleedCarousel}
-                contentContainerStyle={styles.filters}
-              >
-                {filters.map((item) => (
-                  <GlassPressable
-                    key={item.id}
-                    accessibilityLabel={`Show ${item.label} results`}
-                    cornerRadius={18}
-                    height={36}
-                    onPress={() => setFilter(item.id)}
-                    tintColor={
-                      filter === item.id ? colors.accent : colors.controlSurface
-                    }
-                    contentStyle={styles.filterButtonContent}
-                    style={[
-                      styles.filterButton,
-                      filter === item.id && { backgroundColor: colors.accent },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.filterText,
-                        {
-                          color:
-                            filter === item.id
-                              ? '#FFFFFF'
-                              : colors.secondaryText,
-                        },
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </GlassPressable>
-                ))}
-              </ScrollView>
+            {!isSearching ? <SearchDiscovery /> : null}
+            {isSearching ? (
+              <SearchFilterBar visible={isSearching} selected={filter} advancedFilters={advancedFilters}
+                onSelect={(kind) => { setFilter(kind); if (kind !== 'songs') setAdvancedFilters({}); }}
+                onAdvancedChange={setAdvancedFilters} />
             ) : recent.length ? (
               <View style={[{ marginTop: 22, gap: 6 }, desktop && styles.desktopRecent]}>
                 <View
@@ -510,7 +478,7 @@ export default function SearchScreen() {
               title="Search unavailable"
               onRetry={() => setRetry((value) => value + 1)}
             />
-          ) : !query.trim() ? (
+          ) : !isSearching ? (
             <CategoryGrid
               categories={catalog.categories}
               onChoose={(category) =>
@@ -519,11 +487,11 @@ export default function SearchScreen() {
             />
           ) : (
             <EmptySearch
-              title={query.trim().length < 2 ? 'Keep typing' : 'No matches'}
+              title={!advancedActive && query.trim().length < 2 ? 'Keep typing' : 'No matches'}
               body={
-                query.trim().length < 2
+                !advancedActive && query.trim().length < 2
                   ? 'Enter at least two characters.'
-                  : `Try another name or a different filter for “${query.trim()}”.`
+                  : advancedActive ? 'Try a wider tempo range or remove a filter.' : `Try another name or a different filter for “${query.trim()}”.`
               }
             />
           )

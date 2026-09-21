@@ -1,5 +1,3 @@
-/* eslint-disable react-hooks/immutability */
-
 import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -18,6 +16,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { useAppSettings } from '@/providers/settings-provider';
+import { useDisplayedArtwork } from '@/hooks/use-displayed-artwork';
 import {
   type ArtworkPalette,
   fallbackArtworkPalette,
@@ -41,10 +40,10 @@ export default function PlayerArtworkBackground({
   const systemMotionAtLaunch = useReducedMotion();
   const [systemReduceMotion, setSystemReduceMotion] = useState(systemMotionAtLaunch);
   const { width, height } = useWindowDimensions();
-  const source = song?.imageSmall || song?.image;
+  const { primary, source, revision: artworkRevision } = useDisplayedArtwork(song, dataSaver);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const [palette, setPalette] = useState<PaletteState>(() => ({
-    current: getCachedArtworkPalette(source) || fallbackArtworkPalette,
+    current: getCachedArtworkPalette(source || undefined) || fallbackArtworkPalette,
     previous: null,
   }));
   const currentPalette = useRef(palette.current);
@@ -54,6 +53,8 @@ export default function PlayerArtworkBackground({
   // Data Saver only controls palette downloads. Moving cached color textures
   // consumes no data, and uses the same compositor in either network setting.
   const animate = active && appActive && !reduceMotion && !systemReduceMotion && !performanceMode;
+  const canAnimate = useRef(animate);
+  const artworkTransitionOrigin = useRef<{ identity: string; canFade: boolean } | null>(null);
   const finishTransition = useCallback((id: number) => {
     if (transitionID.current === id) setPalette((value) => value.previous ? { current: value.current, previous: null } : value);
   }, []);
@@ -96,11 +97,32 @@ export default function PlayerArtworkBackground({
   }, [animate, phase]);
 
   useEffect(() => {
-    if (!active || !appActive) return;
+    canAnimate.current = animate;
+    if (!animate) {
+      if (artworkTransitionOrigin.current) artworkTransitionOrigin.current.canFade = false;
+      cancelAnimation(transition);
+      transition.value = 1;
+      finishTransition(transitionID.current);
+    }
+  }, [animate, finishTransition, transition]);
+
+  useEffect(() => {
+    if (!appActive) return;
     let live = true;
+    // Resolve colors as soon as the track/artwork changes, even in the mini
+    // player. Opening or dragging the surface must not restart extraction or
+    // reveal a transition from a track that finished while it was collapsed.
+    const identity = `${song?.id || ''}\0${primary}`;
+    if (artworkTransitionOrigin.current?.identity !== identity) {
+      artworkTransitionOrigin.current = { identity, canFade: canAnimate.current };
+    }
+    // Loading/mounting the expanded artwork can retry extraction. Keep the
+    // track's original visibility across those retries, including a hide/open
+    // cycle while its request is pending.
+    const origin = artworkTransitionOrigin.current;
     const request = source ? getArtworkPalette(source, {
       allowNetwork: !dataSaver && !performanceMode && Boolean(song?.imageSmall),
-      alternativeSource: song?.image,
+      alternativeSource: source,
     }) : Promise.resolve(fallbackArtworkPalette);
     void request.then((result) => {
       const next = result || fallbackArtworkPalette;
@@ -108,10 +130,11 @@ export default function PlayerArtworkBackground({
       const previous = currentPalette.current;
       currentPalette.current = next;
       const id = ++transitionID.current;
+      const crossfade = origin.canFade && canAnimate.current;
       cancelAnimation(transition);
-      transition.value = animate ? 0 : 1;
-      setPalette({ current: next, previous: animate ? previous : null });
-      if (animate) transition.value = withTiming(1, {
+      transition.value = crossfade ? 0 : 1;
+      setPalette({ current: next, previous: crossfade ? previous : null });
+      if (crossfade) transition.value = withTiming(1, {
         duration: 1100,
         easing: Easing.inOut(Easing.cubic),
         reduceMotion: ReduceMotion.Never,
@@ -120,15 +143,7 @@ export default function PlayerArtworkBackground({
       });
     });
     return () => { live = false; };
-  }, [active, animate, appActive, artworkLoaded, dataSaver, finishTransition, performanceMode, song?.image, song?.imageSmall, source, transition]);
-
-  useEffect(() => {
-    if (!animate) {
-      cancelAnimation(transition);
-      transition.value = 1;
-      finishTransition(transitionID.current);
-    }
-  }, [animate, finishTransition, transition]);
+  }, [appActive, artworkLoaded, artworkRevision, dataSaver, finishTransition, performanceMode, primary, song?.id, song?.imageSmall, source, transition]);
 
   const currentStyle = useAnimatedStyle(() => ({ opacity: transition.value }));
   const previousStyle = useAnimatedStyle(() => ({ opacity: 1 - transition.value }));

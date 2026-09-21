@@ -1,3 +1,6 @@
+import PersonalMixCover from '@/components/personal-mix-cover';
+import { useBookmarkedPersonalMixes } from '@/hooks/use-personal-mixes';
+import LocalMusicArtwork from '@/components/local-music-artwork';
 import FavoritesArtwork from '@/components/favorites-artwork';
 import { Image } from 'expo-image';
 import { type Href, usePathname, useRootNavigationState, useRouter, useSegments } from 'expo-router';
@@ -16,7 +19,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { usePlayer } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { createDetailRoutes, releaseWebNavigationFocus, type AppRouteGroup } from '@/services/action-sheet';
-import { buildLibraryCollection, filterLibraryCollection, type LibraryCollectionItem } from '@/services/library-collection';
+import { buildLibraryCollection, filterLibraryCollection, mergePersonalMixBookmarks, type LibraryCollectionItem } from '@/services/library-collection';
 import { loadLibraryFeed, readLocalListeningEvents, readOfflineData, type LibraryFeed } from '@/services/music';
 import { getSearchQuery, requestSearchQuery, subscribeToLibraryRefresh, subscribeToSearchFocus, subscribeToSearchQuery } from '@/services/navigation-events';
 import { webShellStyles } from '@/styles/web-shell';
@@ -28,7 +31,7 @@ const tabs: { group: AppRouteGroup; label: string; icon: SymbolViewProps['name']
 ];
 const libraryRoutes = createDetailRoutes('(library)');
 const brandArtwork = require('@/assets/images/icon.png');
-const emptyItems: LibraryCollectionItem[] = [{ key: 'favorites', kind: 'favorites' }];
+const emptyItems: LibraryCollectionItem[] = [{ key: 'favorites', kind: 'favorites' }, { key: 'local-music', kind: 'local-music' }];
 type RouteState = { index?: number; routes: readonly { name: string; state?: RouteState }[] };
 function selectedAppGroup(state?: RouteState): string | undefined {
   if (!state) return undefined;
@@ -160,6 +163,7 @@ export default function WebAppShell({ children }: PropsWithChildren) {
 }
 
 function SidebarLibrary({ uid }: { uid: string }) {
+  const { mixes: bookmarkedMixes } = useBookmarkedPersonalMixes();
   const { colors } = useAppSettings();
   const router = useRouter();
   const navigate = (href: Href) => { releaseWebNavigationFocus(); router.navigate(href); };
@@ -186,7 +190,7 @@ function SidebarLibrary({ uid }: { uid: string }) {
     const unsubscribe = subscribeToLibraryRefresh(() => void reload());
     return () => { revision.current += 1; unsubscribe(); };
   }, [reload]);
-  const visibleItems = useMemo(() => filterLibraryCollection(items, query, { filter }), [filter, items, query]);
+  const visibleItems = useMemo(() => filterLibraryCollection(mergePersonalMixBookmarks(items, bookmarkedMixes), query, { filter }), [filter, items, bookmarkedMixes, query]);
   return (
     <section className="crimson-library-panel" aria-label="Your library">
       <div className="crimson-library-heading"><span>Your library</span><div>
@@ -199,6 +203,14 @@ function SidebarLibrary({ uid }: { uid: string }) {
       {searching && <input className="crimson-library-search" autoFocus aria-label="Find in your library" placeholder="Find in your library" value={query} onChange={(event) => setQuery(event.target.value)} />}
       <div className="crimson-library-items">
         {visibleItems.map((item) => {
+          if (item.kind === 'mix') return <button key={item.key} className="crimson-library-item" onClick={() => navigate({ pathname: '/mix', params: { id: item.mix.id } })} aria-label={`Open ${item.title}`}>
+            <PersonalMixCover id={item.mix.id} mix={item.mix} size={43} borderRadius={7} style={{ width: 43, height: 43, flexShrink: 0 }} />
+            <span><strong>{item.title}</strong><small>Made for you</small></span>
+          </button>;
+          if (item.kind === 'local-music') return <button key={item.key} className="crimson-library-item" onClick={() => navigate('/(app)/(library)/local-music' as Href)} aria-label="Open Local Music">
+            <LocalMusicArtwork size={23} style={{ width: 43, height: 43, borderRadius: 7, flexShrink: 0 }} />
+            <span><strong>Local Music</strong><small>Music on this device</small></span>
+          </button>;
           const title = item.kind === 'favorites' ? 'Favorites' : item.kind === 'artist' ? item.artist.name : item.playlist.title;
           const subtitle = item.kind === 'favorites' ? 'Your favorite songs' : item.kind === 'artist' ? 'Artist' : item.owned ? 'Your playlist' : 'Playlist';
           const href = item.kind === 'favorites' ? libraryRoutes.favoritesHref() : item.kind === 'artist' ? libraryRoutes.artistHref(item.artist.id) : libraryRoutes.playlistHref(item.playlist.id, item.owned, item.playlist.source, item.playlist.title);

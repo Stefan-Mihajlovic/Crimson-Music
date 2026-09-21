@@ -4,10 +4,25 @@ import { act, create } from 'react-test-renderer';
 import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { NetworkProvider, useNetwork } from '../src/providers/network-provider';
+import EntryScreen from '../src/app/index';
+import OfflineModeBanner from '../src/components/offline-mode-banner';
+
+const mockRedirect = jest.fn();
+jest.mock('expo-router', () => ({
+  Redirect: ({ href }) => { mockRedirect(href); return null; },
+  useRouter: () => ({ push: jest.fn() }),
+  useSegments: () => ['(app)', '(home)'],
+}));
+jest.mock('../src/providers/auth-provider', () => ({ useAuth: () => ({ user: { uid: 'cached-listener' }, onboardingComplete: true }) }));
+jest.mock('../src/providers/download-provider', () => ({ useDownloads: () => ({ downloadedCount: 3, ready: false }) }));
+jest.mock('../src/components/glass-pressable', () => ({ __esModule: true, default: require('react-native').Pressable }));
+jest.mock('../src/components/app-symbol', () => ({ SymbolView: () => null }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 
 jest.mock('@react-native-community/netinfo', () => ({
   configure: jest.fn(), addEventListener: jest.fn(), refresh: jest.fn(),
 }));
+const configuredReachability = NetInfo.configure.mock.calls[0][0];
 
 let root;
 let network;
@@ -16,12 +31,12 @@ let onAppState;
 let removeNetwork;
 let removeAppState;
 let stateDescriptor;
-function Probe() { network = useNetwork(); return null; }
-async function mount() {
-  await act(async () => { root = create(React.createElement(NetworkProvider, null, React.createElement(Probe))); });
+function Probe() { const value = useNetwork(); React.useEffect(() => { network = value; }, [value]); return null; }
+async function mount(withScreens = false) {
+  await act(async () => { root = create(<NetworkProvider><Probe />{withScreens && <><EntryScreen /><OfflineModeBanner /></>}</NetworkProvider>); });
 }
-async function networkChange(isConnected, isInternetReachable = isConnected) {
-  await act(async () => onNetwork({ isConnected, isInternetReachable }));
+async function networkChange(isConnected, isInternetReachable = isConnected, type) {
+  await act(async () => onNetwork({ isConnected, isInternetReachable, type }));
 }
 async function appChange(state) {
   AppState.currentState = state;
@@ -59,6 +74,99 @@ test('unknown startup connectivity never gates the first screen behind a probe',
   await advance(60_000);
   expect(network).toEqual({ isOffline: false, ready: true });
   expect(NetInfo.refresh).not.toHaveBeenCalled();
+});
+
+test('NetInfo does not manufacture a failed reachability check during inactive startup', async () => {
+  // Exercise the installed NetInfo implementation that used to turn our
+  // AppState-based reachabilityShouldRun=false into isInternetReachable=false.
+  const Reachability = jest.requireActual('@react-native-community/netinfo/lib/commonjs/internal/internetReachability').default;
+  const defaults = jest.requireActual('@react-native-community/netinfo/lib/commonjs/internal/defaultConfiguration').default;
+  AppState.currentState = 'inactive';
+  const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({ status: 200 });
+  const onReachability = jest.fn();
+  const checker = new Reachability({ ...defaults, ...configuredReachability }, onReachability);
+  try {
+    await act(async () => checker.update({ type: 'wifi', isConnected: true }));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(onReachability.mock.calls.flat()).not.toContain(false);
+    expect(onReachability).toHaveBeenLastCalledWith(true);
+    expect(await configuredReachability.reachabilityTest({ status: 503 })).toBe(true);
+  } finally {
+    checker.tearDown();
+  }
+});
+
+test('online startup and foreground keep the home route without an offline loading banner', async () => {
+  AppState.currentState = 'inactive';
+  NetInfo.refresh.mockImplementation(async () => onNetwork({ type: 'wifi', isConnected: true, isInternetReachable: true }));
+  await mount(true);
+  await networkChange(true, false, 'wifi');
+  await appChange('active');
+  await appChange('background');
+  await networkChange(true, false, 'wifi');
+  await appChange('active');
+  expect(mockRedirect.mock.calls.map(([href]) => href)).toEqual(['/(app)/(home)']);
+  expect(root.root.findAllByProps({ accessibilityLabel: 'Offline mode. 3 songs available.' })).toHaveLength(0);
+  // Confirmed loss of connection still exposes saved music without waiting.
+  await networkChange(false, false, 'none');
+  expect(mockRedirect).toHaveBeenLastCalledWith('/(app)/(home)/offline-listening?auto=1');
+  expect(root.root.findAllByProps({ accessibilityLabel: 'Offline mode. 3 songs available.' }).length).toBeGreaterThan(0);
+});
+
+test('uninitialized native false snapshots do not enable offline mode', async () => {
+  await mount();
+  await networkChange(false, false, 'unknown');
+  expect(network).toEqual({ isOffline: false, ready: true });
+  await networkChange(true, null, 'wifi');
+  expect(network.isOffline).toBe(false);
+  await networkChange(true, true, 'wifi');
+  expect(network.isOffline).toBe(false);
+  expect(NetInfo.refresh).not.toHaveBeenCalled();
+});
+
+test('background failures do not flash offline on resume while a fresh check is pending', async () => {
+  let finish;
+  NetInfo.refresh.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  await mount();
+  await networkChange(true);
+  await appChange('background');
+  await networkChange(true, false);
+  expect(network.isOffline).toBe(false);
+  await appChange('active');
+  await networkChange(true, null);
+  expect(network.isOffline).toBe(false);
+  await networkChange(true);
+  await act(async () => finish());
+  expect(network.isOffline).toBe(false);
+});
+
+test('a real foreground disconnection applies immediately and pending reconnection does not clear it', async () => {
+  await mount();
+  await networkChange(false, false, 'none');
+  expect(network.isOffline).toBe(true);
+  await networkChange(true, null, 'wifi');
+  expect(network.isOffline).toBe(true);
+  await networkChange(true, false, 'wifi');
+  expect(network.isOffline).toBe(true);
+  await networkChange(true, true, 'wifi');
+  expect(network.isOffline).toBe(false);
+});
+
+test('foreground supersedes a pending old refresh without accepting its stale result', async () => {
+  let finishOld;
+  NetInfo.refresh.mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }));
+  NetInfo.refresh.mockImplementationOnce(async () => onNetwork({ isConnected: true, isInternetReachable: true }));
+  await mount();
+  await networkChange(true);
+  await appChange('inactive');
+  await appChange('active');
+  await appChange('background');
+  await appChange('active');
+  await networkChange(true, false);
+  expect(network.isOffline).toBe(false);
+  await act(async () => finishOld());
+  expect(NetInfo.refresh).toHaveBeenCalledTimes(2);
+  expect(network.isOffline).toBe(false);
 });
 
 test('offline callbacks and refresh completion schedule one bounded retry sequence', async () => {

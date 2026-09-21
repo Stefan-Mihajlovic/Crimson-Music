@@ -1,3 +1,4 @@
+import { personalMixDefinition, type PersonalMix } from '@/services/personal-mixes';
 import type { LocalListeningEvent } from '@/services/music';
 import type {
   CrimsonArtist,
@@ -7,6 +8,8 @@ import type {
 
 export type LibraryCollectionItem =
   | { key: 'favorites'; kind: 'favorites' }
+  | { key: 'local-music'; kind: 'local-music' }
+  | { key: string; kind: 'mix'; mix: PersonalMix; title: string }
   | { key: string; kind: 'playlist'; playlist: CrimsonPlaylist; owned: boolean }
   | { key: string; kind: 'artist'; artist: CrimsonArtist };
 
@@ -77,7 +80,24 @@ export function buildLibraryCollection(
   );
   return [
     { key: 'favorites', kind: 'favorites' },
+    { key: 'local-music', kind: 'local-music' },
     ...items.map(({ item }) => item),
+  ];
+}
+
+/** Live bookmarks stay independent of Audius's feed and keep stable mix routes. */
+export function mergePersonalMixBookmarks(items: readonly LibraryCollectionItem[], mixes: readonly PersonalMix[]): LibraryCollectionItem[] {
+  const seen = new Set<string>();
+  const live: LibraryCollectionItem[] = mixes.flatMap((mix) => {
+    const definition = personalMixDefinition(mix.id);
+    if (!definition || !mix.bookmarked || seen.has(mix.id)) return [];
+    seen.add(mix.id);
+    return [{ key: `mix:${mix.id}`, kind: 'mix' as const, mix, title: definition.title }];
+  });
+  return [
+    ...items.filter((item) => item.kind === 'favorites' || item.kind === 'local-music'),
+    ...live,
+    ...items.filter((item) => item.kind !== 'favorites' && item.kind !== 'local-music' && item.kind !== 'mix'),
   ];
 }
 
@@ -94,15 +114,18 @@ export function filterLibraryCollection(
 ): LibraryCollectionItem[] {
   const normalized = query.trim().toLowerCase();
   const matching = items.filter((item) => {
-    if (item.kind !== 'favorites') {
+    if (item.kind === 'local-music' && options.filter === 'artists') return false;
+    if (item.kind !== 'favorites' && item.kind !== 'local-music') {
       if (options.filter === 'artists' && item.kind !== 'artist') return false;
-      if (options.filter === 'playlists' && item.kind !== 'playlist')
+      if (options.filter === 'playlists' && item.kind !== 'playlist' && item.kind !== 'mix')
         return false;
     }
     if (options.filter === 'downloaded' && !options.isOffline?.(item))
       return false;
     if (!normalized) return true;
     if (item.kind === 'favorites') return 'favorites'.includes(normalized);
+    if (item.kind === 'local-music') return 'local music device files'.includes(normalized);
+    if (item.kind === 'mix') return `${item.title} made for you`.toLowerCase().includes(normalized);
     if (item.kind === 'artist')
       return `${item.artist.name} ${item.artist.handle}`
         .toLowerCase()
@@ -115,8 +138,10 @@ export function filterLibraryCollection(
     matching.sort((a, b) => {
       if (a.kind === 'favorites') return -1;
       if (b.kind === 'favorites') return 1;
+      if (a.kind === 'local-music') return -1;
+      if (b.kind === 'local-music') return 1;
       const title = (item: LibraryCollectionItem) =>
-        item.kind === 'artist'
+        item.kind === 'mix' ? item.title : item.kind === 'artist'
           ? item.artist.name
           : item.kind === 'playlist'
             ? item.playlist.title

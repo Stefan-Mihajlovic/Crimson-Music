@@ -6,6 +6,7 @@ import type { ActionSheetAnchor } from '@/services/action-sheet';
 export type ResponsivePopupProps = {
   children: ReactNode;
   onDismiss: () => void;
+  beforeDismiss?: () => boolean | Promise<boolean>;
   label: string;
   anchor?: ActionSheetAnchor | null;
   width?: number;

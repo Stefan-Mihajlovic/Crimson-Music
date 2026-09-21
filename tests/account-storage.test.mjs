@@ -9,6 +9,13 @@ test('account cleanup targets exact UID keys including private playlist caches',
   assert.equal(belongsToAccount('crimson.offline.data.v1:playlist:owner2:crimson:mix', 'owner'), false);
   assert.equal(belongsToAccount('crimson.account.profile.v1:owner2', 'owner'), false);
   assert.equal(belongsToAccount('crimson.player.autoplay.v1', 'owner'), false);
+  assert.equal(belongsToAccount('crimson.local-favorites.v1:owner', 'owner'), true);
+  assert.equal(belongsToAccount('crimson.local-favorites.v1:owner2', 'owner'), false);
+  assert.equal(belongsToAccount('crimson.personal-mixes.v1:owner:daily', 'owner'), true);
+  assert.equal(belongsToAccount('crimson.personal-mixes.v1:owner2:daily', 'owner'), false);
+  assert.equal(belongsToAccount('crimson.personal-mix-bookmarks.v1:owner', 'owner'), true);
+  assert.equal(belongsToAccount('crimson.personal-mix-bookmarks.v1:owner2', 'owner'), false);
+  assert.equal(belongsToAccount('crimson.local-music.v1', 'owner'), false);
 });
 
 test('deletion marks the account before draining work and awaits every cleanup', async () => {

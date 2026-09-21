@@ -9,6 +9,14 @@ const { Platform, StyleSheet, Text, View } = ReactNative;
 let mockHeaderOptions;
 let mockPerformanceMode = false;
 let mockFocused = true;
+let mockRootState;
+const mockRouteKey = 'main-page';
+const mockNavigationListeners = new Set();
+const mockNavigation = {
+  isReady: () => true,
+  getRootState: () => mockRootState,
+  addListener: (_event, listener) => { mockNavigationListeners.add(listener); return () => mockNavigationListeners.delete(listener); },
+};
 const mockPush = jest.fn();
 const mockOffset = { value: 0 };
 
@@ -17,6 +25,8 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
   useFocusEffect: () => undefined,
   useIsFocused: () => mockFocused,
+  useRoute: () => ({ key: mockRouteKey }),
+  useNavigationContainerRef: () => mockNavigation,
 }));
 jest.mock('react-native-reanimated', () => {
   const React = require('react');
@@ -69,6 +79,8 @@ beforeEach(() => {
   mockOffset.value = 0;
   mockPerformanceMode = false;
   mockFocused = true;
+  mockRootState = undefined;
+  mockNavigationListeners.clear();
   mockPush.mockClear();
   Platform.OS = 'ios';
   jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({ width: 393, height: 852, scale: 3, fontScale: 1 });
@@ -191,6 +203,97 @@ test('blur clips the mounted window overlay out of view and accessibility, then 
   expect(headerClip(tree).props.importantForAccessibility).toBe('auto');
   expect(historyButton().props.disabled).toBe(false);
   act(() => tree.unmount());
+});
+
+function pageState({ popup = 'search-filters', selectedTab = 1, pushedPage, nestedPopup = false } = {}) {
+  const pages = [{ key: mockRouteKey, name: 'search' }];
+  if (pushedPage) pages.push({ key: 'detail-page', name: pushedPage });
+  if (nestedPopup) pages.push({ key: 'nested-sheet', name: 'edit-profile' });
+  const app = { key: 'app', name: '(app)', state: { index: selectedTab, routes: [
+    { key: 'home-tab', name: '(home)', state: { index: 0, routes: [{ key: 'home-page', name: 'index' }] } },
+    { key: 'search-tab', name: '(search)', state: { index: pages.length - 1, routes: pages } },
+  ] } };
+  return { index: popup ? 1 : 0, routes: popup ? [app, { key: 'sheet', name: popup }] : [app] };
+}
+
+test.each(['action-sheet', 'search-filters', 'playlist-editor', 'player-details'])('%s preserves the source header behind UIKit while its window overlay and actions stay inactive', (popup) => {
+  mockRootState = pageState({ popup: null });
+  let tree;
+  act(() => { tree = TestRenderer.create(<MainHeaderOverlay title="Search" offset={mockOffset} />); });
+  const originalWindow = tree.root.findByType('FullWindowOverlay');
+  mockFocused = false;
+  mockRootState = pageState({ popup });
+  act(() => tree.update(<MainHeaderOverlay title="Search" offset={mockOffset} />));
+  expect(tree.root.findByType('FullWindowOverlay')).toBe(originalWindow);
+  expect(StyleSheet.flatten(headerClip(tree).props.style).height).toBe(0);
+  const background = tree.root.findByProps({ testID: 'main-header-popup-background' });
+  expect(StyleSheet.flatten(background.props.style).height).toBe(793);
+  expect(background.findByType(MainScreenHeader).props.title).toBe('Search');
+  expect(background.props.pointerEvents).toBe('none');
+  expect(background.props.accessibilityElementsHidden).toBe(true);
+  expect(background.findAllByType(ReactNative.Pressable).every((button) => button.props.disabled)).toBe(true);
+  mockFocused = true;
+  mockRootState = pageState({ popup: null });
+  act(() => tree.update(<MainHeaderOverlay title="Search" offset={mockOffset} />));
+  expect(tree.root.findAllByProps({ testID: 'main-header-popup-background' })).toHaveLength(0);
+  expect(StyleSheet.flatten(headerClip(tree).props.style).height).toBe(793);
+  const history = tree.root.findAllByProps({ accessibilityLabel: 'Open listening history' }).find((node) => node.props.hitSlop === 4);
+  expect(history.props.disabled).toBe(false);
+  act(() => tree.unmount());
+});
+
+test('sheet visibility follows only its selected source page, never a different tab or covered detail', () => {
+  const { isMainHeaderBehindPopup } = require('../src/services/main-header-visibility');
+  expect(isMainHeaderBehindPopup(pageState(), mockRouteKey)).toBe(true);
+  expect(isMainHeaderBehindPopup(pageState({ selectedTab: 0 }), mockRouteKey)).toBe(false);
+  expect(isMainHeaderBehindPopup(pageState({ pushedPage: 'playlist' }), mockRouteKey)).toBe(false);
+  expect(isMainHeaderBehindPopup(pageState({ popup: 'playlist' }), mockRouteKey)).toBe(false);
+  expect(isMainHeaderBehindPopup(pageState({ popup: null }), mockRouteKey)).toBe(false);
+  expect(isMainHeaderBehindPopup(pageState({ popup: null, nestedPopup: true }), mockRouteKey)).toBe(true);
+  expect(isMainHeaderBehindPopup(pageState({ nestedPopup: true }), mockRouteKey)).toBe(true);
+});
+
+test('a post-blur container state event hydrates the nested page and restores its background header without another screen render', () => {
+  const root = (state) => ({ index: 0, routes: [{ key: 'generated-root', name: '__root', state }] });
+  mockRootState = root(pageState({ popup: null }));
+  let tree;
+  act(() => { tree = TestRenderer.create(<MainHeaderOverlay title="Search" offset={mockOffset} />); });
+  mockFocused = false;
+  act(() => tree.update(<MainHeaderOverlay title="Search" offset={mockOffset} />));
+  expect(tree.root.findAllByProps({ testID: 'main-header-popup-background' })).toHaveLength(0);
+  // React Navigation commits the hydrated child states after the blur render.
+  // The container event must update this header without a screen prop change.
+  act(() => {
+    mockRootState = root(pageState());
+    mockNavigationListeners.forEach((listener) => listener());
+  });
+  const background = tree.root.findByProps({ testID: 'main-header-popup-background' });
+  expect(StyleSheet.flatten(background.props.style).height).toBe(793);
+  expect(background.findByType(MainScreenHeader).props.title).toBe('Search');
+  act(() => {
+    mockRootState = root(pageState({ selectedTab: 0 }));
+    mockNavigationListeners.forEach((listener) => listener());
+  });
+  expect(tree.root.findAllByProps({ testID: 'main-header-popup-background' })).toHaveLength(0);
+  act(() => tree.unmount());
+  expect(mockNavigationListeners.size).toBe(0);
+});
+
+test('Android and mobile web keep the background header in their own scene when a popup blurs the page', () => {
+  mockFocused = false;
+  mockRootState = pageState();
+  for (const platform of ['android', 'web']) {
+    Platform.OS = platform;
+    let tree;
+    act(() => { tree = TestRenderer.create(<MainHeaderOverlay title="Search" offset={mockOffset} />); });
+    expect(tree.root.findAllByType('FullWindowOverlay')).toHaveLength(0);
+    const clip = tree.root.findAllByType(View).find((view) => StyleSheet.flatten(view.props.style)?.overflow === 'hidden');
+    expect(StyleSheet.flatten(clip.props.style).height).toBe(793);
+    expect(clip.props.pointerEvents).toBe('none');
+    expect(clip.props.accessibilityElementsHidden).toBe(true);
+    expect(tree.root.findAllByType(MainCompactHeader)).toHaveLength(1);
+    act(() => tree.unmount());
+  }
 });
 
 test('player position progressively clips the header and minimizing restores its action', () => {

@@ -13,7 +13,7 @@ The form retains the draft on failure and disables saving when offline, unchange
 ## Validation
 
 - Service integration tests cover native File and web File uploads, partial metadata updates, storage failures and polling, server confirmation, duplicate saves, and account changes during requests.
-- Serializer regression tests pass the production multipart form through the installed Expo serializer, verify actual image bytes, and reproduce the rejected legacy URI format. Native file reads are mocked; the FormData implementation and serializer are real. A separate live smoke upload of the serialized generic app icon returned HTTP 200 with processing status `done`.
+- Serializer regression tests pass the production multipart form through the installed Expo serializer, verify actual image bytes, and reproduce the rejected legacy URI format. Native file reads are mocked; the FormData implementation and serializer are real.
 - Editor tests cover draft selection/cancellation, explicit saving, retry, offline/read-only states, account changes, and oversized photos.
 - Session/auth tests cover stale refreshes and preference reads, token rotation overlapping a save, and account isolation.
 

@@ -9,6 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cache = path.join(process.env.GRADLE_USER_HOME || path.join(os.homedir(), '.gradle'), 'caches/modules-2/files-2.1');
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'crimson-pcm-tests-'));
 const java = process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin/java') : 'java';
+const equalizer = process.argv.includes('--equalizer');
 
 function artifact(group, name, version, extension = 'jar') {
   const directory = path.join(cache, group, name, version);
@@ -44,15 +45,16 @@ try {
   const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || path.join(root, '.build/android-toolchain/sdk');
   const platforms = fs.readdirSync(path.join(sdk, 'platforms')).filter((name) => /^android-\d+$/.test(name)).sort((a, b) => Number(b.slice(8)) - Number(a.slice(8)));
   const android = path.join(sdk, 'platforms', platforms[0], 'android.jar');
-  const classpath = [stdlib, annotations, ...media, android].join(path.delimiter);
+  const classpath = [stdlib, annotations, artifact('com.google.guava', 'guava', '33.3.1-android'), ...media, android].join(path.delimiter);
   const result = path.join(out, 'tests.jar');
   run(java, ['-cp', compiler.join(path.delimiter), 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler', '-no-stdlib', '-no-reflect', '-jvm-target', '17', '-classpath', classpath, '-d', result,
     path.join(root, 'plugins/crimson-android-media/CrimsonPcmSamples.kt'),
+    path.join(root, 'plugins/crimson-equalizer/CrimsonEqualizerProcessor.kt'),
     path.join(root, 'plugins/crimson-android-media/CrimsonAudioSampleSink.kt'),
     path.join(root, 'tests/native/audio-samples/AndroidOs.kt'),
-    path.join(root, 'tests/native/audio-samples/CrimsonAudioSamplesTest.kt'),
+    path.join(root, equalizer ? 'tests/native/equalizer/CrimsonEqualizerTest.kt' : 'tests/native/audio-samples/CrimsonAudioSamplesTest.kt'),
   ]);
-  run(java, ['-cp', [result, classpath].join(path.delimiter), 'expo.modules.audio.CrimsonAudioSamplesTestKt']);
+  run(java, ['-cp', [result, classpath].join(path.delimiter), equalizer ? 'expo.modules.audio.CrimsonEqualizerTestKt' : 'expo.modules.audio.CrimsonAudioSamplesTestKt']);
 } finally {
   fs.rmSync(out, { recursive: true, force: true });
 }

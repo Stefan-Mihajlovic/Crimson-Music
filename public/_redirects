@@ -1,0 +1,2 @@
+# Serve exported pages/assets first, then let Expo Router handle unmatched URLs.
+/* /index.html 200
