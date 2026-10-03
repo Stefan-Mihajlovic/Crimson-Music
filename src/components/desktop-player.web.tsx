@@ -1,9 +1,11 @@
 import ArtworkImage from '@/components/artwork-image';
-import { useRouter } from 'expo-router';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useIsFocused, useNavigation, useRouter } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 
 import { SymbolView } from '@/components/app-symbol';
+import PlayerArtworkBackground from '@/components/player-artwork-background';
 import DesktopPlayerPanel from '@/components/desktop-player-panel';
 import type { PlayerDetailsTab } from '@/components/player-details-tabs.types';
 import { formatPlayerTime, PlayerIconButton, PlayerRange, WebTransport, WebVolume } from '@/components/web-player-controls';
@@ -11,17 +13,56 @@ import { usePlayer, usePlayerStatus } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { actionSheetHref, useDetailRoutes } from '@/services/action-sheet';
 
+const DesktopArtworkBackground = memo(PlayerArtworkBackground);
+
 export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: PlayerDetailsTab }) {
   const router = useRouter();
+  const navigation = useNavigation();
+  const focused = useIsFocused();
   const player = usePlayer();
   const status = usePlayerStatus();
-  const { colors, isDark } = useAppSettings();
+  const { colors, isDark, reduceMotion } = useAppSettings();
   const { artistHref } = useDetailRoutes();
   const { width, height } = useWindowDimensions();
+  const surface = useRef<HTMLElement>(null);
+  const motion = useRef<Animation | null>(null);
+  const closing = useRef(false);
+  const alive = useRef(true);
   const artworkColumn = useRef<HTMLDivElement>(null);
   const controls = useRef<HTMLDivElement>(null);
+  const [artworkLoaded, setArtworkLoaded] = useState(0);
   const [availableArtwork, setAvailableArtwork] = useState<number | null>(null);
   const song = player.currentSong;
+  const hasSong = Boolean(song);
+  useLayoutEffect(() => {
+    alive.current = true;
+    if (hasSong && !reduceMotion && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      motion.current = surface.current?.animate?.([
+        { transform: 'translateY(100%)', opacity: 0.6 },
+        { transform: 'translateY(0)', opacity: 1 },
+      ], { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' }) ?? null;
+    }
+    return () => { alive.current = false; motion.current?.cancel(); };
+  }, [hasSong, reduceMotion]);
+  usePreventRemove(hasSong, ({ data }) => {
+    if (closing.current) return;
+    if (reduceMotion || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !surface.current?.animate) {
+      navigation.dispatch(data.action);
+      return;
+    }
+    closing.current = true;
+    // Start from the currently displayed position if the user closes mid-entry.
+    const from = getComputedStyle(surface.current).transform;
+    motion.current?.cancel();
+    const animation = surface.current.animate([
+      { transform: from === 'none' ? 'translateY(0)' : from, opacity: 1 },
+      { transform: 'translateY(100%)', opacity: 0.6 },
+    ], { duration: 280, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
+    motion.current = animation;
+    void animation.finished.then(() => {
+      if (alive.current) navigation.dispatch(data.action);
+    }).catch(() => { /* Unmounted or superseded animation. */ }).finally(() => { closing.current = false; });
+  });
   useLayoutEffect(() => {
     if (!artworkColumn.current || !controls.current || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
@@ -54,10 +95,14 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
     type: 'song', id: song.id, title: song.title, subtitle: song.creator,
     image: song.imageSmall || song.image, artistId: song.artistId, playerPresentation: 'modal',
   }));
-  return <section aria-label="Now playing" style={{
+  return <section ref={surface} aria-label="Now playing" style={{
     display: 'flex', flex: 1, flexDirection: 'column', minHeight: 0, overflow: 'hidden', color: colors.text,
-    background: `radial-gradient(ellipse at 20% 15%, ${song.color || '#4A2B6F'}${/^#[a-f\d]{6}$/i.test(song.color || '#4A2B6F') ? isDark ? '38' : '18' : ''}, transparent 65%), ${colors.background}`,
+    position: 'relative', isolation: 'isolate', background: colors.background,
   }}>
+    <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: -1 }}>
+      <DesktopArtworkBackground active={focused} song={song} artworkLoaded={artworkLoaded} />
+      {!isDark && <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.82)' }} />}
+    </div>
     <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 64, padding: '8px 28px', gap: 18, flexShrink: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <PlayerIconButton label="Minimize player" icon="chevron.down" onPress={close} size={20} />
@@ -70,12 +115,12 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
       <div ref={artworkColumn} style={{ minWidth: 0, minHeight: 0, overflowY: 'auto', padding: '12px 4px 8px', scrollbarWidth: 'thin' }}>
         <div style={{ width: artworkSize, maxWidth: '100%', margin: '0 auto' }}>
           <div style={{ width: '100%', aspectRatio: '1', marginBottom: 24, borderRadius: 18, overflow: 'hidden', boxShadow: '0 18px 48px rgba(0,0,0,.28)' }}>
-            <ArtworkImage artwork={song.artwork} source={song.image || song.imageSmall || require('@/assets/images/home/default-song.webp')} contentFit="cover" transition={180} style={{ width: '100%', height: '100%' }} />
+            <ArtworkImage artwork={song.artwork} source={song.image || song.imageSmall || require('@/assets/images/home/default-song.webp')} contentFit="cover" onLoad={() => setArtworkLoaded((value) => value + 1)} transition={180} style={{ width: '100%', height: '100%' }} />
           </div>
           <div ref={controls}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 17 }}>
             <div style={{ flex: 1, minWidth: 0 }}><h1 style={{ margin: '0 0 7px', fontSize: width >= 1280 ? 25 : 21, lineHeight: 1.2, fontWeight: 780, letterSpacing: '-0.7px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={song.title}>{song.title}</h1>
-              <button type="button" disabled={!song.artistId} onClick={() => { router.dismiss(); router.push(artistHref(song.artistId)); }}
+              <button type="button" disabled={!song.artistId} onClick={() => router.replace(artistHref(song.artistId))}
                 style={{ maxWidth: '100%', padding: 0, border: 0, background: 'transparent', color: colors.secondaryText, fontSize: 14, cursor: song.artistId ? 'pointer' : 'default', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.creator}</button></div>
             <PlayerIconButton label={`More options for ${song.title}`} icon="ellipsis" onPress={openActions} />
             <PlayerIconButton label={player.isLiked ? 'Remove from favorites' : 'Add to favorites'} icon={player.isLiked ? 'heart.fill' : 'heart'} active={player.isLiked} onPress={() => void player.toggleLike()} size={23} />

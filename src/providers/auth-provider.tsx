@@ -45,7 +45,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
     const unsubscribe = subscribeAuthSession((nextUser) => {
-      if (mounted) applyUser(nextUser, ++sessionRevision.current);
+      if (mounted) applyUser(nextUser, nextUser ? sessionRevision.current : ++sessionRevision.current);
     });
     const revision = sessionRevision.current;
     restoreSession()

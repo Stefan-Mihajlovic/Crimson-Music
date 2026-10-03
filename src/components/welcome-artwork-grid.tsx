@@ -1,6 +1,6 @@
 import { Image, type ImageSource } from 'expo-image';
 import { useIsFocused } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Animated, AppState, Easing, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { useAppSettings } from '@/providers/settings-provider';
@@ -56,6 +56,7 @@ export default function WelcomeArtworkGrid() {
 
   return (
     <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={StyleSheet.absoluteFill}>
+      {Platform.OS === 'web' && <style>{`@keyframes crimson-wall { from { transform: translateY(0); } to { transform: translateY(var(--wall-distance)); } } @media (prefers-reduced-motion: reduce) { .crimson-artwork-column { animation: none !important; } }`}</style>}
       <View style={[styles.plane, { width: planeWidth, height: planeHeight, left: (width - planeWidth) / 2, top: (height - planeHeight) / 2 }]}>
         {Array.from({ length: columnCount }, (_, column) => (
           <ArtworkColumn
@@ -77,13 +78,13 @@ function ArtworkColumn({ column, moving, size, sources, transition }: { column: 
   const loopHeight = sources.length * (size + 12);
   const reverse = column % 2 === 1;
   useEffect(() => {
-    if (!moving) return;
+    if (!moving || Platform.OS === 'web') return;
     progress.setValue(0);
     const animation = Animated.loop(Animated.timing(progress, {
       toValue: 1,
       duration: loopHeight / (column % 2 ? 14 : 18) * 1000,
       easing: Easing.linear,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: true,
       isInteraction: false,
     }));
     animation.start();
@@ -91,14 +92,17 @@ function ArtworkColumn({ column, moving, size, sources, transition }: { column: 
   }, [column, loopHeight, moving, progress]);
 
   const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: reverse ? [-loopHeight, 0] : [0, -loopHeight] });
-  return (
-    <Animated.View style={{ width: size, marginRight: 12, transform: [{ translateY }] }}>
-      {/* Identical consecutive sets make the reset from the end to the start invisible. */}
-      {[...sources, ...sources].map((source, index) => (
+  const covers = [...sources, ...sources].map((source, index) => (
         <Image key={index} source={source} contentFit="cover" transition={transition} cachePolicy="memory-disk" style={[styles.cover, { width: size, height: size }]} />
-      ))}
-    </Animated.View>
-  );
+      ));
+  if (Platform.OS === 'web') return <div className="crimson-artwork-column" style={{
+    width: size, marginRight: 12, flexShrink: 0,
+    '--wall-distance': `${-loopHeight}px`,
+    animation: `crimson-wall ${loopHeight / (column % 2 ? 14 : 18)}s linear infinite`,
+    animationDirection: reverse ? 'reverse' : 'normal',
+    animationPlayState: moving ? 'running' : 'paused',
+  } as CSSProperties}>{covers}</div>;
+  return <Animated.View style={{ width: size, marginRight: 12, transform: [{ translateY }] }}>{covers}</Animated.View>;
 }
 
 const styles = StyleSheet.create({

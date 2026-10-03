@@ -1,7 +1,20 @@
 [build]
-  command = "npm run build:web"
+  command = "node scripts/validate-web-config.cjs && npm run build:web"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "24"
 
+
+# Public OAuth app identity; this is NOT an API secret or bearer token.
+  EXPO_PUBLIC_AUDIUS_API_KEY = "79ff87d47e1b2a5cca0aaf03df9f4bf91698bd33"
+
+[[headers]]
+  for = "/_expo/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

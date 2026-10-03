@@ -104,7 +104,7 @@ node scripts/fix-expo-ios-paths.js
 npm run web
 ```
 
-Allow the login popup and keep its original tab open while authorization completes. Web sessions persist in that tab's `sessionStorage`, not a native credential store. Downloads for offline listening are not supported on web.
+Web login redirects through Audius in the same tab and verifies the saved PKCE transaction on return. Native login can resume its saved transaction if the OS recreates the app during authorization. Web sessions persist in that tab's `sessionStorage`, not a native credential store. Downloads for offline listening are not supported on web.
 
 The project configures a static web export:
 
@@ -129,3 +129,5 @@ The iOS job selects GitHub's `xcode-27` runner and compiles the layered icon bef
 ## Release validation
 
 Use the [release validation checklist](RELIABILITY-RELEASE.md) and record the tested revision, device/browser, and results in the pull request or release notes. Automated Android/web regression tests run with `npm run test:platforms`; `npm test` includes them alongside the shared suites. Compilation and automated tests do not replace runtime checks.
+
+See the [performance and adaptive layout pass](PERFORMANCE-ADAPTIVE.md) for desktop changes, foldable behavior, measurements, and device-validation limits.

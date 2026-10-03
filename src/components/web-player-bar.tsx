@@ -16,7 +16,7 @@ import { useWebPointerDrag } from '@/hooks/use-web-pointer-drag';
 import { beginWebPlayerMotion, cancelWebPlayerMotion, moveWebPlayerMotion, settleWebPlayerMotion, type WebPlayerMotionSession } from '@/services/web-player-motion';
 import { releaseWebNavigationFocus } from '@/services/action-sheet';
 
-export default function WebPlayerBar({ desktopLeft = 280, mobileBottom = 86, hidden = false }: { desktopLeft?: number; mobileBottom?: number; hidden?: boolean }) {
+export default function WebPlayerBar({ mobileBottom = 86, hidden = false }: { mobileBottom?: number; hidden?: boolean }) {
   const player = usePlayer();
   const status = usePlayerStatus();
   const { colors, isDark, performanceMode, reduceMotion } = useAppSettings();
@@ -177,12 +177,20 @@ export default function WebPlayerBar({ desktopLeft = 280, mobileBottom = 86, hid
     <MiniPlayer onExpand={openPlayer} onBeginExpand={() => {}} onExpandDrag={() => {}} onExpandRelease={() => {}} />
   </div>;
   return (
-    <View style={[styles.bar, { left: desktopLeft, borderColor: colors.border }]}>
-      <div aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: 26, pointerEvents: 'none',
+    <div role="toolbar" aria-label="Music player" className="crimson-player-bar" style={{
+      containerType: 'inline-size', position: 'absolute', bottom: 18, right: 24, left: 'calc(var(--crimson-sidebar-width, 250px) + 30px)',
+      border: `1px solid ${colors.border}`, borderRadius: 14, padding: '16px', minHeight: 82, zIndex: 30,
+      boxShadow: '0 12px 42px rgba(0,0,0,.32)',
+      transition: reduceMotion || performanceMode ? 'none' : 'left .3s cubic-bezier(.22,1,.36,1)',
+    }}>
+      <div aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: 'inherit', pointerEvents: 'none',
         background: performanceMode ? colors.elevated : isDark ? 'rgba(27,22,35,.58)' : 'rgba(250,247,255,.68)',
         backdropFilter: performanceMode ? undefined : 'blur(26px) saturate(1.6)',
         WebkitBackdropFilter: performanceMode ? undefined : 'blur(26px) saturate(1.6)' }} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) clamp(208px, 40%, 460px) minmax(0, 1fr)', alignItems: 'center', columnGap: 16 }}>
+      <div className="crimson-dock-timeline">
+        <PlayerRange label="Playback position" value={status.currentTime} max={status.duration} onChange={seekTo} style={{ margin: 0, borderRadius: 0 }} />
+      </div>
+      <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(196px, 0.7fr) minmax(0, 1fr)', alignItems: 'center', columnGap: 16 }}>
         <View style={styles.trackSection}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Open player for ${currentSong.title}`}
             onPress={openPlayer} style={styles.track}>
@@ -196,41 +204,31 @@ export default function WebPlayerBar({ desktopLeft = 280, mobileBottom = 86, hid
         </View>
         <View style={styles.middle}>
           <WebTransport />
-          <View style={styles.timeline}>
-            <Text style={[styles.time, { color: colors.secondaryText }]}>{formatPlayerTime(status.currentTime)}</Text>
-            <PlayerRange label="Playback position" value={status.currentTime} max={status.duration} onChange={seekTo} />
-            <Text style={[styles.time, { color: colors.secondaryText }]}>{formatPlayerTime(status.duration)}</Text>
-          </View>
         </View>
         <View style={styles.tools}>
+          <span className="crimson-player-time"><Text accessibilityLabel="Playback time" style={[styles.time, { color: colors.secondaryText }]}>{formatPlayerTime(status.currentTime)} / {formatPlayerTime(status.duration)}</Text></span>
           <PlayerIconButton label={player.isLiked ? 'Remove from favorites' : 'Add to favorites'}
             icon={player.isLiked ? 'heart.fill' : 'heart'} active={player.isLiked} onPress={() => void player.toggleLike()} size={19} />
           <PlayerIconButton label="Open Up Next" icon="list.bullet" onPress={() => { releaseWebNavigationFocus(); router.push({ pathname: '/player', params: { tab: 'queue' } }); }} size={20} />
-          {width >= 1200 ? <WebVolume width={76} /> : null}
+          <div className="crimson-player-volume"><WebVolume width={76} /></div>
           <PlayerIconButton label="Expand player" icon="arrow.up.left.and.arrow.down.right" onPress={openPlayer} size={18} />
         </View>
       </div>
       {player.playbackError ? <Pressable accessibilityRole="button" onPress={player.retryPlayback} style={styles.error}>
         <Text style={{ color: colors.accent, fontSize: 12 }}>Playback interrupted · Retry</Text>
       </Pressable> : null}
-    </View>
+    </div>
   );
 }
 const styles = StyleSheet.create({
-  bar: {
-    position: 'absolute', bottom: 18, right: 24, borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 26, paddingHorizontal: 16, paddingVertical: 12,
-    boxShadow: '0 12px 42px rgba(0,0,0,0.32)', zIndex: 30,
-  },
   trackSection: { minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   track: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 11 },
   copy: { flex: 1, minWidth: 0 },
-  art: { width: 48, height: 48, borderRadius: 12 },
+  art: { width: 48, height: 48, borderRadius: 6 },
   title: { fontSize: 13, fontWeight: '700' },
   artist: { marginTop: 3, fontSize: 12 },
   middle: { minWidth: 0, width: '100%', gap: 1 },
-  timeline: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 18 },
-  time: { fontSize: 10, width: 32, flexShrink: 0, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  time: { fontSize: 11, marginRight: 12, flexShrink: 0, textAlign: 'center', fontVariant: ['tabular-nums'] },
   tools: { minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5 },
   error: { alignSelf: 'center', paddingTop: 6 },
 });

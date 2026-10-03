@@ -3,7 +3,7 @@
     "name": "Crimson Music",
     "slug": "crimson-music-mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "crimsonmusic",
     "userInterfaceStyle": "automatic",
@@ -40,7 +40,15 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": true,
+            "default": false
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -79,7 +87,8 @@
       "expo-asset",
       "expo-image",
       "expo-web-browser",
-      "@sentry/react-native/expo"
+      "@sentry/react-native/expo",
+      "./plugins/with-crimson-folding"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,3 +1,4 @@
+import Switch from '@/components/app-switch';
 import { Href, Stack, useRouter, useSegments } from 'expo-router';
 import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
 import { useMemo, useState } from 'react';
@@ -6,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';

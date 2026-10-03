@@ -123,7 +123,7 @@ export class AudiusSessionClient {
       const response = await this.raw('/oauth/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: previous.refreshToken, client_id: previous.clientId }) });
       if (!response.ok) {
         if ([400, 401, 403].includes(response.status) && revision === this.revision) await this.clear();
-        throw new AudiusSessionError(response.status >= 500 ? 'Audius is temporarily unavailable. Try again shortly.' : 'Your Audius session expired. Please log in again.', response.status >= 500 ? 'network' : 'unauthenticated');
+        throw new AudiusSessionError([400, 401, 403].includes(response.status) ? 'Your Audius session expired. Please log in again.' : 'Audius is temporarily unavailable. Try again shortly.', [400, 401, 403].includes(response.status) ? 'unauthenticated' : 'network');
       }
       const updated = sessionWithTokens(await response.json(), previous);
       if (revision !== this.revision) throw new AudiusSessionError('The Audius account changed. Please try again.', 'cancelled');

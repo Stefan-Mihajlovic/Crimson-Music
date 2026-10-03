@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AuthBackdrop from '@/components/auth-backdrop';
@@ -12,6 +12,8 @@ import { CrimsonAuthError } from '@/services/auth';
 export default function WelcomeScreen() {
   const { signInWithAudius, user } = useAuth();
   const { reduceMotion } = useAppSettings();
+  const { height } = useWindowDimensions();
+  const shortWindow = height < 600;
   const signingIn = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -40,8 +42,9 @@ export default function WelcomeScreen() {
   return (
     <AuthBackdrop>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.hero}>
-          <BrandLogo style={styles.logo} />
+        <ScrollView bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+        <View style={[styles.hero, shortWindow && { flex: 0, paddingTop: 18, paddingBottom: 20 }]}>
+          <BrandLogo style={[styles.logo, shortWindow && { width: 220, height: 62 }]} />
         </View>
 
         <View style={styles.actions}>
@@ -67,6 +70,7 @@ export default function WelcomeScreen() {
           </Pressable>
           <Text style={styles.note}>Sign in securely on Audius to continue.</Text>
         </View>
+        </ScrollView>
       </SafeAreaView>
     </AuthBackdrop>
   );
