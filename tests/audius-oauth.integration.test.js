@@ -57,6 +57,10 @@ beforeEach(() => {
     };
     return request;
   });
+  const storage = new Map();
+  secureStore.getItemAsync.mockImplementation(async (key) => storage.get(key) || null);
+  secureStore.setItemAsync.mockImplementation(async (key, value) => { storage.set(key, value); });
+  secureStore.deleteItemAsync.mockImplementation(async (key) => { storage.delete(key); });
   auth = require('../src/services/audius-session');
 });
 
@@ -98,7 +102,7 @@ test('native Audius login requests write access with PKCE and stores the verifie
   expect(auth.getCurrentAudiusUserId()).toBe('eP9k2');
   expect(auth.canWriteAudius()).toBe(true);
   expect(secureStore.setItemAsync).toHaveBeenCalledWith('crimson.audius.session.v1', expect.any(String), { keychainAccessible: secureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY });
-  expect(JSON.parse(secureStore.setItemAsync.mock.calls[0][1])).toEqual(expect.objectContaining({ accessToken: 'listener-access-token', refreshToken: 'listener-refresh-token', scope: 'write', account }));
+  expect(JSON.parse(secureStore.setItemAsync.mock.calls.find(([key]) => key === 'crimson.audius.session.v1')[1])).toEqual(expect.objectContaining({ accessToken: 'listener-access-token', refreshToken: 'listener-refresh-token', scope: 'write', account }));
 });
 
 test.each([
@@ -109,7 +113,7 @@ test.each([
   authResult = result;
   await expect(auth.loginAudius()).rejects.toMatchObject({ code: 'cancelled' });
   expect(transport).not.toHaveBeenCalled();
-  expect(secureStore.setItemAsync).not.toHaveBeenCalled();
+  expect(secureStore.setItemAsync.mock.calls.some(([key]) => key === 'crimson.audius.session.v1')).toBe(false);
   expect(auth.getAudiusSession()).toBeNull();
 });
 
@@ -117,7 +121,7 @@ test('a mismatched callback state cannot exchange an authorization code', async 
   authResult.params.state = 'unexpected-csrf-state';
   await expect(auth.loginAudius()).rejects.toThrow('could not be verified');
   expect(transport).not.toHaveBeenCalled();
-  expect(secureStore.setItemAsync).not.toHaveBeenCalled();
+  expect(secureStore.setItemAsync.mock.calls.some(([key]) => key === 'crimson.audius.session.v1')).toBe(false);
 });
 
 test('a canceled attempt releases the pending login so the listener can retry', async () => {
@@ -133,7 +137,7 @@ test('an incomplete token exchange never creates a saved session', async () => {
   transport.mockResolvedValueOnce(response({ access_token: 'incomplete-access-token' }));
   await expect(auth.loginAudius()).rejects.toThrow('incomplete login session');
   expect(transport).toHaveBeenCalledTimes(1);
-  expect(secureStore.setItemAsync).not.toHaveBeenCalled();
+  expect(secureStore.setItemAsync.mock.calls.some(([key]) => key === 'crimson.audius.session.v1')).toBe(false);
   expect(auth.getAudiusSession()).toBeNull();
 });
 
@@ -142,7 +146,7 @@ test('profile retrieval failure never persists unverified credentials', async ()
     ? response({ access_token: 'listener-access-token', refresh_token: 'listener-refresh-token' })
     : response({}, 401));
   await expect(auth.loginAudius()).rejects.toThrow('Could not load your Audius account');
-  expect(secureStore.setItemAsync).not.toHaveBeenCalled();
+  expect(secureStore.setItemAsync.mock.calls.some(([key]) => key === 'crimson.audius.session.v1')).toBe(false);
   expect(auth.getAudiusSession()).toBeNull();
 });
 
@@ -153,4 +157,74 @@ test('media headers authenticate Audius streams without exposing credentials to 
   expect(await auth.audiusMediaHeaders('https://api.audius.co.attacker.example/v1/tracks/track-id/stream')).toBeUndefined();
   expect(await auth.audiusMediaHeaders('https://api.audius.co/v1/users/eP9k2')).toBeUndefined();
   expect(transport).toHaveBeenCalledTimes(2);
+});
+
+ test('duplicate callbacks exchange once and a transient profile failure can recover', async () => {
+  let resolvePrompt;
+  expoAuth.AuthRequest.mockImplementation(() => ({ state: 'expected-csrf-state', codeVerifier: 'private-pkce-verifier',
+    makeAuthUrlAsync: async () => 'https://api.audius.co/v1/oauth/authorize',
+    promptAsync: () => new Promise((resolve) => { resolvePrompt = resolve; }),
+  }));
+  const login = auth.loginAudius();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  transport.mockResolvedValueOnce(response({ access_token: 'a', refresh_token: 'r' }))
+    .mockResolvedValueOnce(response({}, 503)).mockResolvedValueOnce(response(accountResponse));
+  const url = `${redirectUri}?code=test&state=expected-csrf-state`;
+  const first = auth.completeAudiusLogin(url);
+  const second = auth.completeAudiusLogin(url);
+  expect(first).toBe(second);
+  await expect(first).resolves.toMatchObject({ id: 'eP9k2' });
+  expect(transport).toHaveBeenCalledTimes(3);
+  resolvePrompt({ type: 'cancel' });
+  await expect(login).rejects.toMatchObject({ code: 'cancelled' });
+});
+
+test('concurrent account reads share transport without caching stale results after a write', async () => {
+  await auth.loginAudius();
+  transport.mockClear();
+  let release;
+  transport.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+  const first = auth.audiusRequest('/users/eP9k2/playlists');
+  const second = auth.audiusRequest('/users/eP9k2/playlists');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(transport).toHaveBeenCalledTimes(1);
+  release(response({ data: [] }));
+  await Promise.all([first, second]);
+  await auth.audiusRequest('/users/eP9k2/playlists', { method: 'POST', body: { title: 'test' } });
+  await auth.audiusRequest('/users/eP9k2/playlists');
+  expect(transport).toHaveBeenCalledTimes(3);
+});
+
+test('logout invalidates a pending browser login instead of allowing it to restore an account', async () => {
+  let resolvePrompt;
+  expoAuth.AuthRequest.mockImplementation(() => ({ state: 'expected-csrf-state', codeVerifier: 'private-pkce-verifier',
+    makeAuthUrlAsync: async () => 'https://api.audius.co/v1/oauth/authorize',
+    promptAsync: () => new Promise((resolve) => { resolvePrompt = resolve; }),
+  }));
+  const login = auth.loginAudius();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await auth.logoutAudius();
+  resolvePrompt(authResult);
+  await expect(login).rejects.toThrow('could not be verified');
+  expect(auth.getAudiusSession()).toBeNull();
+  expect(transport).not.toHaveBeenCalled();
+});
+
+test('a cold-start callback recovers a saved PKCE transaction without reopening the browser', async () => {
+  secureStore.getItemAsync.mockResolvedValueOnce(JSON.stringify({ state: 'cold-start', verifier: 'saved-private-verifier', redirectUri, createdAt: Date.now() }));
+  await expect(auth.completeAudiusLogin(`${redirectUri}?state=cold-start&code=recovered`)).resolves.toMatchObject({ id: 'eP9k2' });
+  expect(expoAuth.AuthRequest).not.toHaveBeenCalled();
+  expect(JSON.parse(transport.mock.calls[0][1].body).code_verifier).toBe('saved-private-verifier');
+});
+
+test.each([
+  ['expired', { createdAt: Date.now() - 11 * 60_000 }, redirectUri],
+  ['invalid timestamp', { createdAt: null }, redirectUri],
+  ['unexpected state', { state: 'other' }, redirectUri],
+  ['wrong destination', {}, 'crimsonmusic://other/callback'],
+])('%s callback cannot exchange or establish a session', async (_, patch, destination) => {
+  secureStore.getItemAsync.mockResolvedValueOnce(JSON.stringify({ state: 'saved-state', verifier: 'saved-verifier', redirectUri, createdAt: Date.now(), ...patch }));
+  await expect(auth.completeAudiusLogin(`${destination}?state=saved-state&code=recovered`)).rejects.toThrow('could not be verified');
+  expect(transport).not.toHaveBeenCalled();
+  expect(auth.getAudiusSession()).toBeNull();
 });

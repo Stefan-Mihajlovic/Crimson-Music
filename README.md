@@ -1,4 +1,7 @@
-# Crimson Music
+<h1>
+  <img src="./assets/images/icon.png" alt="Crimson Music icon" width="48" height="48" align="center">
+  Crimson Music
+</h1>
 
 An open-source Audius music player built with Expo 57, React Native, and TypeScript. Sign in with **Log in with Audius** to listen and manage your Audius library. Crimson uses Audius accounts directly; it has no Firebase dependency or separate account server.
 

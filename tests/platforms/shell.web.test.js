@@ -52,6 +52,7 @@ const artistFeed = (id) => ({ ...emptyFeed, followedArtists: [{ id, name: `${id}
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  localStorage.clear();
   mockComplete = true; mockMixes = [];
   mockWidth = 1440;
   mockPathname = '/';
@@ -211,4 +212,69 @@ test('sidebar bookmarks survive failed Audius refreshes and participate in playl
   mockMixes = [];
   await render();
   expect(button('Open Daily Mix')).toBeUndefined();
+});
+
+test('collapsing the sidebar preserves route state and library data and remembers the preference', async () => {
+  localStorage.removeItem('crimson.sidebar.collapsed');
+  await render();
+  const content = container.querySelector('[data-testid="route-content"]');
+  const search = container.querySelector('[aria-label="Search music"]');
+  const requests = loadLibraryFeed.mock.calls.length;
+  await act(async () => button('Collapse sidebar').click());
+  expect(button('Expand sidebar').getAttribute('aria-expanded')).toBe('false');
+  expect(container.querySelector('.crimson-shell').style.getPropertyValue('--crimson-sidebar-width')).toBe('76px');
+  expect(container.querySelector('[data-testid="route-content"]')).toBe(content);
+  expect(container.querySelector('[aria-label="Search music"]')).toBe(search);
+  expect(loadLibraryFeed).toHaveBeenCalledTimes(requests);
+  expect(localStorage.getItem('crimson.sidebar.collapsed')).toBe('true');
+  await act(async () => button('Expand sidebar').click());
+  expect(button('Collapse sidebar').getAttribute('aria-expanded')).toBe('true');
+  expect(localStorage.getItem('crimson.sidebar.collapsed')).toBe('false');
+});
+
+
+test('overlay open/close does not animate or replace the underlying page', async () => {
+  await render();
+  const main = container.querySelector('main');
+  main.animate = jest.fn(() => ({ cancel: jest.fn() }));
+  for (const overlay of ['/action-sheet', '/sleep-timer', '/equalizer', '/player']) {
+    mockPathname = overlay;
+    await render();
+    mockPathname = '/';
+    await render();
+  }
+  expect(container.querySelector('main')).toBe(main);
+  expect(main.animate).not.toHaveBeenCalled();
+  mockPathname = '/library';
+  await render();
+  expect(main.animate).toHaveBeenCalledTimes(1);
+});
+
+test('sidebar divider resizes with pointer capture and keyboard and restores its width', async () => {
+  await render();
+  const divider = container.querySelector('[role="separator"]');
+  const shell = container.querySelector('.crimson-shell');
+  const content = container.querySelector('[data-testid="route-content"]');
+  divider.setPointerCapture = jest.fn();
+  const pointer = (type, x) => {
+    const event = new MouseEvent(type, { bubbles: true, button: 0, clientX: x });
+    Object.defineProperty(event, 'pointerId', { value: 1 });
+    divider.dispatchEvent(event);
+  };
+  act(() => { pointer('pointerdown', 260); });
+  act(() => { pointer('pointermove', 370); });
+  expect(shell.style.getPropertyValue('--crimson-sidebar-width')).toBe('360px');
+  expect(shell.classList.contains('is-resizing-sidebar')).toBe(true);
+  act(() => pointer('pointerup', 370));
+  expect(shell.classList.contains('is-resizing-sidebar')).toBe(false);
+  expect(localStorage.getItem('crimson.sidebar.width')).toBe('360');
+  expect(button('Collapse sidebar').closest('aside')).not.toBeNull();
+  act(() => button('Collapse sidebar').click());
+  act(() => button('Expand sidebar').click());
+  expect(divider.getAttribute('aria-valuenow')).toBe('360');
+  act(() => divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+  expect(divider.getAttribute('aria-valuenow')).toBe('380');
+  act(() => divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
+  expect(divider.getAttribute('aria-valuenow')).toBe('76');
+  expect(container.querySelector('[data-testid="route-content"]')).toBe(content);
 });

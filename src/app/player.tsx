@@ -1,3 +1,6 @@
+import { playerPanes, type FoldingFeature } from '@/services/adaptive-layout';
+import { useFoldingFeature } from '@/hooks/use-folding-feature';
+import AdaptivePlayerQueue from '@/components/adaptive-player-queue';
 import { BrandAccent } from '@/constants/brand-accent';
 /* eslint-disable react-hooks/immutability */
 
@@ -64,12 +67,14 @@ export default function PlayerScreen() {
 
 export const PLAYER_HORIZONTAL_INSET = 22;
 
-export function getPlayerArtworkLayout(width: number, height: number, safeTop: number, safeBottom = 0) {
-  if (width > height) {
-    const size = Math.max(90, Math.min(width * 0.37, height - Math.max(safeTop, 18) - Math.max(safeBottom, 18) - 88));
-    return { size, x: PLAYER_HORIZONTAL_INSET, y: Math.max(safeTop, 18) + 52 + 16 };
+export function getPlayerArtworkLayout(width: number, height: number, safeTop: number, safeBottom = 0, safeLeft = 0, safeRight = 0, fold?: FoldingFeature | null) {
+  const panes = playerPanes(width, height, { top: safeTop, bottom: safeBottom, left: safeLeft, right: safeRight }, fold);
+  if (panes.mode !== 'compact') {
+    const area = panes.artwork;
+    const size = Math.max(0, Math.min(area.width, area.height - 32, 480));
+    return { size, x: area.x + (area.width - size) / 2, y: area.y + 16 };
   }
-  const horizontalSize = width - PLAYER_HORIZONTAL_INSET * 2;
+  const horizontalSize = panes.artwork.width;
   const verticalSize = height
     - Math.max(safeTop, 18)
     - Math.max(safeBottom, 18)
@@ -77,7 +82,7 @@ export function getPlayerArtworkLayout(width: number, height: number, safeTop: n
   const size = Math.min(horizontalSize, Math.max(100, verticalSize));
   return {
     size,
-    x: (width - size) / 2,
+    x: panes.artwork.x + (panes.artwork.width - size) / 2,
     y: Math.max(safeTop, 18) + 52 + 27,
   };
 }
@@ -116,12 +121,19 @@ export function PlayerContent({
     toggleLike,
   } = usePlayer();
 
+  const fold = useFoldingFeature();
+  const panes = playerPanes(width, height, insets, fold);
+  const split = panes.mode !== 'compact';
+  const showCompanionQueue = split && panes.controls.height >= 540;
+  const contentLeft = Math.max(PLAYER_HORIZONTAL_INSET, insets.left + 12);
+  const bodyTop = Math.max(insets.top, 18) + 52;
+  const artworkLayout = getPlayerArtworkLayout(width, height, insets.top, insets.bottom, insets.left, insets.right, fold);
   const artworkSize = useMemo(
-    () => getPlayerArtworkLayout(width, height, insets.top, insets.bottom).size,
-    [height, insets.bottom, insets.top, width],
+    () => getPlayerArtworkLayout(width, height, insets.top, insets.bottom, insets.left, insets.right, fold).size,
+    [height, insets.bottom, insets.top, insets.left, insets.right, width, fold],
   );
   const openPlayerDetails = () => { releaseWebNavigationFocus(); router.push('/player-details'); };
-  const landscape = width > height;
+  const landscape = panes.mode === 'wide' || panes.mode === 'book';
 
   if (!currentSong) {
     return (
@@ -145,8 +157,8 @@ export function PlayerContent({
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.content, { paddingTop: Math.max(insets.top, 18), paddingBottom: Math.max(insets.bottom, 18) }]}>
-        <Animated.View testID="player-drag-header" style={[styles.topBar, Platform.OS === 'web' && webPlayerDragStyle, topBarAnimatedStyle]}>
+      <View style={[styles.content, { paddingTop: Math.max(insets.top, 18), paddingBottom: Math.max(insets.bottom, 18), paddingLeft: Math.max(PLAYER_HORIZONTAL_INSET, insets.left + 12), paddingRight: Math.max(PLAYER_HORIZONTAL_INSET, insets.right + 12) }]}>
+        <Animated.View testID="player-drag-header" style={[styles.topBar, panes.mode === 'book' && { width: panes.artwork.width }, Platform.OS === 'web' && webPlayerDragStyle, topBarAnimatedStyle]}>
           <BouncyPressable accessibilityLabel="Minimize player" accessibilityRole="button" onPress={onClose || (() => router.dismiss())} style={styles.topButton}>
             <SymbolView name="chevron.down" size={20} tintColor={playerPalette.text} weight="bold" />
           </BouncyPressable>
@@ -163,15 +175,15 @@ export function PlayerContent({
           </BouncyPressable>
         </Animated.View>
 
-        <Animated.View style={[styles.playerBody, landscape && styles.landscapeBody, bodyAnimatedStyle]}>
-          <View testID="player-drag-artwork" style={[styles.artworkArea, { height: artworkSize + (landscape ? 32 : 54) }, landscape && { width: artworkSize }, Platform.OS === 'web' && webPlayerDragStyle, Platform.OS === 'web' && landscape && { overflow: 'hidden' }]}>
+        <Animated.View style={[styles.playerBody, bodyAnimatedStyle]}>
+          <View testID="player-drag-artwork" style={[styles.artworkArea, { height: artworkSize + (landscape ? 32 : 54) }, split && { position: 'absolute', left: artworkLayout.x - contentLeft, top: artworkLayout.y - bodyTop, width: artworkSize, height: artworkSize }, Platform.OS === 'web' && webPlayerDragStyle, Platform.OS === 'web' && landscape && { overflow: 'hidden' }]}>
             <View style={[styles.artworkFrame, { width: artworkSize, height: artworkSize }, artworkHidden && styles.artworkPlaceholder]}>
               {!artworkHidden ? (
                 <SwipeableArtwork pageGap={(width - artworkSize) / 2 + 8} size={artworkSize} />
               ) : null}
             </View>
           </View>
-          <ScrollView style={[styles.controlsScroll, landscape && styles.landscapeControls]} contentContainerStyle={styles.controlsContent} showsVerticalScrollIndicator={false} bounces={false}>
+          <ScrollView style={[styles.controlsScroll, split && { position: 'absolute', left: panes.controls.x - contentLeft, top: panes.controls.y - bodyTop + 16, width: panes.controls.width, height: Math.max(0, panes.controls.height - 16 - (showCompanionQueue ? 240 : 0)) }]} contentContainerStyle={styles.controlsContent} showsVerticalScrollIndicator={false} bounces={false}>
           <View style={styles.songLine}>
             <View style={styles.songCopy}>
               <Pressable accessibilityRole="button" accessibilityLabel={`Song information for ${currentSong.title}`} onPress={openActions}>
@@ -223,6 +235,7 @@ export function PlayerContent({
             </BouncyPressable>
           </View>
           </ScrollView>
+          {showCompanionQueue && <View style={{ position: 'absolute', left: panes.controls.x - contentLeft, width: panes.controls.width, top: panes.controls.y - bodyTop + panes.controls.height - 228 }}><AdaptivePlayerQueue /></View>}
         </Animated.View>
       </View>
     </View>

@@ -21,35 +21,27 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
-test('desktop search reserves its controls before focus and clears without changing the field structure', async () => {
+test('desktop search clears inside the field and leaves no external cancel slot', async () => {
   await act(async () => root.render(<Search stableLayout />));
   const input = container.querySelector('input');
-  const cancel = container.querySelector('[aria-label="Cancel search"]');
-  expect(cancel).not.toBeNull();
-  expect(cancel.disabled).toBe(true);
-  const cancelSlot = cancel.parentElement;
-  expect(cancelSlot.getAttribute('aria-hidden')).toBe('true');
-  expect(getComputedStyle(cancelSlot).opacity).toBe('0');
-  // A shell-wide disabled-button opacity must not reveal the hidden slot.
-  cancel.style.opacity = '0.35';
-  expect(getComputedStyle(cancelSlot).opacity).toBe('0');
-  const originalParent = input.parentElement;
-  const originalButtons = container.querySelectorAll('button').length;
+  const field = input.parentElement;
+  expect(field.parentElement.children).toHaveLength(1);
+  expect(container.querySelector('[aria-label="Cancel search"]')).toBeNull();
   act(() => input.focus());
-  expect(cancel.disabled).toBe(false);
-  expect(cancelSlot.getAttribute('aria-hidden')).not.toBe('true');
-  expect(getComputedStyle(cancelSlot).opacity).not.toBe('0');
+  expect(container.querySelector('[aria-label="Clear library search"]')).toBeNull();
   expect(mockFocusChange).toHaveBeenLastCalledWith(true);
-  expect(container.querySelectorAll('button')).toHaveLength(originalButtons);
-  expect(input.parentElement).toBe(originalParent);
-  act(() => cancel.click());
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'ZYRA');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const clear = container.querySelector('[aria-label="Clear library search"]');
+  expect(clear.parentElement).toBe(field);
+  act(() => clear.click());
+  expect(input.value).toBe('');
+  expect(document.activeElement).toBe(input);
   expect(mockStopVoice).toHaveBeenCalledTimes(1);
-  expect(mockFocusChange).toHaveBeenLastCalledWith(false);
-  expect(cancel.disabled).toBe(true);
-  expect(getComputedStyle(cancelSlot).opacity).toBe('0');
-  expect(cancelSlot.getAttribute('aria-hidden')).toBe('true');
-  expect(container.querySelector('[aria-label="Cancel search"]')).toBe(cancel);
-  expect(container.querySelectorAll('button')).toHaveLength(originalButtons);
+  expect(container.querySelector('[aria-label="Clear library search"]')).toBeNull();
+  expect(field.parentElement.children).toHaveLength(1);
 });
 
 test('mobile search still reveals and dismisses its cancel control on focus', async () => {

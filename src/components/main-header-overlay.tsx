@@ -66,7 +66,7 @@ export default function MainHeaderOverlay({ title, offset, horizontalInset = 20,
   const expandedRow = (
     <Animated.View
       pointerEvents="box-none"
-      style={[styles.overlay, { left: horizontalInset, right: horizontalInset }, style]}>
+      style={[styles.overlay, { left: Math.max(horizontalInset, insets.left + 12), right: Math.max(horizontalInset, insets.right + 12) }, style]}>
       <MainScreenHeader title={title} offset={offset} trailing={<MainHeaderActions visible={active} offset={offset} />} />
     </Animated.View>
   );

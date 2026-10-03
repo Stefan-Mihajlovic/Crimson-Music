@@ -1,3 +1,5 @@
+import { useFoldingFeature } from '@/hooks/use-folding-feature';
+import { playerPanes } from '@/services/adaptive-layout';
 import { BrandAccent } from '@/constants/brand-accent';
 import FrostedSurface from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
@@ -55,9 +57,11 @@ export default function DraggablePlayerSurface({
   const [artworkLoaded, setArtworkLoaded] = useState(0);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const fullArtwork = getPlayerArtworkLayout(width, height, insets.top, insets.bottom);
+  const fold = useFoldingFeature();
+  const panes = playerPanes(width, height, insets, fold);
+  const fullArtwork = getPlayerArtworkLayout(width, height, insets.top, insets.bottom, insets.left, insets.right, fold);
   const expansionHandleBottom = fullArtwork.y + fullArtwork.size;
-  const expansionHandleRight = width > height ? fullArtwork.x + fullArtwork.size : width;
+  const expansionHandleRight = panes.mode !== 'compact' ? fullArtwork.x + fullArtwork.size : width;
   const expansionHeaderBottom = Math.max(insets.top, 18) + 52;
   const safeCollapsedTop = Math.max(1, collapsedTop);
   const dragStartPosition = useSharedValue(expanded ? 0 : collapsedTop);
@@ -127,7 +131,6 @@ export default function DraggablePlayerSurface({
   const miniArtworkRadius = 8;
   const miniArtworkX = miniPlayerHorizontalInset + 14;
   const miniArtworkY = (MINI_PLAYER_HEIGHT - miniArtworkSize) / 2;
-  const collapsedScaleX = Math.max(0.01, (width - miniPlayerHorizontalInset * 2) / width);
   // Keep the native GlassView fully opaque while it mounts. Animating an
   // ancestor from opacity 0 can prevent iOS from establishing glass compositing.
   const surfaceAnimatedStyle = useAnimatedStyle(() => ({
@@ -140,31 +143,19 @@ export default function DraggablePlayerSurface({
       ),
     }],
   }));
-  // Intersect two full-size rounded clips. Moving the lower clip upward
-  // reveals a shorter surface without flattening its corners or animating layout.
-  // The content translates back by the same amount, so it stays anchored at the top.
-  const clipRadiusStyle = useAnimatedStyle(() => {
-    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
-    const radius = interpolate(position.value, [0, safeCollapsedTop], [deviceCornerRadius, MINI_PLAYER_HEIGHT / 2], Extrapolation.CLAMP);
-    return { borderRadius: radius / scale };
-  });
+  // Animate the clipping bounds, never the scale of the text/control layer.
+  // Nested scale + inverse-scale transforms make Core Animation resample the
+  // rounded offscreen surface during a gesture, even when their net scale is 1.
+  // The child keeps its full dimensions so resizing the mask cannot reflow it.
   const playerClipAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP) }],
+    left: interpolate(position.value, [0, safeCollapsedTop], [0, miniPlayerHorizontalInset], Extrapolation.CLAMP),
+    width: interpolate(position.value, [0, safeCollapsedTop], [width, width - miniPlayerHorizontalInset * 2], Extrapolation.CLAMP),
+    height: interpolate(position.value, [0, safeCollapsedTop], [height, MINI_PLAYER_HEIGHT], Extrapolation.CLAMP),
+    borderRadius: interpolate(position.value, [0, safeCollapsedTop], [deviceCornerRadius, MINI_PLAYER_HEIGHT / 2], Extrapolation.CLAMP),
   }));
-  const bottomClipAnimatedStyle = useAnimatedStyle(() => {
-    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
-    const visibleHeight = interpolate(position.value, [0, safeCollapsedTop], [height, MINI_PLAYER_HEIGHT], Extrapolation.CLAMP);
-    return { transform: [{ translateY: visibleHeight / scale - height }] };
-  });
-  const clipContentAnimatedStyle = useAnimatedStyle(() => {
-    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
-    const visibleHeight = interpolate(position.value, [0, safeCollapsedTop], [height, MINI_PLAYER_HEIGHT], Extrapolation.CLAMP);
-    return { transform: [{ translateY: height - visibleHeight / scale }] };
-  });
-  const fullAnimatedStyle = useAnimatedStyle(() => {
-    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, collapsedScaleX], Extrapolation.CLAMP);
-    return { transform: [{ scale: 1 / scale }] };
-  });
+  const clipContentAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -interpolate(position.value, [0, safeCollapsedTop], [0, miniPlayerHorizontalInset], Extrapolation.CLAMP) }],
+  }));
   const colorLayerAnimatedStyle = useAnimatedStyle(() => ({
     opacity: interpolate(position.value, [0, safeCollapsedTop * 0.955, safeCollapsedTop], [1, 1, 0], Extrapolation.CLAMP),
   }));
@@ -204,14 +195,7 @@ export default function DraggablePlayerSurface({
   }));
   const compactAnimatedStyle = useAnimatedStyle(() => ({
     opacity: interpolate(position.value, [safeCollapsedTop * 0.955, safeCollapsedTop], [0, 1], Extrapolation.CLAMP),
-    transform: [{
-      scaleX: interpolate(
-        position.value,
-        [0, safeCollapsedTop],
-        [1 / collapsedScaleX, 1],
-        Extrapolation.CLAMP,
-      ),
-    }],
+
   }));
 
   if (!currentSong) return null;
@@ -227,12 +211,9 @@ export default function DraggablePlayerSurface({
           pointerEvents={expanded ? 'auto' : 'none'}
           style={[
             styles.playerClip,
-            { height },
-            clipRadiusStyle,
             playerClipAnimatedStyle,
           ]}>
-          <Animated.View style={[styles.bottomClip, { height }, clipRadiusStyle, bottomClipAnimatedStyle]}>
-          <Animated.View style={[styles.clipContent, { height }, clipContentAnimatedStyle]}>
+          <Animated.View style={[styles.clipContent, { height, width }, clipContentAnimatedStyle]}>
               <Animated.View
                 pointerEvents="none"
                 style={[
@@ -245,7 +226,7 @@ export default function DraggablePlayerSurface({
                 <PlayerArtworkBackground active={expanded} artworkLoaded={artworkLoaded} song={currentSong} />
               </Animated.View>
 
-              <Animated.View style={[styles.full, { height }, fullAnimatedStyle]}>
+              <Animated.View style={[styles.full, { height, width }]}>
                 {expanded ? (
                   <PlayerContent
                     artworkHidden
@@ -255,7 +236,6 @@ export default function DraggablePlayerSurface({
                   />
                 ) : null}
               </Animated.View>
-          </Animated.View>
           </Animated.View>
         </Animated.View>
 
@@ -361,11 +341,10 @@ function CompactPlayer({
 
 const styles = StyleSheet.create({
   surface: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000 },
-  playerClip: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 6, overflow: 'hidden', borderCurve: 'continuous', transformOrigin: 'top center' },
-  bottomClip: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden', borderCurve: 'continuous' },
+  playerClip: { position: 'absolute', top: 0, left: 0, zIndex: 6, overflow: 'hidden', borderCurve: 'continuous' },
   clipContent: { position: 'absolute', top: 0, left: 0, right: 0 },
   colorLayer: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#17171B' },
-  full: { position: 'absolute', inset: 0, transformOrigin: 'top center' },
+  full: { position: 'absolute', top: 0, left: 0 },
   compact: { position: 'absolute', top: 0, left: miniPlayerHorizontalInset, right: miniPlayerHorizontalInset, zIndex: 4, height: MINI_PLAYER_HEIGHT, borderRadius: 26, borderCurve: 'continuous', transformOrigin: 'center', shadowColor: '#000000', shadowOpacity: 0.34, shadowRadius: 18, shadowOffset: { width: 0, height: -5 } },
   compactInterior: { position: 'absolute', inset: 0, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 14, borderRadius: 26, borderCurve: 'continuous' },
   progressTrack: { position: 'absolute', top: 0, left: 14, right: 14, height: 2, backgroundColor: 'rgba(255,255,255,0.18)' },

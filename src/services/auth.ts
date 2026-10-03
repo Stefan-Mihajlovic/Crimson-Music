@@ -75,7 +75,15 @@ export async function signOut() {
 }
 export function subscribeAuthSession(listener: (user: CrimsonUser | null) => void) {
   return subscribeAudiusSession(() => {
-    if (!getAudiusSession()) { clearAudiusCaches(); listener(null); }
+    const session = getAudiusSession();
+    if (!session) { clearAudiusCaches(); listener(null); }
+    else {
+      const revision = getAudiusSessionRevision();
+      activateAccount(session.account.id);
+      void userFrom(session.account).then((user) => {
+        if (getAudiusSessionRevision() === revision) listener(user);
+      }).catch(() => undefined);
+    }
   });
 }
 const preferenceWrites = new Map<string, Promise<CrimsonUser>>();

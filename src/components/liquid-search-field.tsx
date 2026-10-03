@@ -35,12 +35,10 @@ const LiquidSearchField = forwardRef<AuthFieldHandle, LiquidSearchFieldProps>(fu
     },
   }), [onChangeText]);
 
-  const cancelHidden = stableLayout && !focused && !value;
   const cancelButton = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Cancel search"
-      disabled={cancelHidden}
       onPress={() => {
         voiceSearch.stop();
         inputRef.current?.clear();
@@ -59,7 +57,8 @@ const LiquidSearchField = forwardRef<AuthFieldHandle, LiquidSearchFieldProps>(fu
           const target = event.target as unknown as HTMLElement;
           if (!target.closest?.('button, [role="button"]')) inputRef.current?.focus();
         } : undefined}
-        style={[styles.field, { backgroundColor: colors.controlSurface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
+        {...(stableLayout && Platform.OS === 'web' ? { dataSet: { crimsonSearch: 'true' } } : {})}
+        style={[styles.field, { backgroundColor: colors.controlSurface, borderColor: focused ? colors.accent : colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
         <SymbolView name="magnifyingglass" size={18} tintColor={colors.text} />
         <TextInput
           ref={inputRef}
@@ -80,21 +79,16 @@ const LiquidSearchField = forwardRef<AuthFieldHandle, LiquidSearchFieldProps>(fu
           style={[styles.input, { color: colors.text }]}
           value={value}
         />
+        {stableLayout && value ? <Pressable accessibilityRole="button" accessibilityLabel="Clear library search" onPress={() => {
+          voiceSearch.stop();
+          onChangeText('');
+          inputRef.current?.focus();
+        }} style={styles.micButton}><SymbolView name="xmark" size={16} tintColor={colors.secondaryText} /></Pressable> : null}
         <Pressable accessibilityRole="button" accessibilityLabel={voiceSearch.listening ? 'Stop voice search' : 'Start voice search'} onPress={() => void voiceSearch.toggle()} style={styles.micButton}>
           <SymbolView name={voiceSearch.listening ? 'waveform' : 'mic.fill'} size={voiceSearch.listening ? 19 : 17} tintColor={voiceSearch.listening ? colors.accent : colors.text} />
         </Pressable>
       </View>
-      {focused || stableLayout ? (
-        stableLayout ? (
-          <View
-            aria-hidden={cancelHidden}
-            accessibilityElementsHidden={cancelHidden}
-            importantForAccessibility={cancelHidden ? 'no-hide-descendants' : 'auto'}
-            style={[styles.cancelSlot, cancelHidden && styles.hiddenCancel]}>
-            {cancelButton}
-          </View>
-        ) : cancelButton
-      ) : null}
+      {focused && !stableLayout ? cancelButton : null}
     </View>
   );
 });
@@ -107,6 +101,4 @@ const styles = StyleSheet.create({
   input: { flex: 1, height: 46, fontSize: 15 },
   micButton: { width: 32, height: 42, alignItems: 'center', justifyContent: 'center' },
   cancel: { width: 46, height: 46, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderRadius: 23 },
-  cancelSlot: { width: 46, height: 46, flexShrink: 0 },
-  hiddenCancel: { opacity: 0 },
 });

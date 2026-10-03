@@ -1,3 +1,4 @@
+import Switch from '@/components/app-switch';
 import { equalizerPresetName } from '@/services/equalizer';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import Constants from 'expo-constants';
@@ -11,7 +12,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';

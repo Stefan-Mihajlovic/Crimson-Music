@@ -94,6 +94,7 @@ function RootNavigator() {
       screenLayout={({ children, route }) => popupRouteNames.includes(route.name)
         ? children : <ModalBackdropScene>{children}</ModalBackdropScene>}
       screenOptions={{
+        ...(Platform.OS === 'web' ? { title: 'Crimson Music' } : {}),
         header: performanceMode || Platform.OS !== 'ios' ? (props) => <PerformanceStackHeader {...props} /> : undefined,
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },

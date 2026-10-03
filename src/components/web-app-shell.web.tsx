@@ -22,6 +22,7 @@ import { createDetailRoutes, releaseWebNavigationFocus, type AppRouteGroup } fro
 import { buildLibraryCollection, filterLibraryCollection, mergePersonalMixBookmarks, type LibraryCollectionItem } from '@/services/library-collection';
 import { loadLibraryFeed, readLocalListeningEvents, readOfflineData, type LibraryFeed } from '@/services/music';
 import { getSearchQuery, requestSearchQuery, subscribeToLibraryRefresh, subscribeToSearchFocus, subscribeToSearchQuery } from '@/services/navigation-events';
+import { popupRouteNames } from '@/services/popup-presentation';
 import { webShellStyles } from '@/styles/web-shell';
 
 const tabs: { group: AppRouteGroup; label: string; icon: SymbolViewProps['name']; href: Href }[] = [
@@ -52,18 +53,68 @@ export default function WebAppShell({ children }: PropsWithChildren) {
   const segments = useSegments();
   const rootState = useRootNavigationState();
   const desktop = width >= 960;
-  const modalRoute = pathname === '/action-sheet' || pathname === '/player-details';
+  const modalRoute = popupRouteNames.includes(pathname.slice(1));
   const [lastPage, setLastPage] = useState(pathname);
   if (!modalRoute && lastPage !== pathname) setLastPage(pathname);
-  const baseRoute = rootState?.routes.slice(0, (rootState.index ?? 0) + 1).findLast((route) => !['action-sheet', 'player-details'].includes(route.name));
+  const baseRoute = rootState?.routes.slice(0, (rootState.index ?? 0) + 1).findLast((route) => !popupRouteNames.includes(route.name));
   const fullPlayer = pathname === '/player' || (desktop && pathname === '/player-details') || (modalRoute && (baseRoute?.name === 'player' || lastPage === '/player'));
   const activeGroup = segments.find((value) => ['(home)', '(search)', '(library)', '(account)'].includes(value));
   const selectedGroup = activeGroup || selectedAppGroup(rootState) || '(home)';
   const showShell = Boolean(user) && onboardingComplete && !['/welcome', '/sign-in', '/register', '/reset-password', '/onboarding', '/oauth/callback'].includes(pathname);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return typeof window !== 'undefined' && localStorage.getItem('crimson.sidebar.collapsed') === 'true'; } catch { return false; }
+  });
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try { return Math.min(480, Math.max(220, Number(localStorage.getItem('crimson.sidebar.width')) || 250)); } catch { return 250; }
+  });
+  const [resizingSidebar, setResizingSidebar] = useState(false);
+  const sidebarDrag = useRef<{ pointer: number; x: number; width: number } | null>(null);
+  const maxSidebarWidth = Math.min(480, width - 640);
+  const expandedWidth = Math.min(sidebarWidth, maxSidebarWidth);
+  const actualSidebarWidth = sidebarCollapsed ? 76 : expandedWidth;
+  const setCollapsed = (collapsed: boolean, persist = true) => {
+    setSidebarCollapsed(collapsed);
+    if (persist) try { localStorage.setItem('crimson.sidebar.collapsed', String(collapsed)); } catch { /* Session only. */ }
+  };
+  const toggleSidebar = () => setCollapsed(!sidebarCollapsed);
+  const resizeSidebar = (next: number, persist = true) => {
+    setCollapsed(next < 150, persist);
+    if (next >= 150) {
+      const clamped = Math.max(220, Math.min(maxSidebarWidth, next));
+      setSidebarWidth(clamped);
+      if (persist) try { localStorage.setItem('crimson.sidebar.width', String(clamped)); } catch { /* Session only. */ }
+    }
+  };
+  const endSidebarDrag = () => {
+    if (!sidebarDrag.current) return;
+    sidebarDrag.current = null;
+    setResizingSidebar(false);
+    // Storage is synchronous: save once on release, not on every pointer frame.
+    try {
+      localStorage.setItem('crimson.sidebar.width', String(sidebarWidth));
+      localStorage.setItem('crimson.sidebar.collapsed', String(sidebarCollapsed));
+    } catch { /* Session only. */ }
+  };
   const [query, setQuery] = useState(getSearchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const previousRoute = useRef(pathname);
+  useEffect(() => {
+    // Overlay URLs are not page navigation. Keep the underlying route as the
+    // animation baseline so dismissing a menu or player cannot bounce the page.
+    if (modalRoute || fullPlayer) return;
+    const changed = previousRoute.current !== pathname;
+    previousRoute.current = pathname;
+    if (!changed || !showShell || !desktop || reduceMotion || performanceMode) return;
+    const animation = mainRef.current?.animate?.([
+      { opacity: 0.65, transform: 'translateY(6px)' },
+      { opacity: 1, transform: 'translateY(0)' },
+    ], { duration: 180, easing: 'cubic-bezier(.22,1,.36,1)' });
+    return () => animation?.cancel();
+  }, [desktop, fullPlayer, modalRoute, pathname, performanceMode, reduceMotion, showShell]);
   const tabBottom = Math.max(12, insets.bottom);
   const theme = {
+    '--crimson-sidebar-width': `${actualSidebarWidth}px`,
     '--crimson-bg': colors.background,
     '--crimson-panel': colors.elevated,
     '--crimson-surface': colors.surface,
@@ -108,18 +159,21 @@ export default function WebAppShell({ children }: PropsWithChildren) {
     <>
       <style>{webShellStyles}</style>
       {showShell ? (
-        <div className={`crimson-shell ${desktop ? 'is-desktop' : 'is-mobile'} ${fullPlayer ? 'is-player' : ''} ${currentSong && !fullPlayer ? 'has-player' : ''} ${performanceMode || reduceMotion ? 'reduce-motion' : ''}`} style={theme}>
+        <div className={`crimson-shell ${desktop ? 'is-desktop' : 'is-mobile'} ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${resizingSidebar ? 'is-resizing-sidebar' : ''} ${fullPlayer ? 'is-player' : ''} ${currentSong && !fullPlayer ? 'has-player' : ''} ${performanceMode || reduceMotion ? 'reduce-motion' : ''}`} style={theme}>
           {desktop && (
-            <aside className="crimson-sidebar" aria-label="Main navigation and library">
-              <button className="crimson-brand" onClick={() => navigate('/(app)/(home)')} aria-label="Crimson Music Home">
-                <Image source={brandArtwork} style={{ width: 34, height: 34, borderRadius: 10 }} />
-                <span>Crimson<span className="crimson-brand-light"> Music</span></span>
-              </button>
+            <aside id="crimson-sidebar" className="crimson-sidebar" aria-label="Main navigation and library">
+              <div className="crimson-brand">
+                <button className="crimson-sidebar-toggle" aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebarCollapsed} aria-controls="crimson-sidebar" onClick={toggleSidebar}>
+                  <span className="crimson-brand-icon"><Image source={brandArtwork} style={{ width: 34, height: 34, borderRadius: 10 }} /></span>
+                  <span className="crimson-sidebar-toggle-icon"><SymbolView name={sidebarCollapsed ? 'chevron.right' : 'chevron.left'} size={21} tintColor={colors.text} /></span>
+                </button>
+                <button className="crimson-brand-title" onClick={() => navigate('/(app)/(home)')} aria-label="Crimson Music Home">Crimson<span className="crimson-brand-light"> Music</span></button>
+              </div>
               <nav className="crimson-primary-nav" aria-label="Main navigation">
                 {tabs.map((tab) => (
-                  <button key={tab.group} className={`crimson-nav-item ${selectedGroup === tab.group ? 'is-active' : ''}`} aria-current={selectedGroup === tab.group ? 'page' : undefined} onClick={() => navigate(tab.href)}>
+                  <button key={tab.group} className={`crimson-nav-item ${selectedGroup === tab.group ? 'is-active' : ''}`} aria-label={tab.label} title={tab.label} aria-current={selectedGroup === tab.group ? 'page' : undefined} onClick={() => navigate(tab.href)}>
                     <SymbolView name={tab.icon} size={21} tintColor={selectedGroup === tab.group ? colors.accent : colors.secondaryText} />
-                    {tab.label}
+                    <span className="crimson-nav-label">{tab.label}</span>
                   </button>
                 ))}
               </nav>
@@ -131,10 +185,36 @@ export default function WebAppShell({ children }: PropsWithChildren) {
               </button>
             </aside>
           )}
+          {desktop && <div className="crimson-sidebar-resizer" role="separator" tabIndex={0}
+            aria-label="Resize sidebar" aria-orientation="vertical" aria-controls="crimson-sidebar"
+            aria-valuemin={76} aria-valuemax={maxSidebarWidth} aria-valuenow={actualSidebarWidth}
+            aria-valuetext={sidebarCollapsed ? 'Collapsed' : `${actualSidebarWidth} pixels`}
+            onDoubleClick={() => { setSidebarWidth(250); setCollapsed(false); try { localStorage.setItem('crimson.sidebar.width', '250'); } catch { /* Session only. */ } }}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              sidebarDrag.current = { pointer: event.pointerId, x: event.clientX, width: actualSidebarWidth };
+              setResizingSidebar(true);
+            }}
+            onPointerMove={(event) => {
+              const drag = sidebarDrag.current;
+              if (drag && drag.pointer === event.pointerId) resizeSidebar(drag.width + event.clientX - drag.x, false);
+            }}
+            onPointerUp={endSidebarDrag} onPointerCancel={endSidebarDrag} onLostPointerCapture={endSidebarDrag}
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              if (event.key === 'Home') setCollapsed(true);
+              else if (event.key === 'End') resizeSidebar(maxSidebarWidth);
+              else if (event.key === 'ArrowRight') resizeSidebar(sidebarCollapsed ? 220 : actualSidebarWidth + 20);
+              else resizeSidebar(actualSidebarWidth <= 220 ? 76 : actualSidebarWidth - 20);
+            }} />}
           <div className="crimson-workspace">
             {desktop && (
               <header className="crimson-toolbar">
                 <div className="crimson-history-buttons">
+
                   <button className="crimson-icon-button" aria-label="Go back" disabled={!router.canGoBack()} onClick={() => { releaseWebNavigationFocus(); router.back(); }}><SymbolView name="chevron.left" size={19} tintColor={colors.text} /></button>
                   <button className="crimson-icon-button" aria-label="Go forward" onClick={() => { releaseWebNavigationFocus(); window.history.forward(); }}><SymbolView name="chevron.right" size={19} tintColor={colors.text} /></button>
                 </div>
@@ -152,10 +232,10 @@ export default function WebAppShell({ children }: PropsWithChildren) {
                 </div>
               </header>
             )}
-            <main id="crimson-main-content" className="crimson-main-content">{children}</main>
+            <main ref={mainRef} id="crimson-main-content" className="crimson-main-content">{children}</main>
           </div>
           {!desktop && !fullPlayer && <PerformanceTabs bottom={tabBottom} />}
-          <WebPlayerBar desktopLeft={280} mobileBottom={tabBottom + 68} hidden={fullPlayer} />
+          <WebPlayerBar mobileBottom={tabBottom + 68} hidden={fullPlayer} />
         </div>
       ) : children}
     </>

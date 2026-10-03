@@ -1,5 +1,6 @@
+import Switch from '@/components/app-switch';
 import { useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from '@/components/app-symbol';
 import PopupSheetLayout from '@/components/popup-sheet-layout';

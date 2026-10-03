@@ -6,7 +6,7 @@ import ArtworkImage from '@/components/artwork-image';
 import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
 import { useCallback, useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import PlaylistCover from '@/components/playlist-cover';
 import { useAuth } from '@/providers/auth-provider';
 import { useDownloads } from '@/providers/download-provider';
@@ -31,7 +31,7 @@ export default function HomeQuickAccess() {
 function AccountQuickAccess({ uid }: { uid?: string }) {
   const { colors } = useAppSettings();
   const { width } = useWindowDimensions();
-  const desktop = Platform.OS === 'web' && width >= 960;
+  const desktop = width >= 700;
   const [contentWidth, setContentWidth] = useState(0);
   const [hovered, setHovered] = useState('');
   const { isOffline } = useNetwork();

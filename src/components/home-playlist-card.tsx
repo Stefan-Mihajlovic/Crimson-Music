@@ -15,7 +15,7 @@ export default function HomePlaylistCard({ title, subtitle, desktopWidth = 184, 
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 960;
   const [hovered, setHovered] = useState(false);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`}
+  return <Pressable {...(Platform.OS === 'web' ? { dataSet: { crimsonCard: 'true' } } : {})} accessibilityRole="button" accessibilityLabel={`Open ${title}`}
     onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)}
     onPress={onPress} onLongPress={onLongPress} delayLongPress={350}
     style={({ pressed }) => [styles.card, desktop && [styles.desktopCard, { width: desktopWidth }], desktop && hovered && { backgroundColor: colors.controlSurface }, pressed && styles.pressed, pressed && !reduceMotion && styles.pressedScale]}>

@@ -1,5 +1,6 @@
+import Switch from '@/components/app-switch';
 import { useState } from 'react';
-import { FlatList, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuth } from '@/providers/auth-provider';
 import { usePopupLauncher } from '@/components/use-popup-session';
 import { POPUP_CLOSE_CLEARANCE } from '@/components/popup-layout';

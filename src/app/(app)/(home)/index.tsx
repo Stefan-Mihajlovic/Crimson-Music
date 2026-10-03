@@ -510,7 +510,7 @@ export default function HomeScreen({
         contentContainerStyle={[
           styles.scrollContent,
           desktop && styles.desktopContent,
-          { paddingTop: insets.top, paddingBottom: insets.bottom + 150 },
+          { paddingTop: insets.top, paddingLeft: Math.max(desktop ? 28 : 20, insets.left + 12), paddingRight: Math.max(desktop ? 28 : 20, insets.right + 12), paddingBottom: insets.bottom + 150 },
         ]}
       >
         <MainHeaderSpacer title="Home" />
