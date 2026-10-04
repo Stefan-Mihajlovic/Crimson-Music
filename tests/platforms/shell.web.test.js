@@ -67,7 +67,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
-test('mobile switches to the Android tabs and removes desktop navigation at the responsive boundary', async () => {
+test('mobile uses compact tabs and preserves them beneath the player at the responsive boundary', async () => {
   await render();
   expect(container.querySelector('.crimson-shell')?.className).toContain('is-desktop');
   expect(container.querySelector('aside')).not.toBeNull();
@@ -79,10 +79,12 @@ test('mobile switches to the Android tabs and removes desktop navigation at the 
   expect([...container.querySelectorAll('[role="tab"]')].map((node) => node.getAttribute('aria-label'))).toEqual(['Home', 'Search', 'Library', 'Account']);
   await act(async () => container.querySelector('[role="tab"][aria-label="Library"]').click());
   expect(mockRouter.navigate).toHaveBeenLastCalledWith('/(app)/(library)/library');
-  expect(Number(container.querySelector('output').dataset.playerBottom)).toBeGreaterThan(62 + 20);
+  expect(Number(container.querySelector('output').dataset.playerBottom)).toBe(20 + 56 + 6);
+  const homeTab = container.querySelector('[role="tab"][aria-label="Home"]');
   mockPathname = '/player'; mockSegments = ['player'];
   await render();
-  expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+  expect(container.querySelector('[role="tab"][aria-label="Home"]')).toBe(homeTab);
+  expect(homeTab.closest('[inert]')).not.toBeNull();
   expect(container.querySelector('output').dataset.playerHidden).toBe('true');
   expect(container.querySelector('[data-testid="route-content"]')).not.toBeNull();
 });
@@ -277,4 +279,20 @@ test('sidebar divider resizes with pointer capture and keyboard and restores its
   act(() => divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
   expect(divider.getAttribute('aria-valuenow')).toBe('76');
   expect(container.querySelector('[data-testid="route-content"]')).toBe(content);
+});
+
+
+test('mobile page navigation animates while player and sheet dismissal preserve the source page', async () => {
+  mockWidth = 390;
+  await render();
+  const main = container.querySelector('main');
+  main.animate = jest.fn(() => ({ cancel: jest.fn() }));
+  mockPathname = '/library';
+  await render();
+  expect(main.animate).toHaveBeenCalledTimes(1);
+  for (const path of ['/player', '/library', '/action-sheet', '/library']) {
+    mockPathname = path;
+    await render();
+  }
+  expect(main.animate).toHaveBeenCalledTimes(1);
 });

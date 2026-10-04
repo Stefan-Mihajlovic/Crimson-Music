@@ -1,6 +1,6 @@
 /* global jest, beforeEach, afterEach, test, expect */
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Dimensions, Platform, StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import ArtistSpotlight from '../src/components/artist-spotlight';
@@ -18,6 +18,7 @@ const onMenu = jest.fn();
 const defaults = { artist, songs: [{ id: 'song-1', streamable: true }], onPlay, onOpen, onMenu };
 let root;
 const originalPlatform = Platform.OS;
+const originalWindow = Dimensions.get('window');
 const button = (label) => root.root.findAll((node) => node.props.accessibilityRole === 'button' && node.props.accessibilityLabel === label)[0];
 const render = async (props = {}) => { await act(async () => { root = create(<ArtistSpotlight {...defaults} {...props} />); }); };
 
@@ -29,6 +30,7 @@ afterEach(async () => {
   if (root) await act(async () => root.unmount());
   root = undefined;
   Platform.OS = originalPlatform;
+  Dimensions.set({ window: originalWindow });
 });
 
 test('play, profile, and menu are independent actions rather than nested press targets', async () => {
@@ -92,4 +94,19 @@ test('does not invent copy when the artist has no biography or follower count', 
   expect(tree).not.toContain('followers');
   expect(tree).not.toContain('biography');
   expect(button(`More options for ${artist.name}`)).toBeUndefined();
+});
+
+
+test('desktop spotlight keeps the profile portrait separate from the artist banner', async () => {
+  Platform.OS = 'web';
+  Dimensions.set({ window: { width: 1440, height: 900, scale: 1, fontScale: 1 } });
+  await render({ artist: { ...artist, aboutImage: 'https://example.com/banner.jpg' } });
+  const images = root.root.findAllByType('ArtworkImage');
+  expect(images).toHaveLength(2);
+  expect(images[0].props.source).toEqual({ uri: 'https://example.com/banner.jpg' });
+  expect(images[0].props.artwork).toBeUndefined();
+  expect(images[1].props.source).toEqual({ uri: artist.image });
+  expect(images[1].props.artwork).toBe(artist.artwork);
+  await act(async () => button(`Play ${artist.name}`).props.onPress());
+  expect(onPlay).toHaveBeenCalledTimes(1);
 });

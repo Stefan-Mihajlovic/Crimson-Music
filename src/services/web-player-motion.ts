@@ -5,9 +5,12 @@ let state = initial;
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let frame: number | undefined;
+let awaitingSurface = false;
+let pendingSettle: (() => void) | undefined;
 let currentSession: WebPlayerMotionSession | undefined;
 
 function clearScheduledMotion() {
+  pendingSettle = undefined;
   clearTimeout(timer);
   timer = undefined;
   if (frame !== undefined) cancelAnimationFrame(frame);
@@ -29,12 +32,21 @@ export function subscribeWebPlayerMotion(listener: () => void) {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
 }
-export function beginWebPlayerMotion(position: number, collapsedTop: number) {
+export function beginWebPlayerMotion(position: number, collapsedTop: number, waitForSurface = false) {
   clearScheduledMotion();
+  awaitingSurface = waitForSurface;
   const session = Symbol('player-motion');
   currentSession = session;
   publish({ position, collapsedTop: Math.max(1, collapsedTop), phase: 'dragging' });
   return session;
+}
+/** A lazy route must paint the handoff geometry before consuming its opening animation. */
+export function attachWebPlayerMotionSurface(session: WebPlayerMotionSession | undefined) {
+  if (!ownsMotion(session)) return;
+  awaitingSurface = false;
+  const settle = pendingSettle;
+  pendingSettle = undefined;
+  settle?.();
 }
 export function cancelWebPlayerMotion(session: WebPlayerMotionSession | undefined) {
   if (!ownsMotion(session)) return;
@@ -49,6 +61,10 @@ export function moveWebPlayerMotion(session: WebPlayerMotionSession | undefined,
 export function settleWebPlayerMotion(session: WebPlayerMotionSession | undefined, open: boolean, reduceMotion: boolean, onFinished?: () => void, afterPaint = false) {
   if (!ownsMotion(session)) return;
   clearScheduledMotion();
+  if (awaitingSurface) {
+    pendingSettle = () => settleWebPlayerMotion(session, open, reduceMotion, onFinished, true);
+    return;
+  }
   const settle = () => {
     frame = undefined;
     if (!ownsMotion(session)) return;

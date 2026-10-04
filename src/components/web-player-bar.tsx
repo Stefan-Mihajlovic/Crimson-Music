@@ -1,6 +1,7 @@
+import { getDesktopPlayerPresented, getServerDesktopPlayerPresented, subscribeDesktopPlayerPresented } from '@/services/desktop-player-presentation';
 import ArtworkImage from '@/components/artwork-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import { usePlayer, usePlayerStatus } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
+import { WEB_BOTTOM_BAR_INSET } from '@/components/player-layout';
 import MiniPlayer from '@/components/mini-player';
 import { formatPlayerTime, PlayerIconButton, PlayerRange, WebTransport, WebVolume } from '@/components/web-player-controls';
 import { useWebPointerDrag } from '@/hooks/use-web-pointer-drag';
@@ -17,6 +19,8 @@ import { beginWebPlayerMotion, cancelWebPlayerMotion, moveWebPlayerMotion, settl
 import { releaseWebNavigationFocus } from '@/services/action-sheet';
 
 export default function WebPlayerBar({ mobileBottom = 86, hidden = false }: { mobileBottom?: number; hidden?: boolean }) {
+  const desktopPresented = useSyncExternalStore(subscribeDesktopPlayerPresented, getDesktopPlayerPresented, getServerDesktopPlayerPresented);
+  const concealDesktop = hidden && desktopPresented;
   const player = usePlayer();
   const status = usePlayerStatus();
   const { colors, isDark, performanceMode, reduceMotion } = useAppSettings();
@@ -36,7 +40,7 @@ export default function WebPlayerBar({ mobileBottom = 86, hidden = false }: { mo
     canStart: (target) => Boolean(target.closest('.crimson-mini-track')),
     onStart: () => {
       dragOrigin.current = collapsedTop;
-      motionSession.current = beginWebPlayerMotion(collapsedTop, collapsedTop);
+      motionSession.current = beginWebPlayerMotion(collapsedTop, collapsedTop, true);
       releaseWebNavigationFocus();
       router.push('/player');
     },
@@ -163,25 +167,28 @@ export default function WebPlayerBar({ mobileBottom = 86, hidden = false }: { mo
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [currentSong, playNext, playPrevious, seekTo, togglePlay]);
-  if (!currentSong || hidden) return null;
+  if (!currentSong) return null;
   const openPlayer = () => {
     releaseWebNavigationFocus();
     if (width < 960 && !reduceMotion) {
-      motionSession.current = beginWebPlayerMotion(collapsedTop, collapsedTop);
+      motionSession.current = beginWebPlayerMotion(collapsedTop, collapsedTop, true);
       router.push('/player');
       settleWebPlayerMotion(motionSession.current, true, false, undefined, true);
     } else router.push('/player');
   };
-  if (width < 960) return <div onPointerDownCapture={drag.onPointerDown} onClickCapture={drag.onClickCapture} onDragStart={(event) => event.preventDefault()}
-    style={{ position: 'absolute', left: 20, right: 20, height: 52, bottom: mobileBottom, zIndex: 30 }}>
+  if (width < 960) return <div data-testid="mobile-mini-player" inert={hidden} aria-hidden={hidden} onPointerDownCapture={drag.onPointerDown} onClickCapture={drag.onClickCapture} onDragStart={(event) => event.preventDefault()}
+    style={{ position: 'absolute', left: WEB_BOTTOM_BAR_INSET, right: WEB_BOTTOM_BAR_INSET, height: 52, bottom: mobileBottom, zIndex: 30, visibility: hidden ? 'hidden' : 'visible' }}>
     <MiniPlayer onExpand={openPlayer} onBeginExpand={() => {}} onExpandDrag={() => {}} onExpandRelease={() => {}} />
   </div>;
   return (
-    <div role="toolbar" aria-label="Music player" className="crimson-player-bar" style={{
+    <div inert={hidden} aria-hidden={hidden} role="toolbar" aria-label="Music player" className="crimson-player-bar" style={{
       containerType: 'inline-size', position: 'absolute', bottom: 18, right: 24, left: 'calc(var(--crimson-sidebar-width, 250px) + 30px)',
-      border: `1px solid ${colors.border}`, borderRadius: 14, padding: '16px', minHeight: 82, zIndex: 30,
+      border: 0, borderRadius: 14, padding: '16px', minHeight: 82, zIndex: 30,
       boxShadow: '0 12px 42px rgba(0,0,0,.32)',
-      transition: reduceMotion || performanceMode ? 'none' : 'left .3s cubic-bezier(.22,1,.36,1)',
+      opacity: concealDesktop ? 0 : 1, pointerEvents: hidden ? 'none' : 'auto',
+      // The drag flag is inherited through CSS, so position follows the sidebar
+      // immediately while the independent player open/close fade stays animated.
+      transition: reduceMotion || performanceMode ? 'none' : 'left var(--crimson-sidebar-transition-duration, .3s) cubic-bezier(.22,1,.36,1), opacity 220ms ease',
     }}>
       <div aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: 'inherit', pointerEvents: 'none',
         background: performanceMode ? colors.elevated : isDark ? 'rgba(27,22,35,.58)' : 'rgba(250,247,255,.68)',

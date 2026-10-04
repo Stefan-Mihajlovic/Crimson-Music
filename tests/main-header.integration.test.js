@@ -394,3 +394,12 @@ test('Performance Mode hides the UIKit bar and uses a solid compact header', () 
   expect(StyleSheet.flatten(background.props.style)).toMatchObject({ height: 103, opacity: 1, backgroundColor: '#111' });
   act(() => tree.unmount());
 });
+
+
+test('the web player preserves only its selected source header during the shared transition', () => {
+  const { isMainHeaderBehindPopup } = require('../src/services/main-header-visibility');
+  expect(isMainHeaderBehindPopup(pageState({ popup: 'player' }), mockRouteKey, true)).toBe(true);
+  expect(isMainHeaderBehindPopup(pageState({ popup: 'player' }), mockRouteKey)).toBe(false);
+  expect(isMainHeaderBehindPopup(pageState({ popup: 'player', selectedTab: 0 }), mockRouteKey, true)).toBe(false);
+  expect(isMainHeaderBehindPopup(pageState({ popup: 'player', pushedPage: 'playlist' }), mockRouteKey, true)).toBe(false);
+});

@@ -16,7 +16,6 @@ type Props = {
   profile: DiscoveryProfile;
   rotation: number;
   excludeTrackIds: string[];
-  contentWidth: number;
   onOpenArtist: (artist: CrimsonArtist) => void;
   onArtistMenu: (artist: CrimsonArtist) => void;
   onSongMenu: (song: CrimsonSong) => void;
@@ -30,7 +29,7 @@ export default function HomeDiscovery(props: Props) {
   return <AccountHomeDiscovery key={key} {...props} uid={user?.uid} />;
 }
 
-function AccountHomeDiscovery({ artist, profile, rotation, excludeTrackIds, contentWidth, onOpenArtist, onArtistMenu, onSongMenu, uid }: Props & { uid?: string }) {
+function AccountHomeDiscovery({ artist, profile, rotation, excludeTrackIds, onOpenArtist, onArtistMenu, onSongMenu, uid }: Props & { uid?: string }) {
   const { isOffline } = useNetwork();
   const { colors } = useAppSettings();
   const { playSong } = usePlayer();
@@ -65,7 +64,7 @@ function AccountHomeDiscovery({ artist, profile, rotation, excludeTrackIds, cont
         onPlay={() => { if (spotlightSongs.length) playSong(spotlightSongs[0], spotlightSongs, artist.name); }}
         onOpen={() => onOpenArtist(artist)} onMenu={() => onArtistMenu(artist)} />
     </View> : null}
-    <HomeDiscoverySections underground={shelves.underground} contentWidth={contentWidth}
+    <HomeDiscoverySections underground={shelves.underground}
       excludeTrackIds={[...excludeTrackIds, ...spotlightSongs.map((song) => song.id)]}
       onPlaySong={(song, queue, source) => playSong(song, queue, source)}
       onSongMenu={onSongMenu} />
