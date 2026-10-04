@@ -39,7 +39,7 @@ export default function MainHeaderOverlay({ title, offset, horizontalInset = 20,
   // container hydrates nested tab/page states and notifies after blur commits.
   const subscribe = useCallback((changed: () => void) => navigation.addListener('state', changed), [navigation]);
   const getCovered = useCallback(() => isMainHeaderBehindPopup(
-    navigation.isReady() ? navigation.getRootState() : undefined, route.key,
+    navigation.isReady() ? navigation.getRootState() : undefined, route.key, Platform.OS === 'web',
   ), [navigation, route.key]);
   const coveredByPopup = useSyncExternalStore(subscribe, getCovered, () => false);
   const playerVisible = usePlayerOverlayVisible();

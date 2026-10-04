@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { SymbolView } from '@/components/app-symbol';
 import ArtworkImage from '@/components/artwork-image';
@@ -21,6 +21,8 @@ export type ArtistSpotlightProps = {
 
 export default function ArtistSpotlight({ artist, songs, loading = false, onPlay, onOpen, onMenu }: ArtistSpotlightProps) {
   const { isDark, reduceMotion } = useAppSettings();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 960;
   const [wide, setWide] = useState(false);
   const [failedImage, setFailedImage] = useState<string | null>(null);
   const imageKey = `${artist.id}:${artist.image}`;
@@ -34,30 +36,30 @@ export default function ArtistSpotlight({ artist, songs, loading = false, onPlay
       onLayout={(event) => setWide(event.nativeEvent.layout.width >= 600)}
       style={[styles.card, wide && styles.wideCard, { backgroundColor: surface, borderColor: isDark ? 'rgba(177,138,255,0.2)' : 'rgba(109,40,217,0.28)' }]}
     >
-      <View pointerEvents="none" style={[styles.imageWrap, wide && styles.wideImageWrap]}>
+      <View pointerEvents="none" style={[styles.imageWrap, wide && styles.wideImageWrap, desktop && styles.desktopBanner]}>
         <ArtworkImage
           accessibilityIgnoresInvertColors
           accessible={false}
-          artwork={artist.artwork}
+          artwork={desktop ? undefined : artist.artwork}
           fallbackSource={defaultArtistImage}
           cachePolicy="memory-disk"
           contentFit="cover"
           contentPosition="center"
-          recyclingKey={imageKey}
+          recyclingKey={desktop ? `${artist.id}:${artist.aboutImage}` : imageKey}
           transition={reduceMotion ? 0 : 180}
-          source={artist.image && failedImage !== imageKey ? { uri: artist.image } : defaultArtistImage}
+          source={desktop ? (artist.aboutImage ? { uri: artist.aboutImage } : defaultArtistImage) : artist.image && failedImage !== imageKey ? { uri: artist.image } : defaultArtistImage}
           onError={() => {
             // Web ArtworkImage tries its mirrors itself; native needs a local fallback.
             if (Platform.OS !== 'web') setFailedImage(imageKey);
           }}
           style={StyleSheet.absoluteFill}
         />
-        <CollectionPlayingOverlay sourceName={artist.name} spectrumSize={50} />
+        {!desktop && <CollectionPlayingOverlay sourceName={artist.name} spectrumSize={50} />}
       </View>
       <LinearGradient
         pointerEvents="none"
-        colors={[surface, isDark ? 'rgba(24,13,43,0.94)' : 'rgba(40,19,64,0.94)', 'rgba(29,12,52,0.28)', 'rgba(29,12,52,0.08)']}
-        locations={[0, wide ? 0.36 : 0.3, 0.76, 1]}
+        colors={desktop ? ['rgba(16,9,28,.72)', 'rgba(16,9,28,.42)'] : [surface, isDark ? 'rgba(24,13,43,0.94)' : 'rgba(40,19,64,0.94)', 'rgba(29,12,52,0.28)', 'rgba(29,12,52,0.08)']}
+        locations={desktop ? [0, 1] : [0, wide ? 0.36 : 0.3, 0.76, 1]}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={StyleSheet.absoluteFill}
@@ -69,35 +71,43 @@ export default function ArtistSpotlight({ artist, songs, loading = false, onPlay
         style={StyleSheet.absoluteFill}
       />
 
-      <View style={[styles.content, wide && styles.wideContent]}>
-        <View style={[styles.copy, wide && styles.wideCopy]}>
-          <Text accessibilityRole="header" numberOfLines={2} style={[styles.name, wide && styles.wideName]}>{artist.name}</Text>
-          {artist.followers ? <Text style={styles.followers}>{artist.followers} followers</Text> : null}
-          {bio ? <Text numberOfLines={2} style={styles.bio}>{bio}</Text> : null}
-        </View>
+      <View style={desktop ? styles.desktopRow : styles.row}>
+        {desktop && <View style={styles.desktopPortrait}>
+          <ArtworkImage artwork={artist.artwork} source={artist.image ? { uri: artist.image } : defaultArtistImage}
+            fallbackSource={defaultArtistImage} contentFit="cover" style={StyleSheet.absoluteFill} />
+          <CollectionPlayingOverlay sourceName={artist.name} spectrumSize={50} />
+        </View>}
+        <View style={[styles.content, wide && styles.wideContent, desktop && styles.desktopContent]}>
+          <View style={[styles.copy, wide && styles.wideCopy, desktop && styles.desktopCopy]}>
+            <Text accessibilityRole="header" numberOfLines={2} style={[styles.name, wide && styles.wideName]}>{artist.name}</Text>
+            {artist.followers ? <Text style={styles.followers}>{artist.followers} followers</Text> : null}
+            {bio ? <Text numberOfLines={2} style={styles.bio}>{bio}</Text> : null}
+          </View>
 
-        <View style={styles.actions}>
-          {canPlay ? (
+          <View style={styles.actions}>
+            {canPlay ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Play ${artist.name}`}
+                onPress={onPlay}
+                style={({ pressed }) => [styles.playButton, pressed && styles.playPressed, pressed && !reduceMotion && styles.buttonScale]}
+              >
+                <SymbolView name="play.fill" size={18} tintColor="#1B102A" />
+                <Text style={styles.playText}>Play</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Play ${artist.name}`}
-              onPress={onPlay}
-              style={({ pressed }) => [styles.playButton, pressed && styles.playPressed, pressed && !reduceMotion && styles.buttonScale]}
+              accessibilityLabel={`View ${artist.name}'s profile`}
+              onPress={onOpen}
+              style={({ pressed }) => [styles.profileButton, pressed && styles.profilePressed]}
             >
-              <SymbolView name="play.fill" size={18} tintColor="#1B102A" />
-              <Text style={styles.playText}>Play</Text>
+              <Text style={styles.profileText}>View profile</Text>
+              <SymbolView name="chevron.right" size={14} tintColor="#F3ECFF" />
             </Pressable>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`View ${artist.name}'s profile`}
-            onPress={onOpen}
-            style={({ pressed }) => [styles.profileButton, pressed && styles.profilePressed]}
-          >
-            <Text style={styles.profileText}>View profile</Text>
-            <SymbolView name="chevron.right" size={14} tintColor="#F3ECFF" />
-          </Pressable>
+          </View>
         </View>
+
       </View>
 
       {onMenu ? (
@@ -115,6 +125,12 @@ export default function ArtistSpotlight({ artist, songs, loading = false, onPlay
 }
 
 const styles = StyleSheet.create({
+  row: { flexGrow: 1 },
+  desktopRow: { flexDirection: 'row', alignItems: 'center', gap: 28, padding: 28, minHeight: 264 },
+  desktopPortrait: { width: 208, height: 208, borderRadius: 10, overflow: 'hidden', flexShrink: 0, boxShadow: '0 12px 32px rgba(0,0,0,.24)' },
+  desktopBanner: { width: '100%' },
+  desktopContent: { flex: 1, minWidth: 0, minHeight: 208, padding: 0, paddingHorizontal: 0, paddingVertical: 0, gap: 18 },
+  desktopCopy: { width: '100%', paddingRight: 44 },
   card: { width: '100%', minHeight: 280, borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
   wideCard: { minHeight: 270, borderRadius: 28 },
   imageWrap: { position: 'absolute', top: 0, right: 0, bottom: 0, width: '76%' },

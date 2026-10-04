@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { getDesktopPlayerPresented } from '../../src/services/desktop-player-presentation';
 import DesktopPlayer from '../../src/components/desktop-player';
 
 let mockPreventRemove;
@@ -41,15 +42,17 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); HTMLElement.prototype.animate = originalAnimate; });
 
-test('player slides in and retains the route until the closing animation finishes', async () => {
+test('player enters with a short reveal and retains the route until the closing animation finishes', async () => {
   await act(async () => root.render(<DesktopPlayer />));
-  expect(animations[0].frames[0].transform).toBe('translateY(100%)');
+  expect(animations[0].frames[0].transform).toBe('translateY(24px)');
+  expect(getDesktopPlayerPresented()).toBe(true);
   act(() => container.querySelector('[aria-label="Minimize player"]').click());
   expect(mockBack).toHaveBeenCalledTimes(1);
   const action = { type: 'GO_BACK' };
   act(() => mockPreventRemove({ data: { action } }));
   expect(mockDispatch).not.toHaveBeenCalled();
-  expect(animations[1].frames[1].transform).toBe('translateY(100%)');
+  expect(getDesktopPlayerPresented()).toBe(false);
+  expect(animations[1].frames[1].transform).toBe('translateY(24px)');
   act(() => mockPreventRemove({ data: { action } }));
   expect(animations).toHaveLength(2);
   await act(async () => animations[1].finish());

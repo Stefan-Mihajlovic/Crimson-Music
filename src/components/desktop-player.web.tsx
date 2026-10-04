@@ -1,3 +1,4 @@
+import { setDesktopPlayerPresented } from '@/services/desktop-player-presentation';
 import ArtworkImage from '@/components/artwork-image';
 import { useIsFocused, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
@@ -38,11 +39,12 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
     alive.current = true;
     if (hasSong && !reduceMotion && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       motion.current = surface.current?.animate?.([
-        { transform: 'translateY(100%)', opacity: 0.6 },
+        { transform: 'translateY(24px)', opacity: 0 },
         { transform: 'translateY(0)', opacity: 1 },
-      ], { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' }) ?? null;
+      ], { duration: 320, easing: 'cubic-bezier(.22,1,.36,1)' }) ?? null;
     }
-    return () => { alive.current = false; motion.current?.cancel(); };
+    setDesktopPlayerPresented(hasSong);
+    return () => { alive.current = false; motion.current?.cancel(); setDesktopPlayerPresented(false); };
   }, [hasSong, reduceMotion]);
   usePreventRemove(hasSong, ({ data }) => {
     if (closing.current) return;
@@ -51,13 +53,16 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
       return;
     }
     closing.current = true;
+    setDesktopPlayerPresented(false);
     // Start from the currently displayed position if the user closes mid-entry.
-    const from = getComputedStyle(surface.current).transform;
+    const currentStyle = getComputedStyle(surface.current);
+    const from = currentStyle.transform;
+    const fromOpacity = currentStyle.opacity || 1;
     motion.current?.cancel();
     const animation = surface.current.animate([
-      { transform: from === 'none' ? 'translateY(0)' : from, opacity: 1 },
-      { transform: 'translateY(100%)', opacity: 0.6 },
-    ], { duration: 280, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
+      { transform: from === 'none' ? 'translateY(0)' : from, opacity: fromOpacity },
+      { transform: 'translateY(24px)', opacity: 0 },
+    ], { duration: 220, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' });
     motion.current = animation;
     void animation.finished.then(() => {
       if (alive.current) navigation.dispatch(data.action);

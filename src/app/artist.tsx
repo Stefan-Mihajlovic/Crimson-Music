@@ -215,18 +215,20 @@ export default function ArtistDetailScreen() {
       >
         <View style={[styles.hero, desktop && styles.desktopHero]}>
           <ArtworkImage
-            artwork={artist.artwork}
+            artwork={desktop ? undefined : artist.artwork}
             fallbackSource={fallbackArtist}
             cachePolicy="memory-disk"
-            source={heroArtwork ? { uri: heroArtwork } : fallbackArtist}
+            source={desktop ? (artist.aboutImage ? { uri: artist.aboutImage } : fallbackArtist) : heroArtwork ? { uri: heroArtwork } : fallbackArtist}
             contentFit="cover"
             contentPosition={desktop ? { top: '30%', left: '50%' } : undefined}
             style={StyleSheet.absoluteFill}
           />
           <LinearGradient
-            colors={['transparent', 'rgba(14,13,19,0.58)', desktop ? 'rgba(14,13,19,0.90)' : colors.background]}
+            colors={[desktop ? 'rgba(14,13,19,0.28)' : 'transparent', 'rgba(14,13,19,0.58)', desktop ? 'rgba(14,13,19,0.90)' : colors.background]}
             style={StyleSheet.absoluteFill}
           />
+          {desktop && <ArtworkImage testID="desktop-artist-portrait" artwork={artist.artwork} source={heroArtwork ? { uri: heroArtwork } : fallbackArtist}
+            fallbackSource={fallbackArtist} contentFit="cover" style={[styles.desktopPortrait, { width: width >= 1200 ? 208 : 180, height: width >= 1200 ? 208 : 180 }]} />}
           <View style={[styles.heroCopy, desktop && styles.desktopHeroCopy]}>
             <Text numberOfLines={desktop ? 2 : undefined} style={[styles.name, desktop && styles.desktopName]}>{artist.name}</Text>
             <View style={styles.metadataRow}>
@@ -585,8 +587,9 @@ export default function ArtistDetailScreen() {
 
 const styles = StyleSheet.create({
   desktopContent: { width: '100%', maxWidth: 1440, alignSelf: 'center' },
-  desktopHero: { height: 300 },
-  desktopHeroCopy: { paddingHorizontal: 32, paddingBottom: 24 },
+  desktopHero: { height: 'auto', minHeight: 264, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', padding: 28, gap: 28 },
+  desktopPortrait: { borderRadius: 10, flexShrink: 0, boxShadow: '0 12px 32px rgba(0,0,0,.24)' },
+  desktopHeroCopy: { flex: 1, minWidth: 0, paddingHorizontal: 0, paddingBottom: 0 },
   desktopName: { fontSize: 52, letterSpacing: -1.5, fontWeight: '800' },
   desktopActions: { maxWidth: 340 },
   desktopBody: { paddingHorizontal: 22 },

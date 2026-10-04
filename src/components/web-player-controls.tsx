@@ -33,7 +33,7 @@ export function PlayerIconButton({ label, icon, onPress, active = false, size = 
       transition: 'background-color 150ms, transform 150ms', ...style,
     }}>
     {loading ? <ActivityIndicator color={prominent ? '#19131F' : colors.accent} size="small" />
-      : <SymbolView name={icon} size={size} tintColor={prominent ? '#19131F' : active ? colors.accent : colors.text} />}
+      : <SymbolView name={icon} size={size} style={icon === 'play.fill' ? { transform: [{ translateX: size * 0.075 }] } : undefined} tintColor={prominent ? '#19131F' : active ? colors.accent : colors.text} />}
     {active && !prominent ? <span aria-hidden="true" style={{ position: 'absolute', bottom: 0, width: 3, height: 3, borderRadius: 3, background: colors.accent }} /> : null}
   </button>;
 }

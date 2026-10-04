@@ -21,6 +21,8 @@ const fallbackArtwork = require('@/assets/images/home/default-song.webp');
 
 export type MiniPlayerGestureProps = {
   disabled?: boolean;
+  artworkHidden?: boolean;
+  materialHidden?: boolean;
   onBeginExpand: () => void;
   onExpand: () => void;
   onExpandDrag: (distance: number) => void;

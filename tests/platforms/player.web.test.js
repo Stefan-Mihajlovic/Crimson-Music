@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { setDesktopPlayerPresented } from '../../src/services/desktop-player-presentation';
 import WebPlayerBar from '../../src/components/web-player-bar';
 import DesktopPlayerPanel from '../../src/components/desktop-player-panel';
 
@@ -34,6 +35,7 @@ let handlers;
 let media;
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  setDesktopPlayerPresented(false);
   Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 1440 });
   Object.defineProperty(document.documentElement, 'clientHeight', { configurable: true, value: 900 });
   window.dispatchEvent(new Event('resize'));
@@ -78,7 +80,7 @@ test('keyboard playback shortcuts do not steal input or button keystrokes', () =
 
 test('hiding the bar for the expanded player preserves media session commands', () => {
   act(() => root.render(<WebPlayerBar hidden />));
-  expect(container.querySelector('[aria-label="Play"]')).toBeNull();
+  expect(container.querySelector('[aria-label="Play"]').closest('[inert]')).not.toBeNull();
   act(() => handlers.play());
   expect(mockPlayer.togglePlay).toHaveBeenCalledTimes(1);
   expect(media.metadata.title).toBe('First song');
@@ -116,4 +118,19 @@ test('related stays inside the player and starts the selected related queue', as
   act(() => container.querySelector('[aria-label="Play Related song by Another artist"]').click());
   expect(mockPlayer.playSong).toHaveBeenCalledWith(related[0], related, 'Related');
   expect(mockPush).not.toHaveBeenCalled();
+});
+
+
+test('the desktop dock stays visible until the lazy player is ready and returns during dismissal', () => {
+  const dock = container.querySelector('[aria-label="Music player"]');
+  act(() => root.render(<WebPlayerBar hidden />));
+  expect(container.querySelector('[aria-label="Music player"]')).toBe(dock);
+  expect(dock.style.opacity).toBe('1');
+  expect(dock.hasAttribute('inert')).toBe(true);
+  act(() => setDesktopPlayerPresented(true));
+  expect(dock.style.opacity).toBe('0');
+  act(() => setDesktopPlayerPresented(false));
+  expect(dock.style.opacity).toBe('1');
+  act(() => root.render(<WebPlayerBar />));
+  expect(dock.hasAttribute('inert')).toBe(false);
 });

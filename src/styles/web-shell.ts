@@ -26,8 +26,9 @@ html, body * { scrollbar-width: thin; scrollbar-color: var(--crimson-accent, ${B
 .crimson-sidebar-resizer { position: absolute; z-index: 40; left: calc(var(--crimson-sidebar-width) + 10px); width: 10px; top: 14px; bottom: 14px; cursor: col-resize; touch-action: none; transition: left .3s cubic-bezier(.22,1,.36,1); }
 .crimson-sidebar-resizer::after { content: ''; position: absolute; width: 2px; top: 8px; bottom: 8px; left: 4px; border-radius: 2px; background: var(--crimson-muted); opacity: 0; transition: opacity .16s; }
 .crimson-sidebar-resizer:hover::after, .crimson-sidebar-resizer:focus-visible::after, .is-resizing-sidebar .crimson-sidebar-resizer::after { opacity: 1; }
+.is-resizing-sidebar { --crimson-sidebar-transition-duration: 0s; }
 .is-resizing-sidebar, .is-resizing-sidebar * { cursor: col-resize !important; user-select: none !important; }
-.is-resizing-sidebar .crimson-sidebar, .is-resizing-sidebar .crimson-sidebar-resizer, .is-resizing-sidebar .crimson-player-bar { transition: none; }
+.is-resizing-sidebar .crimson-sidebar, .is-resizing-sidebar .crimson-sidebar-resizer { transition: none; }
 .crimson-brand-light { font-weight: 500; }
 .crimson-primary-nav { padding: 4px 10px 16px; display: flex; flex-direction: column; gap: 3px; }
 .crimson-nav-item { border: 0; display: flex; align-items: center; gap: 14px; padding: 11px 14px; min-height: 44px; text-align: left; font-size: 14px; font-weight: 650; background: transparent; color: var(--crimson-muted); border-radius: 9px; transition: background .15s, color .15s; }

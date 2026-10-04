@@ -32,7 +32,7 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
   const { colors } = useAppSettings();
   const { width } = useWindowDimensions();
   const desktop = width >= 700;
-  const [contentWidth, setContentWidth] = useState(0);
+  const [fourColumns, setFourColumns] = useState(false);
   const [hovered, setHovered] = useState('');
   const { isOffline } = useNetwork();
   const { playSong } = usePlayer();
@@ -73,11 +73,11 @@ function AccountQuickAccess({ uid }: { uid?: string }) {
     { title: 'Your library', icon: 'square.stack' as const, onPress: () => router.push('/(app)/(library)/library') },
   ];
   const tileStyle = (key: string) => [styles.tile, { backgroundColor: colors.controlSurface, borderColor: colors.border },
-    desktop && [styles.desktopTile, { width: contentWidth >= 780 ? '24.1%' as const : '48.6%' as const }],
+    desktop && [styles.desktopTile, { width: fourColumns ? '24.1%' as const : '48.6%' as const }],
     desktop && hovered === key && { backgroundColor: colors.accentSoft }];
 
   return (
-    <View onLayout={({ nativeEvent: { layout } }) => setContentWidth(layout.width)} style={styles.section}>
+    <View onLayout={({ nativeEvent: { layout } }) => setFourColumns(layout.width >= 780)} style={styles.section}>
       <View style={styles.grid}>
         <Pressable accessibilityRole="button" onPress={() => router.push(routes.favoritesHref())} onHoverIn={() => setHovered('favorites')} onHoverOut={() => setHovered('')} style={tileStyle('favorites')}>
           <FavoritesArtwork style={styles.smallCover} />

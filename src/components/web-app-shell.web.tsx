@@ -11,7 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
 import ArtworkImage from '@/components/artwork-image';
 import MainHeaderActions from '@/components/main-header-actions';
-import PerformanceTabs from '@/components/performance-tabs';
+import WebMobileNavigation from '@/components/web-mobile-navigation';
+import { webTabBottom, webMiniPlayerBottom } from '@/components/player-layout';
 import PlaylistCover from '@/components/playlist-cover';
 import { profileImageSource } from '@/components/profile-images';
 import WebPlayerBar from '@/components/web-player-bar';
@@ -105,14 +106,14 @@ export default function WebAppShell({ children }: PropsWithChildren) {
     if (modalRoute || fullPlayer) return;
     const changed = previousRoute.current !== pathname;
     previousRoute.current = pathname;
-    if (!changed || !showShell || !desktop || reduceMotion || performanceMode) return;
+    if (!changed || !showShell || reduceMotion || performanceMode) return;
     const animation = mainRef.current?.animate?.([
       { opacity: 0.65, transform: 'translateY(6px)' },
       { opacity: 1, transform: 'translateY(0)' },
     ], { duration: 180, easing: 'cubic-bezier(.22,1,.36,1)' });
     return () => animation?.cancel();
   }, [desktop, fullPlayer, modalRoute, pathname, performanceMode, reduceMotion, showShell]);
-  const tabBottom = Math.max(12, insets.bottom);
+  const tabBottom = webTabBottom(insets.bottom);
   const theme = {
     '--crimson-sidebar-width': `${actualSidebarWidth}px`,
     '--crimson-bg': colors.background,
@@ -234,8 +235,8 @@ export default function WebAppShell({ children }: PropsWithChildren) {
             )}
             <main ref={mainRef} id="crimson-main-content" className="crimson-main-content">{children}</main>
           </div>
-          {!desktop && !fullPlayer && <PerformanceTabs bottom={tabBottom} />}
-          <WebPlayerBar mobileBottom={tabBottom + 68} hidden={fullPlayer} />
+          {!desktop && <WebMobileNavigation bottom={tabBottom} playerOpen={fullPlayer} selectedGroup={selectedGroup} />}
+          <WebPlayerBar mobileBottom={webMiniPlayerBottom(insets.bottom)} hidden={fullPlayer} />
         </div>
       ) : children}
     </>

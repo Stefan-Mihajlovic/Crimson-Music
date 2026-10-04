@@ -3,6 +3,8 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import WebPlayerBar from '../../src/components/web-player-bar';
+import WebMobileNavigation from '../../src/components/web-mobile-navigation';
+import { webMiniPlayerBottom } from '../../src/components/player-layout';
 import MobilePlayerSurface from '../../src/components/mobile-player-surface.web';
 import { SwipeableArtwork } from '../../src/components/song-swipe-pager.web';
 import { beginWebPlayerMotion, cancelWebPlayerMotion, getWebPlayerMotion, getWebPlayerMotionSession, settleWebPlayerMotion } from '../../src/services/web-player-motion';
@@ -21,6 +23,8 @@ jest.mock('../../src/providers/player-provider', () => ({ usePlayer: () => mockP
 jest.mock('../../src/providers/settings-provider', () => ({ useAppSettings: () => mockSettings }));
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useIsFocused: () => mockFocused }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+jest.mock('../../src/components/performance-tabs', () => () => <nav><button>Home</button></nav>);
+jest.mock('../../src/components/artwork-image', () => () => <img alt="Song artwork" />);
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('../../src/components/mini-player', () => jest.requireActual('../../src/components/mini-player.web'));
 jest.mock('../../src/components/song-swipe-pager', () => jest.requireActual('../../src/components/song-swipe-pager.web'));
@@ -60,17 +64,17 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); container.remove(); cancelWebPlayerMotion(getWebPlayerMotionSession()); jest.useRealTimers(); });
 
 test('a mobile mini-player drag follows the pointer through the expanded-route handoff', () => {
-  const render = (expanded) => <><WebPlayerBar mobileBottom={80} hidden={expanded} />{expanded ? <MobilePlayerSurface /> : null}</>;
+  const render = (expanded) => <><WebPlayerBar mobileBottom={webMiniPlayerBottom(0)} hidden={expanded} />{expanded ? <MobilePlayerSurface /> : null}</>;
   mockRouter.push.mockImplementation(() => root.render(render(true)));
   act(() => root.render(render(false)));
   act(() => pointer(container.querySelector('.crimson-mini-track'), 'pointerdown', 100, 700));
   act(() => pointer(window, 'pointermove', 100, 640));
   expect(mockRouter.push).toHaveBeenCalledWith('/player');
-  expect(getWebPlayerMotion().position).toBe(608);
-  expect(container.querySelector('[data-testid="mobile-player-surface"]').style.transform).toContain('translateY(608px)');
+  expect(getWebPlayerMotion().position).toBe(618);
+  expect(container.querySelector('[data-testid="mobile-player-surface"]').style.transform).toContain('translateY(618px)');
   // The mini has unmounted; its globally owned pointer stream remains active.
   act(() => pointer(window, 'pointermove', 100, 450));
-  expect(getWebPlayerMotion().position).toBe(418);
+  expect(getWebPlayerMotion().position).toBe(428);
   act(() => pointer(window, 'pointerup', 100, 450));
   expect(getWebPlayerMotion().position).toBe(0);
   act(() => jest.advanceTimersByTime(280));
@@ -141,7 +145,7 @@ test('old player cleanup cannot cancel a newer motion session', () => {
 });
 
 test('returning to the mini player during its gesture prevents stale release navigation', () => {
-  const render = (expanded) => <><WebPlayerBar mobileBottom={80} hidden={expanded} />{expanded ? <MobilePlayerSurface /> : null}</>;
+  const render = (expanded) => <><WebPlayerBar mobileBottom={webMiniPlayerBottom(0)} hidden={expanded} />{expanded ? <MobilePlayerSurface /> : null}</>;
   mockRouter.push.mockImplementation(() => root.render(render(true)));
   act(() => root.render(render(false)));
   act(() => pointer(container.querySelector('.crimson-mini-track'), 'pointerdown', 100, 700));
@@ -182,4 +186,105 @@ test('horizontal cover swipes change songs without a vertical player drag', () =
   act(() => jest.advanceTimersByTime(180));
   expect(mockPlayer.playNext).toHaveBeenCalledTimes(1);
   expect(mockRouter.push).not.toHaveBeenCalled();
+});
+
+
+test('the morph draws exactly one cover without scaling the player controls', () => {
+  const render = (expanded) => <><WebPlayerBar mobileBottom={webMiniPlayerBottom(0)} hidden={expanded} />{expanded ? <MobilePlayerSurface /> : null}</>;
+  mockRouter.push.mockImplementation(() => root.render(render(true)));
+  act(() => root.render(render(false)));
+  act(() => pointer(container.querySelector('.crimson-mini-track'), 'pointerdown', 100, 710));
+  act(() => pointer(window, 'pointermove', 100, 680));
+  expect(container.querySelector('[data-testid="mobile-player-surface"]').querySelectorAll('img[alt="Song artwork"]')).toHaveLength(1);
+  expect(container.querySelector('[data-testid="mobile-mini-player"]').style.visibility).toBe('hidden');
+  expect(container.querySelector('[data-testid="player-morph-artwork"] img')).not.toBeNull();
+  expect(container.querySelector('[data-testid="mobile-player-surface"]').style.transform).not.toContain('scale');
+});
+
+test('a slow lazy player route still paints its collapsed geometry before animating', () => {
+  act(() => root.render(<WebPlayerBar mobileBottom={webMiniPlayerBottom(0)} />));
+  act(() => container.querySelector('.crimson-mini-track').click());
+  act(() => jest.advanceTimersByTime(1000));
+  expect(getWebPlayerMotion().position).toBe(678);
+  expect(getWebPlayerMotion().phase).toBe('dragging');
+  act(() => root.render(<><WebPlayerBar hidden /><MobilePlayerSurface /></>));
+  expect(container.querySelector('[data-testid="mobile-player-surface"]').style.transform).toBe('translateY(678px)');
+  act(() => jest.advanceTimersByTime(40));
+  expect(getWebPlayerMotion().phase).toBe('settling');
+  expect(getWebPlayerMotion().position).toBe(0);
+  act(() => jest.advanceTimersByTime(280));
+  expect(getWebPlayerMotion().phase).toBe('rest');
+});
+
+test('navigation stays mounted and follows the drag instead of disappearing on route push', () => {
+  let session;
+  act(() => root.render(<WebMobileNavigation bottom={8} playerOpen={false} selectedGroup="(home)" />));
+  const navigation = container.querySelector('[data-testid="mobile-navigation"]');
+  const home = navigation.querySelector('button');
+  act(() => { session = beginWebPlayerMotion(600, 678); });
+  act(() => root.render(<WebMobileNavigation bottom={8} playerOpen selectedGroup="(home)" />));
+  expect(navigation.querySelector('button')).toBe(home);
+  expect(navigation.style.opacity).toBe('');
+  expect(navigation.hasAttribute('inert')).toBe(true);
+  act(() => settleWebPlayerMotion(session, true, false));
+  expect(navigation.style.transition).toContain('280ms');
+  expect(navigation.style.transform).toBe('translateY(72px)');
+  expect(navigation.style.opacity).toBe('');
+  act(() => root.render(<WebMobileNavigation bottom={8} playerOpen={false} selectedGroup="(home)" />));
+  expect(navigation.style.transform).toBe('translateY(0px)');
+  expect(navigation.hasAttribute('inert')).toBe(false);
+});
+
+
+test('returning from the expanded player reuses the loaded mini artwork', () => {
+  const render = (expanded) => <><WebPlayerBar hidden={expanded} />{expanded ? <MobilePlayerSurface /> : null}</>;
+  act(() => root.render(render(false)));
+  const cover = container.querySelector('img');
+  act(() => root.render(render(true)));
+  expect(cover.closest('[inert]')).not.toBeNull();
+  act(() => root.render(render(false)));
+  expect(container.querySelector('img')).toBe(cover);
+  expect(cover.closest('[inert]')).toBeNull();
+});
+
+test('grabbing a settling player resumes at its visible position', () => {
+  act(() => root.render(<MobilePlayerSurface />));
+  act(() => container.querySelector('[aria-label="Minimize player"]').click());
+  act(() => jest.advanceTimersByTime(40));
+  const surface = container.querySelector('[data-testid="mobile-player-surface"]');
+  surface.getBoundingClientRect = () => ({ top: 240 });
+  act(() => pointer(container.querySelector('[data-testid="header-handle"]'), 'pointerdown', 100, 300));
+  act(() => pointer(window, 'pointermove', 100, 340));
+  expect(getWebPlayerMotion().position).toBe(280);
+  act(() => pointer(window, 'pointercancel', 100, 340));
+  act(() => jest.advanceTimersByTime(500));
+  expect(mockRouter.back).not.toHaveBeenCalled();
+});
+
+
+test('dragging keeps the dock material outside the fading and clipped player contents', () => {
+  const render = (expanded) => <><WebPlayerBar mobileBottom={webMiniPlayerBottom(0)} hidden={expanded} />{expanded ? <MobilePlayerSurface /> : null}</>;
+  mockRouter.push.mockImplementation(() => root.render(render(true)));
+  act(() => root.render(render(false)));
+  const restingMaterial = container.querySelector('.crimson-mini-track').parentElement.style;
+  const tint = restingMaterial.backgroundColor;
+  const blur = restingMaterial.backdropFilter;
+  act(() => pointer(container.querySelector('.crimson-mini-track'), 'pointerdown', 100, 710));
+  for (const y of [695, 660, 580]) {
+    act(() => pointer(window, 'pointermove', 100, y));
+    const material = container.querySelector('[data-testid="mobile-player-material"]');
+    expect(material.style.backgroundColor).toBe(tint);
+    expect(material.style.backdropFilter).toBe(blur);
+    expect(material.style.WebkitBackdropFilter).toBe(blur);
+    for (let ancestor = material; ancestor && ancestor !== container; ancestor = ancestor.parentElement) {
+      expect(ancestor.style.opacity).toBe('');
+      expect(ancestor.style.clipPath).toBe('');
+    }
+    // The fading compact controls do not add a second, isolated material.
+    const copy = container.querySelector('[data-testid="mobile-player-surface"] .crimson-mini-track').parentElement;
+    expect(copy.style.backgroundColor).toBe('transparent');
+    expect(copy.style.backdropFilter).toBeUndefined();
+  }
+  act(() => pointer(window, 'pointercancel', 100, 580));
+  act(() => jest.advanceTimersByTime(280));
 });
