@@ -16,6 +16,8 @@ An open-source Audius music player built with Expo 57, React Native, and TypeScr
 - Play music with one ordered queue, queue editing, playback recovery, and a paused session restore. Optional crossfade is off by default and adjustable from 1–12 seconds in Settings.
 - Set a sleep timer for 5–90 minutes or the end of the current song, from the player's three-dot menu or Account → Sound & sleep.
 - Adjust a five-band equalizer with presets and custom controls. It starts off and remembers settings on this device.
+- Choose an optional music-reactive player background: Aurora, Spectrum, Orbit, Tides, or Prism. Visualizers start off and can be selected from Settings or the player's menu.
+- Set playback speed from 0.5× to 2× using presets or a fine-adjustment slider, with optional pitch preservation. Find it in Settings or the player's menu.
 - Manage Audius favorites, follows, and playlists, including privacy, titles, descriptions, track order, and deletion. The Add to playlist picker includes Favorites and playlist covers.
 - Keep device audio in the default **Local Music** collection: import files on every platform, scan permitted media libraries on mobile, or import a folder on web. Access and format limits are described in [platform support](docs/PLATFORMS.md).
 - Generate a Vault mood mix and save it to your Audius library.

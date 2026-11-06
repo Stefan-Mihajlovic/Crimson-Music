@@ -86,7 +86,7 @@ export default function MobilePlayerSurface() {
       transform: `translateY(${position}px)`,
       clipPath: `inset(0 ${inset}px ${Math.max(0, height - visibleHeight)}px ${inset}px round ${radius}px)`, transition }}>
       <div style={{ position: 'absolute', inset: 0, opacity: Math.min(1, progress * 3), transition: motion.phase === 'settling' && !reduceMotion ? 'opacity 280ms' : 'none' }}>
-        <PlayerArtworkBackground active={focused} song={currentSong} />
+        <PlayerArtworkBackground active={focused} artworkLayout={artwork} song={currentSong} />
       </div>
       <div style={{ position: 'absolute', inset: 0, height, display: 'flex', opacity: moving ? Math.max(0, Math.min(1, (progress - 0.07) * 2)) : 1,
         transition: motion.phase === 'settling' && !reduceMotion ? 'opacity 280ms' : 'none' }}>

@@ -10,18 +10,21 @@ import { clearFailedArtworkCache } from '../src/services/artwork-fallback';
 import { withTiming } from 'react-native-reanimated';
 let mockDataSaver = false;
 let mockReduceMotion = true;
+let mockVisualizerEnabled = false;
+let mockPerformanceMode = false;
+jest.mock('../src/components/player-visualizer', () => 'PlayerVisualizer');
 jest.mock('expo-image', () => ({ Image: 'ArtworkImage' }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'Gradient' }));
 jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { View: 'AnimatedView' }, cancelAnimation: jest.fn(), useReducedMotion: () => mockReduceMotion, useSharedValue: (value) => require('react').useRef({ value }).current, useAnimatedStyle: (callback) => callback(), Easing: { inOut: (value) => value, cubic: 'cubic', linear: 'linear' }, ReduceMotion: {}, withRepeat: jest.fn(), withTiming: jest.fn((value) => value) }));
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: (callback, ...args) => callback(...args) }));
 jest.mock('react-native-svg', () => ({ __esModule: true, default: 'Svg', Defs: 'Defs', RadialGradient: 'RadialGradient', Rect: 'Rect', Stop: 'Stop' }));
-jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ dataSaver: mockDataSaver, performanceMode: false, reduceMotion: mockReduceMotion }) }));
+jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ dataSaver: mockDataSaver, performanceMode: mockPerformanceMode, reduceMotion: mockReduceMotion, visualizerEnabled: mockVisualizerEnabled, visualizerStyle: 'spectrum' }) }));
 jest.mock('../src/services/artwork-palette', () => ({ fallbackArtworkPalette: require('../src/services/artwork-palette-colors').fallbackArtworkPalette, getCachedArtworkPalette: () => undefined, getArtworkPalette: jest.fn() }));
 let root;
 const image = 'https://cover.example/large.jpg';
 const song = { id: 'song', image, imageSmall: 'https://cover.example/small.jpg' };
 const colors = () => [...new Set(root.root.findAllByType('Stop').map((stop) => stop.props.stopColor))];
-beforeEach(() => { globalThis.IS_REACT_ACT_ENVIRONMENT = true; AppState.currentState = 'active'; mockDataSaver = false; mockReduceMotion = true; clearFailedArtworkCache(); getArtworkPalette.mockResolvedValue(['#12802A', '#267742', '#36856A']); });
+beforeEach(() => { globalThis.IS_REACT_ACT_ENVIRONMENT = true; AppState.currentState = 'active'; mockDataSaver = false; mockReduceMotion = true; mockVisualizerEnabled = false; mockPerformanceMode = false; clearFailedArtworkCache(); getArtworkPalette.mockResolvedValue(['#12802A', '#267742', '#36856A']); });
 afterEach(async () => { if (root) await act(async () => root.unmount()); root = undefined; });
 
 test('a song without artwork immediately renders the bundled purple palette without a palette download', async () => {
@@ -105,4 +108,25 @@ test('track changes while the player is open still blend between artwork palette
   getArtworkPalette.mockResolvedValue(['#813628', '#BB5331', '#963218']);
   await act(async () => root.update(<PlayerArtworkBackground active song={{ id: 'next', image: 'https://cover.example/next.jpg' }} />));
   expect(withTiming.mock.calls.filter(([, options]) => options.duration === 1100)).toHaveLength(1);
+});
+
+
+test('visualizer mounts only when opted in, expanded, foregrounded and motion is allowed', async () => {
+  mockReduceMotion = false;
+  await act(async () => { root = create(<PlayerArtworkBackground active song={song} />); });
+  const visualizers = () => root.root.findAllByType('PlayerVisualizer');
+  expect(visualizers()).toHaveLength(0);
+  mockVisualizerEnabled = true;
+  await act(async () => root.update(<PlayerArtworkBackground active song={song} />));
+  expect(visualizers()).toHaveLength(1);
+  expect(visualizers()[0].props.style).toBe('spectrum');
+  await act(async () => root.update(<PlayerArtworkBackground active={false} song={song} />));
+  expect(visualizers()).toHaveLength(0);
+  mockPerformanceMode = true;
+  await act(async () => root.update(<PlayerArtworkBackground active song={song} />));
+  expect(visualizers()).toHaveLength(0);
+  mockPerformanceMode = false;
+  mockReduceMotion = true;
+  await act(async () => root.update(<PlayerArtworkBackground active song={song} />));
+  expect(visualizers()).toHaveLength(0);
 });

@@ -2,22 +2,21 @@ import { Image } from 'expo-image';
 import type { CSSProperties } from 'react';
 import type { DesktopMusicPreferencesProps } from '@/components/desktop-music-preferences';
 import { useAppSettings } from '@/providers/settings-provider';
-
-const descriptions = {
-  familiar: 'More of the sounds you already enjoy.',
-  balanced: 'Familiar favorites and fresh discoveries.',
-  surprise: 'Explore beyond your usual listening.',
-  underground: 'Find emerging artists and lesser-known tracks.',
-};
+import { SymbolView } from '@/components/app-symbol';
+import { recommendationDetails, recommendationOrder } from '@/services/recommendation-presentation';
 
 export default function DesktopMusicPreferences({
   categories, recommendationOptions, selectedCategories, recommendationStyle,
   onToggleCategory, onSelectRecommendation, onSave, onClose, saving, error, editing,
 }: DesktopMusicPreferencesProps) {
-  const { colors, isDark } = useAppSettings();
+  const { colors, isDark, reduceMotion, performanceMode } = useAppSettings();
+  const preferredArtwork = categories.filter((category) => selectedCategories.includes(category.id));
+  const artwork = preferredArtwork.length ? preferredArtwork : categories.slice(0, 4);
+  const spread = recommendationOrder.indexOf(recommendationStyle);
   const buttonStyle: CSSProperties = { borderRadius: 24, minHeight: 44, padding: '0 24px', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer' };
   return (
-    <section aria-label="Music preferences" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: colors.background, color: colors.text, fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif', colorScheme: isDark ? 'dark' : 'light' }}>
+    <section className="crimson-preferences" data-reduced-motion={reduceMotion || performanceMode || undefined} aria-label="Music preferences" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: colors.background, color: colors.text, fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif', colorScheme: isDark ? 'dark' : 'light', '--preference-accent': colors.accent } as CSSProperties}>
+      <style>{preferenceMotion}</style>
       <form onSubmit={(event) => { event.preventDefault(); if (!saving && selectedCategories.length >= 2) onSave(); }}
         style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, width: '100%', maxWidth: 1040, alignSelf: 'center' }}>
         <div style={{ overflowY: 'auto', minHeight: 0, padding: '36px 40px 24px', flex: 1 }}>
@@ -29,7 +28,7 @@ export default function DesktopMusicPreferences({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12 }}>
               {categories.map((category) => {
                 const selected = selectedCategories.includes(category.id);
-                return <label key={category.id} style={{ position: 'relative', height: 108, overflow: 'hidden', borderRadius: 12, cursor: saving ? 'default' : 'pointer', border: `2px solid ${selected ? colors.accent : 'transparent'}`, background: colors.elevated }}>
+                return <label className="preference-choice" key={category.id} style={{ position: 'relative', height: 108, overflow: 'hidden', borderRadius: 12, cursor: saving ? 'default' : 'pointer', border: `2px solid ${selected ? colors.accent : 'transparent'}`, background: colors.elevated }}>
                   <Image source={category.image} contentFit="cover" style={{ position: 'absolute', inset: 0, opacity: selected ? 1 : 0.65 }} />
                   <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(transparent, rgba(0,0,0,.76))', pointerEvents: 'none' }} />
                   <input type="checkbox" aria-label={category.label} checked={selected} onChange={() => onToggleCategory(category.id)}
@@ -42,13 +41,32 @@ export default function DesktopMusicPreferences({
           </fieldset>
           <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             <legend style={{ fontSize: 19, fontWeight: 700, padding: 0, marginBottom: 16 }}>Your discovery style</legend>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-              {recommendationOptions.map((option) => <label key={option.id}
-                style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', minHeight: 74, borderRadius: 12, cursor: saving ? 'default' : 'pointer', border: `1px solid ${recommendationStyle === option.id ? colors.accent : colors.border}`, background: recommendationStyle === option.id ? colors.accentSoft : colors.elevated }}>
-                <input type="radio" name="discovery-style" value={option.id} aria-label={option.label} checked={recommendationStyle === option.id}
-                  onChange={() => onSelectRecommendation(option.id)} style={{ margin: 0, width: 18, height: 18, flexShrink: 0, accentColor: colors.accent }} />
-                <span><strong style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{option.label}</strong><span style={{ display: 'block', marginTop: 5, color: colors.secondaryText, fontSize: 12, lineHeight: 1.5 }}>{descriptions[option.id]}</span></span>
-              </label>)}
+            <div className="preference-discovery-layout">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                {recommendationOptions.map((option) => {
+                  const selected = recommendationStyle === option.id;
+                  return <label className="preference-choice" key={option.id}
+                    style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, padding: '18px 16px', minHeight: 86, borderRadius: 20, cursor: saving ? 'default' : 'pointer', border: `1px solid ${selected ? colors.accent : colors.border}`, background: colors.elevated, overflow: 'hidden' }}>
+                    <span aria-hidden className="preference-selection" style={{ position: 'absolute', inset: 0, opacity: selected ? 1 : 0, background: `linear-gradient(120deg, ${colors.accentSoft}, transparent)`, pointerEvents: 'none' }} />
+                    <input type="radio" name="discovery-style" value={option.id} aria-label={option.label} aria-describedby={`discovery-description-${option.id}`} checked={selected}
+                      onChange={() => onSelectRecommendation(option.id)} style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+                    <span aria-hidden style={{ position: 'relative', flexShrink: 0 }}><SymbolView name={recommendationDetails[option.id].icon} size={24} tintColor={colors.accent} /></span>
+                    <span style={{ position: 'relative', flex: 1 }}><strong style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{option.label}</strong><span id={`discovery-description-${option.id}`} style={{ display: 'block', marginTop: 5, color: colors.secondaryText, fontSize: 12, lineHeight: 1.5 }}>{recommendationDetails[option.id].description}</span></span>
+                    <span aria-hidden style={{ position: 'relative', width: 22, height: 22, flexShrink: 0, border: `1px solid ${colors.border}`, borderRadius: '50%' }}>
+                      <span className="preference-check" style={{ position: 'absolute', inset: -1, opacity: selected ? 1 : 0, transform: `scale(${selected ? 1 : 0.65})` }}><SymbolView name="checkmark.circle.fill" size={24} tintColor={colors.accent} /></span>
+                    </span>
+                  </label>;
+                })}
+              </div>
+              <div aria-hidden="true" style={{ position: 'relative', height: 174, pointerEvents: 'none', background: `radial-gradient(ellipse, ${colors.accentSoft}, transparent 70%)` }}>
+                {artwork.length ? [0, 1, 2, 3].map((index) => {
+                  const distance = index - 1.5;
+                  return <div key={index} className="preference-sleeve" style={{ position: 'absolute', width: 66, height: 82, left: '50%', marginLeft: -33, top: 26, overflow: 'hidden', borderRadius: 13, border: '1px solid #FFFFFF30', zIndex: index === 1 ? 4 : index === 2 ? 3 : 1, transform: `translate(${distance * (24 + spread * 9)}px, ${Math.abs(distance) * (8 + spread * 3)}px) rotate(${distance * (8 + spread * 5)}deg)` }}>
+                    <Image source={artwork[index % artwork.length].image} contentFit="cover" style={{ position: 'absolute', inset: 0 }} />
+                  </div>;
+                }) : null}
+                <span style={{ position: 'absolute', bottom: 0, width: '100%', textAlign: 'center', color: colors.secondaryText, fontSize: 12 }}>Built around your taste</span>
+              </div>
             </div>
           </fieldset>
         </div>
@@ -63,3 +81,20 @@ export default function DesktopMusicPreferences({
     </section>
   );
 }
+
+const preferenceMotion = `
+.crimson-preferences .preference-discovery-layout { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 24px; align-items: center; }
+.crimson-preferences .preference-choice, .crimson-preferences button { transition: transform 180ms cubic-bezier(.22,1,.36,1), border-color 240ms ease, background-color 240ms ease; }
+.crimson-preferences .preference-selection { transition: opacity 240ms ease; }
+.crimson-preferences .preference-check { transition: opacity 240ms ease, transform 320ms cubic-bezier(.22,1,.36,1); }
+.crimson-preferences .preference-sleeve { transition: transform 420ms cubic-bezier(.22,1,.36,1); }
+.crimson-preferences fieldset:not(:disabled) .preference-choice:active, .crimson-preferences button:not(:disabled):active { transform: scale(.985); }
+.crimson-preferences .preference-choice:focus-within, .crimson-preferences button:focus-visible { outline: 2px solid var(--preference-accent); outline-offset: 3px; }
+.crimson-preferences[data-reduced-motion] *, .crimson-preferences[data-reduced-motion] *:active { transition: none !important; }
+.crimson-preferences[data-reduced-motion] .preference-choice:active, .crimson-preferences[data-reduced-motion] button:active { transform: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .crimson-preferences * { transition: none !important; }
+  .crimson-preferences .preference-choice:active, .crimson-preferences button:active { transform: none !important; }
+}
+@media (max-width: 1100px) { .crimson-preferences .preference-discovery-layout { grid-template-columns: minmax(0, 1fr); } .crimson-preferences .preference-discovery-layout > [aria-hidden] { display: none; } }
+`;

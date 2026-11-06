@@ -5,7 +5,7 @@ import { act, create } from 'react-test-renderer';
 import { setAudioModeAsync } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { PlayerProvider, usePlayer, usePlayerSpectrum } from '../src/providers/player-provider';
+import { PlayerProvider, usePlayer, usePlayerSpectrum, usePlayerVisualizer } from '../src/providers/player-provider';
 import { PlaybackSpectrumAnalyzer } from '../src/services/playback-spectrum';
 import { getUserCollectionState, loadRelatedSongs, recordListeningEvent, resolveTrackPlaybackUrl, toggleUserCollectionItem } from '../src/services/music';
 
@@ -294,6 +294,30 @@ test('spectrum analysis does no work when no playback marker is subscribed', asy
   const analyze = jest.spyOn(PlaybackSpectrumAnalyzer.prototype, 'analyze');
   try {
     await act(async () => onSample({ channels: [{ frames: Array(512).fill(0.5) }], timestamp: 4 }));
+    expect(analyze).not.toHaveBeenCalled();
+  } finally { analyze.mockRestore(); }
+});
+
+
+test('a visualizer alone receives real audio bands, clears on pause, and stops analysis after closing', async () => {
+  await start('background-visualizer');
+  let visualizer;
+  function VisualizerProbe() { visualizer = usePlayerVisualizer(); return null; }
+  mockStatus = { ...mockStatus, playing: true, currentTime: 4 };
+  await act(async () => root.update(<PlayerProvider><VisualizerProbe /></PlayerProvider>));
+  const onSample = mockAudio.addListener.mock.calls.find(([event]) => event === 'audioSampleUpdate')[1];
+  const sample = { channels: [{ frames: Array.from({ length: 512 }, (_, index) => 0.5 * Math.sin(2 * Math.PI * 16 * index / 512)) }] };
+  await act(async () => onSample(sample));
+  expect(visualizer).toHaveLength(16);
+  expect(visualizer[8]).toBeGreaterThan(0.8);
+  mockStatus = { ...mockStatus, playing: false };
+  await act(async () => root.update(<PlayerProvider><VisualizerProbe /></PlayerProvider>));
+  expect(visualizer).toEqual(Array(16).fill(0));
+  mockStatus = { ...mockStatus, playing: true };
+  await act(async () => root.update(<PlayerProvider />));
+  const analyze = jest.spyOn(PlaybackSpectrumAnalyzer.prototype, 'analyze');
+  try {
+    await act(async () => { jest.advanceTimersByTime(100); onSample(sample); });
     expect(analyze).not.toHaveBeenCalled();
   } finally { analyze.mockRestore(); }
 });

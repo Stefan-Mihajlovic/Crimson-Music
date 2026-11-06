@@ -28,7 +28,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { useDownloads } from '@/providers/download-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { createValueStore } from '@/services/value-store';
-import { PAUSED_SPECTRUM as pausedSpectrum, PlaybackSpectrumAnalyzer, SPECTRUM_UPDATE_INTERVAL_MS } from '@/services/playback-spectrum';
+import { PAUSED_SPECTRUM as pausedSpectrum, PlaybackSpectrumAnalyzer, SPECTRUM_UPDATE_INTERVAL_MS, SILENT_VISUALIZER } from '@/services/playback-spectrum';
 import {
   CrimsonSong,
   getUserCollectionState,
@@ -89,6 +89,7 @@ type PlayerContextValue = {
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 const PlayerStatusContext = createContext<AudioStatus | null>(null);
 const PlayerSpectrumContext = createContext(createValueStore(pausedSpectrum));
+const PlayerVisualizerContext = createContext(createValueStore(SILENT_VISUALIZER));
 const autoplayStorageKey = 'crimson.player.autoplay.v1';
 const volumeStorageKey = 'crimson.player.volume.v1';
 let audioSessionConfiguration: Promise<void> | null = null;
@@ -146,7 +147,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [autoplayCandidates, setAutoplayCandidates] = useState<CrimsonSong[]>([]);
   const autoplayCandidatesRef = useRef<CrimsonSong[]>([]);
   const [spectrumStore] = useState(() => createValueStore(pausedSpectrum));
-  const setSpectrumLevels = spectrumStore.publish;
+  const [visualizerStore] = useState(() => createValueStore(SILENT_VISUALIZER));
+  const setSpectrumLevels = useCallback((levels: number[]) => {
+    spectrumStore.publish(levels);
+    if (levels === pausedSpectrum) visualizerStore.publish(SILENT_VISUALIZER);
+  }, [spectrumStore, visualizerStore]);
   const handledFinishRef = useRef(false);
   const activationRef = useRef(0);
   const autoplayRequestRef = useRef(0);
@@ -330,15 +335,16 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioPlayer, flushListening, mixer, setSpectrumLevels, sleepTimer, spectrumAnalyzer, updateQueue, user?.uid]);
 
   const handleAudioSample = useCallback((sample: AudioSample) => {
-    if (!appActiveRef.current || !playingRef.current || !spectrumStore.hasSubscribers()) return;
+    if (!appActiveRef.current || !playingRef.current || !(spectrumStore.hasSubscribers() || visualizerStore.hasSubscribers())) return;
     const now = Date.now();
     const elapsed = now - lastSpectrumUpdateRef.current;
     if (elapsed < SPECTRUM_UPDATE_INTERVAL_MS) return;
-    const spectrum = spectrumAnalyzer.analyze(sample, lastSpectrumUpdateRef.current ? elapsed : SPECTRUM_UPDATE_INTERVAL_MS);
+    const spectrum = spectrumAnalyzer.analyze(sample, lastSpectrumUpdateRef.current ? elapsed : SPECTRUM_UPDATE_INTERVAL_MS, visualizerStore.hasSubscribers());
     if (!spectrum) return;
     lastSpectrumUpdateRef.current = now;
     setSpectrumLevels(spectrum);
-  }, [setSpectrumLevels, spectrumAnalyzer, spectrumStore]);
+    if (visualizerStore.hasSubscribers()) visualizerStore.publish(spectrumAnalyzer.getVisualizerLevels());
+  }, [setSpectrumLevels, spectrumAnalyzer, spectrumStore, visualizerStore]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -945,7 +951,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   return (
     <PlayerContext.Provider value={value}>
       <PlayerStatusContext.Provider value={publicStatus}>
-        <PlayerSpectrumContext.Provider value={spectrumStore}>{children}</PlayerSpectrumContext.Provider>
+        <PlayerSpectrumContext.Provider value={spectrumStore}>
+          <PlayerVisualizerContext.Provider value={visualizerStore}>{children}</PlayerVisualizerContext.Provider>
+        </PlayerSpectrumContext.Provider>
       </PlayerStatusContext.Provider>
     </PlayerContext.Provider>
   );
@@ -965,6 +973,16 @@ export function usePlayerStatus() {
 
 export function usePlayerSpectrum() {
   const store = useContext(PlayerSpectrumContext);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}
+
+/** Imperative subscribers animate on the UI thread without React renders. */
+export function usePlayerVisualizerStore() {
+  return useContext(PlayerVisualizerContext);
+}
+
+export function usePlayerVisualizer() {
+  const store = usePlayerVisualizerStore();
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 

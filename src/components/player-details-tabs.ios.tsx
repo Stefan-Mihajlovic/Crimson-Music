@@ -1,3 +1,4 @@
+import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { GlassView } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
@@ -7,9 +8,9 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 import { PlayerDetailsTab, PlayerDetailsTabsProps } from '@/components/player-details-tabs.types';
 import { useAppSettings } from '@/providers/settings-provider';
 
-const tabs: { label: string; value: PlayerDetailsTab }[] = [
-  { label: 'Up next', value: 'queue' },
-  { label: 'Related', value: 'related' },
+const tabs: { label: string; value: PlayerDetailsTab; icon: SymbolViewProps['name'] }[] = [
+  { label: 'Up next', value: 'queue', icon: 'music.note.list' },
+  { label: 'Related', value: 'related', icon: 'sparkles' },
 ];
 const trackPadding = 5;
 
@@ -84,6 +85,7 @@ export default function PlayerDetailsTabs({ onChange, value }: PlayerDetailsTabs
             accessibilityState={{ selected }}
             onPress={() => onChange(item.value)}
             style={styles.tab}>
+            <SymbolView name={item.icon} size={17} tintColor={selected ? '#FFFFFF' : colors.secondaryText} />
             <Text
               style={[
                 styles.label,
@@ -127,6 +129,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   tab: {
+    flexDirection: 'row',
+    gap: 7,
     zIndex: 1,
     flex: 1,
     alignItems: 'center',

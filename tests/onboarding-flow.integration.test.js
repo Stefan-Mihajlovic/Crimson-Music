@@ -27,7 +27,7 @@ jest.mock('react-native-gesture-handler', () => ({ Gesture: { Pan: () => {
 jest.mock('react-native-worklets', () => ({ scheduleOnRN: (callback, ...args) => callback(...args) }));
 jest.mock('react-native-reanimated', () => ({
   __esModule: true, default: { View: require('react-native').View, Text: require('react-native').Text },
-  useSharedValue: (value) => require('react').useRef({ value }).current,
+  useSharedValue: (value) => require('react').useRef({ value, set(next) { this.value = next; } }).current,
   useAnimatedStyle: (callback) => callback(), useReducedMotion: () => true,
   cancelAnimation: () => undefined, Easing: {}, Extrapolation: { CLAMP: 'clamp' },
   interpolate: (_value, _input, output) => output[0], interpolateColor: (_value, _input, output) => output[0],
@@ -40,7 +40,7 @@ jest.mock('../src/components/bouncy-pressable', () => {
 });
 jest.mock('../src/components/brand-logo', () => () => null);
 jest.mock('../src/components/frosted-surface', () => ({ FrostedLayer: ({ children }) => children }));
-jest.mock('../src/components/preferences-glass', () => ({ PreferencesGlassButton: (props) => {
+jest.mock('../src/components/preferences-glass', () => ({ PreferencesGlassSurface: 'GlassSurface', PreferencesGlassButton: (props) => {
   const { Pressable } = require('react-native');
   return <Pressable {...props} />;
 } }));
@@ -152,4 +152,19 @@ test('Android Back stays in required setup and moves backward only between its s
   await act(async () => expect(back()).toBe(true));
   expect(control('Rock')).toBeDefined();
   expect(mockRouter.back).not.toHaveBeenCalled();
+});
+
+test('recommendation cards expose their meaning and retain the selected draft when revisiting categories', async () => {
+  await render();
+  await press('Rock'); await press('Pop'); await press('Next');
+  expect(control('A balanced mix').props.accessibilityState.checked).toBe(true);
+  expect(control('Deep underground').props.accessibilityHint).toContain('hidden gems');
+  await press('Deep underground');
+  expect(control('Deep underground').props.accessibilityState.checked).toBe(true);
+  expect(control('A balanced mix').props.accessibilityState.checked).toBe(false);
+  await press('Back to categories');
+  await press('Next');
+  expect(control('Deep underground').props.accessibilityState.checked).toBe(true);
+  await press('Next'); await finish();
+  expect(mockSave).toHaveBeenCalledWith(['rock', 'pop'], 'underground');
 });

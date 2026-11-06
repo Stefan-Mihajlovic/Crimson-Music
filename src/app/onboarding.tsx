@@ -3,6 +3,7 @@ import { FrostedLayer } from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
 import { Image, ImageSource } from 'expo-image';
+import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
@@ -35,6 +36,7 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Path, Text as SvgText, TextPath } from 'react-native-svg';
@@ -44,6 +46,7 @@ import BouncyPressable from '@/components/bouncy-pressable';
 import BrandLogo from '@/components/brand-logo';
 import DesktopMusicPreferences from '@/components/desktop-music-preferences';
 import { PreferencesGlassButton } from '@/components/preferences-glass';
+import { DiscoveryPreview, RecommendationChoice } from '@/components/recommendation-choice';
 import { useAuth } from '@/providers/auth-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { RecommendationStyle } from '@/services/auth';
@@ -85,6 +88,20 @@ const finalSliderCategories = categories.slice(0, 8);
 const finalSliderColumnWidth = 104;
 const finalSliderLoopWidth = finalSliderCategories.length * finalSliderColumnWidth;
 
+function pullGeometry(progress: number, distance: number, height: number, idle: number, interaction: number, glass: boolean) {
+  'worklet';
+  const p = Math.max(0, Math.min(1, progress));
+  const fingerDistance = p * distance;
+  const accelerationPoint = height * 0.4;
+  const travel = fingerDistance <= accelerationPoint
+    ? fingerDistance
+    : accelerationPoint + (fingerDistance - accelerationPoint) * 2.8;
+  return {
+    y: -travel + idle * (1 - interaction) * (1 - p),
+    scale: 1 + (glass ? 0.78 : 0.98) * (1 - Math.pow(1 - p, 3)),
+  };
+}
+
 export default function OnboardingScreen({ editing = false }: { editing?: boolean } = {}) {
   const { user } = useAuth();
   return <OnboardingFlow key={user?.uid || 'signed-out'} editing={editing} />;
@@ -96,6 +113,8 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
   const { performanceMode, reduceMotion: reduceMotionSetting } = useAppSettings();
   const systemReduceMotion = useReducedMotion();
   const reduceMotion = performanceMode || reduceMotionSetting || systemReduceMotion;
+  const nativePullGlass = Platform.OS === 'ios' && !performanceMode
+    && isGlassEffectAPIAvailable() && isLiquidGlassAvailable();
   const insets = useSafeAreaInsets();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && screenWidth >= 960;
@@ -116,6 +135,8 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
   const pullStart = useSharedValue(0);
   const pullInteraction = useSharedValue(0);
   const idlePullOffset = useSharedValue(0);
+  const artworkOffset = useSharedValue(0);
+  const finalLayout = useSharedValue({ width: 0, height: 0 });
   const pullDistance = Math.max(520, screenHeight * 0.72);
   const finalSliderTop = interpolate(
     screenHeight,
@@ -152,6 +173,18 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
     });
     return () => subscription.remove();
   }, [close, isEditing, step]));
+
+  useEffect(() => {
+    artworkOffset.value = 0;
+    if (step === 2 && !reduceMotion && !finishing && appActive) {
+      artworkOffset.value = withRepeat(
+        withTiming(-finalSliderLoopWidth, { duration: 26000, easing: Easing.linear }),
+        -1,
+        false,
+      );
+    }
+    return () => cancelAnimation(artworkOffset);
+  }, [appActive, artworkOffset, finishing, reduceMotion, step]);
 
   useEffect(() => {
     idlePullOffset.value = 0;
@@ -293,25 +326,33 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
   ]);
 
   const pullTravelStyle = useAnimatedStyle(() => {
-    const progress = Math.max(0, Math.min(1, pullProgress.value));
-    const fingerDistance = progress * pullDistance;
-    const accelerationPoint = screenHeight * 0.4;
-    const travel = fingerDistance <= accelerationPoint
-      ? fingerDistance
-      : accelerationPoint + (fingerDistance - accelerationPoint) * 2.8;
-    const idleOffset = idlePullOffset.value
-      * (1 - pullInteraction.value)
-      * (1 - progress);
+    const { y } = pullGeometry(pullProgress.value, pullDistance, screenHeight, idlePullOffset.value, pullInteraction.value, nativePullGlass);
     return {
-      transform: [{ translateY: -travel + idleOffset }],
+      transform: [{ translateY: y }],
     };
   });
   const pullScaleStyle = useAnimatedStyle(() => {
-    const progress = Math.max(0, Math.min(1, pullProgress.value));
-    const growth = 1 - Math.pow(1 - progress, 3);
+    const { scale } = pullGeometry(pullProgress.value, pullDistance, screenHeight, idlePullOffset.value, pullInteraction.value, nativePullGlass);
     return {
       opacity: 1,
-      transform: [{ scale: 1 + 0.98 * growth }],
+      transform: [{ scale }],
+    };
+  });
+  const pullLensStyle = useAnimatedStyle(() => {
+    const { y, scale } = pullGeometry(pullProgress.value, pullDistance, screenHeight, idlePullOffset.value, pullInteraction.value, nativePullGlass);
+    const { width, height } = finalLayout.value;
+    const centerY = height - 24 - 52 + y;
+    // Counter the control's scale, then magnify around the exact point under its
+    // center. Both artwork passes share one clock, so moving cards stay aligned.
+    const magnification = 1 + (reduceMotion ? 0 : 0.72 * Math.min(1, Math.max(0, pullProgress.value) / 0.18));
+    const samplingScale = magnification / scale;
+    return {
+      width,
+      height,
+      left: 52 - width / 2 * samplingScale,
+      top: 52 - centerY * samplingScale,
+      opacity: width > 0 ? interpolate(pullProgress.value, [0, 0.04, 0.12], [0, 0.5, 1], Extrapolation.CLAMP) : 0,
+      transform: [{ scale: samplingScale }],
     };
   });
   const pullArrowStyle = useAnimatedStyle(() => ({
@@ -332,7 +373,8 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
     }],
   }));
   const finalSliderStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pullProgress.value, [0, 0.18, 0.52], [1, 0.78, 0], Extrapolation.CLAMP),
+    // Keep artwork behind the moving glass long enough for its refraction to read.
+    opacity: interpolate(pullProgress.value, nativePullGlass ? [0, 0.72, 1] : [0, 0.18, 0.52], nativePullGlass ? [1, 1, 0] : [1, 0.78, 0], Extrapolation.CLAMP),
     transform: [
       {
         translateY: interpolate(pullProgress.value, [0, 0.52], [0, -18], Extrapolation.CLAMP),
@@ -398,11 +440,13 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
             }}
             reduceMotion={reduceMotion}
             selected={recommendationStyle}
+            selectedCategories={selectedCategories}
           />
         ) : null}
         {step === 2 ? (
           <Animated.View
             entering={reduceMotion ? undefined : FadeInDown.duration(430).withInitialValues({ opacity: 1 })}
+            onLayout={({ nativeEvent: { layout } }) => { finalLayout.value = { width: layout.width, height: layout.height }; }}
             style={styles.finalStep}>
             <Animated.View style={[styles.finalBrand, finalCopyStyle]}>
               <Text style={styles.welcomeLabel}>
@@ -414,7 +458,7 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
             <Animated.View
               pointerEvents="none"
               style={[styles.finalSliderWrap, { top: finalSliderTop }, finalSliderStyle]}>
-              <InfiniteCategorySlider reduceMotion={reduceMotion || finishing || !appActive} />
+              <InfiniteCategorySlider offset={artworkOffset} />
             </Animated.View>
 
             {error ? (
@@ -441,16 +485,43 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
                       label={isEditing ? 'PULL UP TO SAVE' : 'PULL UP TO ENTER'}
                     />
                   </Animated.View>
-                  <View pointerEvents="none" style={styles.pullNativeGlass}>
-
-                    <Animated.View style={[styles.pullGlassContent, pullArrowStyle]}>
+                  <View style={styles.pullNativeGlass}>
+                    {nativePullGlass && !reduceMotion ? (
+                      <View pointerEvents="none" accessibilityElementsHidden style={[StyleSheet.absoluteFill, styles.pullLensClip]}>
+                        <Animated.View style={[styles.pullLensScene, pullLensStyle]}>
+                          <LinearGradient
+                            colors={['#1D0B35', '#150D25', '#0A080F', '#09070D']}
+                            locations={[0, 0.38, 0.7, 1]}
+                            style={{ position: 'absolute', left: 0, right: 0, top: -insets.top, height: screenHeight }}
+                          />
+                          <Animated.View style={[styles.finalBrand, finalCopyStyle]}>
+                            <Text style={styles.welcomeLabel}>{isEditing ? 'Your music, your way' : 'Welcome to'}</Text>
+                            <BrandLogo style={styles.finalLogo} />
+                          </Animated.View>
+                          <Animated.View style={[styles.finalSliderWrap, { top: finalSliderTop }, finalSliderStyle]}>
+                            <InfiniteCategorySlider offset={artworkOffset} />
+                          </Animated.View>
+                        </Animated.View>
+                      </View>
+                    ) : null}
+                    {nativePullGlass ? (
+                      <GlassView
+                        glassEffectStyle="clear"
+                        colorScheme="dark"
+                        isInteractive={false}
+                        style={[StyleSheet.absoluteFill, styles.pullNativeGlass]}
+                      />
+                    ) : (
+                      <View style={[StyleSheet.absoluteFill, styles.pullNativeGlass, styles.pullSolidFallback]} />
+                    )}
+                    <Animated.View pointerEvents="none" style={[styles.pullGlassContent, pullArrowStyle]}>
                       {finishing ? (
-                        <ActivityIndicator color="#100D17" size="small" />
+                        <ActivityIndicator color={nativePullGlass ? '#FFFFFF' : '#100D17'} size="small" />
                       ) : (
                         <SymbolView
                           name="arrow.up"
                           size={42}
-                          tintColor="#100D17"
+                          tintColor={nativePullGlass ? '#FFFFFF' : '#100D17'}
                           weight="medium"
                         />
                       )}
@@ -467,24 +538,7 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
   );
 }
 
-function InfiniteCategorySlider({ reduceMotion }: { reduceMotion: boolean }) {
-  const offset = useSharedValue(0);
-
-  useEffect(() => {
-    offset.value = 0;
-    if (!reduceMotion) {
-      offset.value = withRepeat(
-        withTiming(-finalSliderLoopWidth, {
-          duration: 26000,
-          easing: Easing.linear,
-        }),
-        -1,
-        false,
-      );
-    }
-    return () => cancelAnimation(offset);
-  }, [offset, reduceMotion]);
-
+function InfiniteCategorySlider({ offset }: { offset: SharedValue<number> }) {
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: offset.value }],
   }));
@@ -571,11 +625,22 @@ function CurvedPullLabel({ label }: { label: string }) {
 }
 
 function OnboardingNextButton({ disabled = false, label, onPress }: { disabled?: boolean; label: string; onPress: () => void }) {
+  const { reduceMotion, performanceMode } = useAppSettings();
+  const scale = useSharedValue(1);
+  const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  useEffect(() => {
+    if (disabled || reduceMotion || performanceMode) { cancelAnimation(scale); scale.value = 1; }
+    return () => cancelAnimation(scale);
+  }, [disabled, performanceMode, reduceMotion, scale]);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-      style={({ pressed }) => [styles.nextButton, disabled && styles.nextDisabled, pressed && styles.nextPressed]}>
-      <Text style={styles.nextLabel}>{label}</Text>
-    </Pressable>
+    <Animated.View style={animated}>
+      <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+        onPressIn={() => { scale.value = reduceMotion || performanceMode ? 1 : withTiming(0.985, { duration: 130 }); }}
+        onPressOut={() => { scale.value = reduceMotion || performanceMode ? 1 : withSpring(1, { damping: 22, stiffness: 300 }); }}
+        style={() => [styles.nextButton, disabled && styles.nextDisabled]}>
+        <Text style={styles.nextLabel}>{label}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -664,6 +729,7 @@ function RecommendationStep({
   onSelect,
   reduceMotion,
   selected,
+  selectedCategories,
 }: {
   error: string;
   onBack: () => void;
@@ -671,7 +737,10 @@ function RecommendationStep({
   onSelect: (style: RecommendationStyle) => void;
   reduceMotion: boolean;
   selected: RecommendationStyle;
+  selectedCategories: string[];
 }) {
+  const preferredArtwork = categories.filter((category) => selectedCategories.includes(category.id));
+  const artwork = (preferredArtwork.length ? preferredArtwork : categories.slice(0, 4)).map((category) => category.image);
   return (
     <Animated.View
       entering={reduceMotion ? undefined : FadeInDown.duration(300).withInitialValues({ opacity: 1 })}
@@ -697,20 +766,17 @@ function RecommendationStep({
         </PreferencesGlassButton>
       </Animated.View>
       <OnboardingHeader
-        subtitle={'Choose how adventurous your recommendations\nshould be (You can always change this)'}
+        subtitle="Choose how adventurous your recommendations should be."
         reduceMotion={reduceMotion}
       />
       <ScrollView bounces contentContainerStyle={styles.recommendationBody} showsVerticalScrollIndicator={false}>
-        {recommendationOptions.map((option, index) => (
-          <RecommendationCard
-            key={option.id}
-            index={index}
-            onPress={() => onSelect(option.id)}
-            option={option}
-            reduceMotion={reduceMotion}
-            selected={selected === option.id}
-          />
-        ))}
+        <DiscoveryPreview images={artwork} selected={selected} reduceMotion={reduceMotion} />
+        <View style={styles.recommendationOptions}>
+          {recommendationOptions.map((option) => (
+            <RecommendationChoice key={option.id} id={option.id} label={option.label}
+              onPress={() => onSelect(option.id)} reduceMotion={reduceMotion} selected={selected === option.id} />
+          ))}
+        </View>
       </ScrollView>
       <View style={styles.footer}>
         <Text style={[styles.helper, error ? styles.helperError : null]}>
@@ -816,68 +882,6 @@ function CategoryCard({
   );
 }
 
-function RecommendationCard({
-  index,
-  onPress,
-  option,
-  reduceMotion,
-  selected,
-}: {
-  index: number;
-  onPress: () => void;
-  option: RecommendationOption;
-  reduceMotion: boolean;
-  selected: boolean;
-}) {
-  const selection = useSharedValue(selected ? 1 : 0);
-
-  useEffect(() => {
-    selection.value = reduceMotion
-      ? selected ? 1 : 0
-      : withSpring(selected ? 1 : 0, { damping: 12, mass: 0.52, stiffness: 250 });
-  }, [reduceMotion, selected, selection]);
-
-  const labelStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(
-      selection.value,
-      [0, 1],
-      ['rgba(255,255,255,0.57)', '#FFFFFF'],
-    ),
-  }));
-  const checkStyle = useAnimatedStyle(() => ({
-    opacity: selection.value,
-  }));
-
-  return (
-    <Animated.View
-      entering={reduceMotion
-        ? undefined
-        : FadeInDown
-          .delay(100 + index * 85)
-          .duration(420)
-          .easing(Platform.OS === 'web' ? Easing.bezier(0.22, 1, 0.36, 1) : Easing.out(Easing.cubic))
-          .withInitialValues({ opacity: 1 })}
-      style={styles.recommendationShell}>
-      <PreferencesGlassButton
-        accessibilityLabel={option.label}
-        radius={29}
-        height={58}
-        onPress={onPress}
-        selected={selected}
-        style={[styles.recommendationGlass, selected && styles.recommendationSelected]}
-        tintColor={selected ? BrandAccent.dark : 'rgba(255,255,255,0.07)'}
-        contentStyle={styles.recommendationContent}>
-        <Animated.Text style={[styles.recommendationLabel, labelStyle]}>
-          {option.label}
-        </Animated.Text>
-        <Animated.View style={[styles.optionCheck, checkStyle]}>
-          <SymbolView name="checkmark.circle.fill" size={23} tintColor="#FFFFFF" />
-        </Animated.View>
-      </PreferencesGlassButton>
-    </Animated.View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#09070D', overflow: 'hidden' },
   safeArea: { flex: 1 },
@@ -932,7 +936,6 @@ const styles = StyleSheet.create({
   nextButton: { width: '100%', minHeight: 56, paddingHorizontal: 24, paddingVertical: 16, borderRadius: 28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   nextLabel: { color: '#100D17', fontSize: 16, fontWeight: '700' },
   nextDisabled: { opacity: 0.65 },
-  nextPressed: { opacity: 0.9 },
   helper: {
     height: 22,
     color: 'rgba(255,255,255,0.44)',
@@ -941,29 +944,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   helperError: { color: '#FF91A2' },
-  recommendationBody: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    gap: 15,
-    paddingHorizontal: 30,
-    paddingBottom: 34,
-  },
-  recommendationShell: { width: '100%', height: 58 },
-  recommendationGlass: { width: '100%' },
-  recommendationSelected: {
-    shadowColor: BrandAccent.glow,
-    shadowOpacity: 0.38,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 5 },
-  },
-  recommendationContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  recommendationLabel: { flex: 1, fontSize: 16, fontWeight: '500' },
-  optionCheck: { width: 24, height: 24 },
+  recommendationBody: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 18 },
+  recommendationOptions: { gap: 12 },
   finalStep: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center' },
   finalBrand: { alignItems: 'center', paddingTop: 78 },
   welcomeLabel: { color: 'rgba(226,214,233,0.62)', fontSize: 21, fontWeight: '300' },
@@ -1054,8 +1036,10 @@ const styles = StyleSheet.create({
     width: 104,
     height: 104,
     borderRadius: 52,
-    backgroundColor: '#FFFFFF',
   },
+  pullSolidFallback: { backgroundColor: '#FFFFFF' },
+  pullLensClip: { borderRadius: 52, overflow: 'hidden' },
+  pullLensScene: { position: 'absolute', transformOrigin: 'top left' },
   pullGlassContent: {
     position: 'absolute',
     inset: 0,

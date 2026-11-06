@@ -1,3 +1,4 @@
+import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { FrostedBackdrop } from '@/components/frosted-surface';
 import { GlassView } from 'expo-glass-effect';
@@ -10,7 +11,7 @@ import { useAppSettings } from '@/providers/settings-provider';
 const trackPadding = 5;
 
 type PillSegmentedControlProps<T extends string> = {
-  options: readonly { label: string; value: T }[];
+  options: readonly { label: string; value: T; icon?: SymbolViewProps['name'] }[];
   onChange: (value: T) => void;
   value: T;
   style?: StyleProp<ViewStyle>;
@@ -93,6 +94,7 @@ export default function PillSegmentedControl<T extends string>({
             accessibilityState={{ selected }}
             onPress={() => onChange(item.value)}
             style={styles.tab}>
+            {item.icon ? <SymbolView name={item.icon} size={17} tintColor={selected ? '#FFFFFF' : colors.secondaryText} /> : null}
             <Text
               style={[
                 styles.label,
@@ -134,6 +136,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   tab: {
+    flexDirection: 'row',
+    gap: 7,
     zIndex: 1,
     flex: 1,
     alignItems: 'center',

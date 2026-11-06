@@ -24,7 +24,7 @@ export default function AppTabs() {
   const accountIcon = useAccountTabIcon();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { colors, isDark, performanceMode, reduceMotion } = useAppSettings();
+  const { colors, isDark, performanceMode, reduceMotion, theme } = useAppSettings();
   const customTabs = performanceMode || Platform.OS === 'android';
   const customTabBottom = Platform.OS === 'android' ? insets.bottom + 8 : Math.max(8, insets.bottom - 8);
   const miniBottom = customTabs ? customTabBottom + 62 + 8 : insets.bottom + 55;
@@ -103,6 +103,7 @@ export default function AppTabs() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <FrostedLayer style={styles.screen} background={<NativeTabs
         hidden={customTabs}
+        unstable_nativeProps={{ colorScheme: theme === 'Auto' ? 'inherit' : isDark ? 'dark' : 'light' }}
         backgroundColor={isDark ? 'rgba(17,14,23,0.86)' : 'rgba(255,255,255,0.82)'}
         blurEffect={isDark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
         disableTransparentOnScrollEdge

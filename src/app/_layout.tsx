@@ -185,7 +185,7 @@ function RootNavigator() {
               elevated: colors.elevated,
               performanceMode,
               reduceMotion,
-              detent: name === 'player-details' ? 0.62 : name === 'playlist-editor' || name === 'equalizer' ? 0.75 : 0.5,
+              detent: name === 'player-details' ? 0.62 : ['playlist-editor', 'equalizer', 'visualizer', 'playback-speed'].includes(name) ? 0.75 : 0.5,
             })}
           />
         ))}

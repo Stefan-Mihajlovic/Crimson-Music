@@ -223,7 +223,7 @@ export default function DraggablePlayerSurface({
                     height,
                   },
                 ]}>
-                <PlayerArtworkBackground active={expanded} artworkLoaded={artworkLoaded} song={currentSong} />
+                <PlayerArtworkBackground active={expanded} artworkLayout={fullArtwork} artworkLoaded={artworkLoaded} song={currentSong} />
               </Animated.View>
 
               <Animated.View style={[styles.full, { height, width }]}>
@@ -328,7 +328,7 @@ function CompactPlayer({
         <FrostedSurface radius={26} style={styles.compactInterior}>{contents}</FrostedSurface>
       ) : (
         <GlassView
-          colorScheme="auto"
+          colorScheme={isDark ? 'dark' : 'light'}
           glassEffectStyle="regular"
           isInteractive
           style={styles.compactInterior}>

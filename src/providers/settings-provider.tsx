@@ -1,11 +1,12 @@
 import { normalizePlaybackSpeed } from '@/services/playback-controls';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, useColorScheme } from 'react-native';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { AccessibilityInfo, Appearance, Platform, useColorScheme } from 'react-native';
 import { setDataSaverEnabled } from '@/services/data-usage';
 import { normalizeCrossfadeSeconds } from '@/services/crossfade-player';
 import { DEFAULT_EQUALIZER, normalizeEqualizer, type EqualizerSettings } from '@/services/equalizer';
+import { normalizeVisualizerStyle, type VisualizerStyle } from '@/services/player-visualizer';
 
 export type AppThemeMode = 'Light' | 'Dark' | 'Auto';
 
@@ -14,6 +15,8 @@ type AppSettings = {
   dataSaver: boolean;
   reduceMotion: boolean;
   performanceMode: boolean;
+  visualizerEnabled: boolean;
+  visualizerStyle: VisualizerStyle;
   crossfadeEnabled: boolean;
   crossfadeSeconds: number;
   equalizer: EqualizerSettings;
@@ -84,6 +87,8 @@ const defaults: AppSettings = {
   dataSaver: false,
   reduceMotion: false,
   performanceMode: false,
+  visualizerEnabled: false,
+  visualizerStyle: 'aurora',
   crossfadeEnabled: false,
   crossfadeSeconds: 3,
   equalizer: DEFAULT_EQUALIZER,
@@ -128,6 +133,7 @@ export function SettingsProvider({ children }: PropsWithChildren) {
     next.crossfadeSeconds = Math.max(1, normalizeCrossfadeSeconds(next.crossfadeSeconds));
     next.equalizer = normalizeEqualizer(next.equalizer);
     next.playbackSpeed = normalizePlaybackSpeed(next.playbackSpeed);
+    next.visualizerStyle = normalizeVisualizerStyle(next.visualizerStyle);
     settingsRef.current = next;
     if (typeof patch.dataSaver === 'boolean') setDataSaverEnabled(patch.dataSaver);
     setSettings(next);
@@ -146,6 +152,8 @@ export function SettingsProvider({ children }: PropsWithChildren) {
           dataSaver: parsed?.dataSaver === true,
           reduceMotion: parsed?.reduceMotion === true,
           performanceMode: parsed?.performanceMode === true,
+          visualizerEnabled: parsed?.visualizerEnabled === true,
+          visualizerStyle: normalizeVisualizerStyle(parsed?.visualizerStyle),
           crossfadeEnabled: parsed?.crossfadeEnabled === true,
           equalizer: normalizeEqualizer(parsed?.equalizer),
           playbackSpeed: normalizePlaybackSpeed(parsed?.playbackSpeed),
@@ -170,6 +178,15 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   const resolvedTheme: ResolvedAppTheme = settings.theme === 'Auto'
     ? systemColorScheme === 'light' ? 'Light' : 'Dark'
     : settings.theme;
+
+  useLayoutEffect(() => {
+    if (!ready || Platform.OS === 'web') return;
+    // UIKit bars, sheets, menus and glass inherit the app window's traits.
+    // Clear the override for Auto rather than pinning the last resolved theme.
+    Appearance.setColorScheme(settings.theme === 'Auto'
+      ? 'unspecified'
+      : settings.theme === 'Dark' ? 'dark' : 'light');
+  }, [ready, settings.theme]);
 
   const value = useMemo<SettingsContextValue>(() => ({
     ...settings,

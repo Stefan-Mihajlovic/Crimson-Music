@@ -63,7 +63,7 @@ export default function MiniPlayer({ disabled, onBeginExpand, onExpand, onExpand
       pointerEvents={disabled ? 'none' : 'auto'}
       style={styles.shell}>
       <View style={styles.glass}>
-        {glassAvailable ? <GlassView glassEffectStyle="regular" isInteractive style={StyleSheet.absoluteFill} /> : <FrostedBackdrop radius={23} />}
+        {glassAvailable ? <GlassView colorScheme={isDark ? 'dark' : 'light'} glassEffectStyle="regular" isInteractive style={StyleSheet.absoluteFill} /> : <FrostedBackdrop radius={23} />}
         <View style={styles.content}>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />

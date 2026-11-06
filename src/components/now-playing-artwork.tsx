@@ -87,15 +87,17 @@ export function CollectionPlayingOverlay({
 
 export default function NowPlayingArtwork({
   borderRadius = 10,
+  active: activeOverride,
   size,
   song,
 }: {
   borderRadius?: number;
+  active?: boolean;
   size: number;
   song: Pick<CrimsonSong, 'id' | 'image' | 'imageSmall' | 'title'> & { artwork?: CrimsonSong['artwork'] };
 }) {
   const { currentSong } = usePlayer();
-  const active = currentSong?.id === song.id;
+  const active = activeOverride ?? currentSong?.id === song.id;
   const image = song.imageSmall || song.image;
 
   return (
