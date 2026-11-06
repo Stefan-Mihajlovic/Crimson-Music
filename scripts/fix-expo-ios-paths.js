@@ -10,7 +10,7 @@ const projectRoot = path.join(__dirname, '..');
 require('../plugins/with-crimson-equalizer').patchEqualizer(projectRoot);
 require('../plugins/with-crimson-sleep-timer').patchCrimsonSleepTimer(projectRoot);
 
-function replaceOnce(filePath, brokenValue, fixedValue, label, { optional = false } = {}) {
+function replaceOnce(filePath, brokenValue, fixedValue, label, { optional = false, supportedValues = [] } = {}) {
   if (!fs.existsSync(filePath)) {
     if (optional) return;
     console.log(`[Expo iOS path fix] ${label} is not installed; nothing to patch.`);
@@ -18,7 +18,7 @@ function replaceOnce(filePath, brokenValue, fixedValue, label, { optional = fals
   }
 
   const contents = fs.readFileSync(filePath, 'utf8');
-  if (contents.includes(fixedValue) || (label === 'React Native bundle script' && contents.includes('REACT_NATIVE_XCODE_SCRIPT='))) {
+  if (contents.includes(fixedValue) || supportedValues.some((value) => contents.includes(value)) || (label === 'React Native bundle script' && contents.includes('REACT_NATIVE_XCODE_SCRIPT='))) {
     console.log(`[Expo iOS path fix] ${label} already supports paths containing spaces.`);
     return;
   }
@@ -43,6 +43,9 @@ replaceOnce(
   ':script => "bash -l -c \\"#{env_vars}$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\\"",',
   ':script => "bash -l \\"$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\\"",',
   'Expo Constants',
+  // Expo Constants 57.0.23 quotes the script path upstream and preserves an
+  // explicitly configured PROJECT_ROOT. Keep that fix rather than replacing it.
+  { supportedValues: [String.raw`:script => "bash -l -c \"#{env_vars}\\\"$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\\\"\"",`] },
 );
 
 const constantsScript = path.join(
