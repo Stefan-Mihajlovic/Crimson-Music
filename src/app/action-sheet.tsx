@@ -1,4 +1,7 @@
 import LocalMusicActionsSheet from '@/components/local-music-actions-sheet';
+import VisualizerIcon from '@/components/visualizer-icon';
+import { VISUALIZER_STYLES } from '@/services/player-visualizer';
+import { playbackSpeedLabel } from '@/services/playback-controls';
 import { BrandAccent } from '@/constants/brand-accent';
 import ResponsivePopup from '@/components/responsive-popup';
 import PopupSheetLayout from '@/components/popup-sheet-layout';
@@ -7,7 +10,7 @@ import { Image } from 'expo-image';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { SymbolView } from '@/components/app-symbol';
 import { SFSymbol } from 'sf-symbols-typescript';
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -70,7 +73,7 @@ function MusicActionsSheet() {
   const { user } = useAuth();
   const downloads = useDownloads();
   const { playSong, playNextInQueue, addToQueue } = usePlayer();
-  const { colors, reduceMotion } = useAppSettings();
+  const { colors, reduceMotion, visualizerEnabled, visualizerStyle, playbackSpeed = 1 } = useAppSettings();
   const params = useLocalSearchParams<{
     type?: string;
     id?: string;
@@ -625,6 +628,19 @@ function MusicActionsSheet() {
           {type === 'song' && (params.playerPresentation === 'overlay' || params.playerPresentation === 'modal') ? (
             <>
               <ActionRow
+                icon="waveform"
+                customIcon={<VisualizerIcon style={visualizerStyle} color={colors.text} size={26} />}
+                label="Visualizer"
+                value={visualizerEnabled ? VISUALIZER_STYLES.find((style) => style.id === visualizerStyle)?.name : 'Off'}
+                onPress={() => { releaseWebNavigationFocus(); router.replace('/visualizer' as Href); }}
+              />
+              <ActionRow
+                icon="speedometer"
+                label="Playback speed"
+                value={playbackSpeedLabel(playbackSpeed)}
+                onPress={() => { releaseWebNavigationFocus(); router.replace('/playback-speed' as Href); }}
+              />
+              <ActionRow
                 icon="moon.stars.fill"
                 label="Sleep timer"
                 onPress={() => { releaseWebNavigationFocus(); router.replace('/sleep-timer' as Href); }}
@@ -719,6 +735,8 @@ const ActionRow = memo(function ActionRow({
   muted,
   onPress,
   selected,
+  customIcon,
+  value,
 }: {
   disabled?: boolean;
   icon: SFSymbol;
@@ -727,6 +745,8 @@ const ActionRow = memo(function ActionRow({
   muted?: boolean;
   onPress: () => void;
   selected?: boolean;
+  customIcon?: ReactNode;
+  value?: string;
 }) {
   const { colors } = useAppSettings();
   const desktop = useContext(DesktopActionsContext);
@@ -740,6 +760,7 @@ const ActionRow = memo(function ActionRow({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityValue={value ? { text: value } : undefined}
       disabled={disabled}
       onPress={onPress}
       onHoverIn={() => setHovered(true)}
@@ -759,7 +780,7 @@ const ActionRow = memo(function ActionRow({
           size="small"
           style={styles.rowIcon}
         />
-      ) : (
+      ) : customIcon ? <View style={desktop ? styles.desktopRowIcon : styles.rowIcon}>{customIcon}</View> : (
         <SymbolView
           name={icon}
           size={desktop ? 19 : 23}
@@ -773,6 +794,7 @@ const ActionRow = memo(function ActionRow({
       >
         {label}
       </Text>
+      {value ? <Text numberOfLines={1} style={{ color: colors.secondaryText, fontSize: desktop ? 12 : 14, maxWidth: '30%' }}>{value}</Text> : null}
       {!desktop ? <SymbolView name="chevron.right" size={13} tintColor={colors.mutedText} /> : null}
     </Pressable>
   );

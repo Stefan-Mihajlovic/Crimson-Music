@@ -7,18 +7,20 @@ import { playlistPickerArtwork } from '../src/services/playlist-artwork';
 import { assertNativeSheetLayout } from './helpers/assert-native-sheet-layout';
 
 let mockParams = { type: 'song', id: 'remote', title: 'Song', subtitle: 'Artist' };
-jest.mock('expo-router', () => ({ useRouter: () => ({ canGoBack: () => true, dismiss: jest.fn() }), useLocalSearchParams: () => mockParams }));
+const mockReplace = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ canGoBack: () => true, dismiss: jest.fn(), replace: mockReplace }), useLocalSearchParams: () => mockParams }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 jest.mock('expo-image', () => ({ Image: 'Image' }));
 jest.mock('../src/components/app-symbol', () => ({ SymbolView: 'SymbolView' }));
+jest.mock('../src/components/visualizer-icon', () => 'VisualizerIcon');
 jest.mock('../src/components/responsive-popup', () => function Popup({ children }) { return children; });
 jest.mock('../src/components/playlist-cover', () => 'PlaylistCover');
 jest.mock('../src/components/favorites-artwork', () => 'FavoritesArtwork');
 jest.mock('../src/providers/auth-provider', () => ({ useAuth: () => ({ user: { uid: 'listener' } }) }));
-jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ colors: {}, reduceMotion: true }) }));
+jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ colors: {}, reduceMotion: true, visualizerEnabled: true, visualizerStyle: 'prism', playbackSpeed: 1.25 }) }));
 jest.mock('../src/providers/player-provider', () => ({ usePlayer: () => ({}) }));
 jest.mock('../src/providers/download-provider', () => ({ useDownloads: () => ({ supported: false, statusFor: () => ({ state: 'none' }), isDownloaded: () => false, isTrackKnownUnavailable: () => false }) }));
-jest.mock('../src/services/action-sheet', () => ({ useDetailRoutes: () => ({}) }));
+jest.mock('../src/services/action-sheet', () => ({ useDetailRoutes: () => ({}), releaseWebNavigationFocus: jest.fn() }));
 jest.mock('../src/services/music', () => ({ getUserCollectionState: jest.fn(), getMusicTrack: jest.fn(), loadLibraryFeed: jest.fn(), normalizeRemoteImageUrl: (value) => value, toggleUserCollectionItem: jest.fn() }));
 jest.mock('../src/services/playlist-artwork', () => ({ playlistPickerArtwork: jest.fn() }));
 jest.mock('../src/services/local-music', () => ({ isLocalTrackId: (id) => id.startsWith('local:'), removeLocalMusic: jest.fn() }));
@@ -59,4 +61,22 @@ test('local audio offers Favorites and owned playlists', async () => {
   expect(loadLibraryFeed).toHaveBeenCalledWith('listener', { selectedTrackId: mockParams.id });
   expect(root.root.findAllByType('FavoritesArtwork')).toHaveLength(1);
   expect(root.root.findAllByType('PlaylistCover')).toHaveLength(1);
+});
+
+test.each(['overlay', 'modal'])('the %s player menu opens visualizer and speed without dismissing the player', async (playerPresentation) => {
+  mockParams.playerPresentation = playerPresentation;
+  await act(async () => { root = create(<ActionSheetScreen />); });
+  const row = (label) => root.root.findAll((node) => node.props.accessibilityLabel === label && typeof node.props.onPress === 'function')[0];
+  expect(row('Visualizer').props.accessibilityValue.text).toBe('Prism');
+  expect(row('Playback speed').props.accessibilityValue.text).toBe('1.25×');
+  await press('Visualizer');
+  expect(mockReplace).toHaveBeenLastCalledWith('/visualizer');
+  await press('Playback speed');
+  expect(mockReplace).toHaveBeenLastCalledWith('/playback-speed');
+});
+
+test('a library song menu does not offer player-only effects', async () => {
+  await act(async () => { root = create(<ActionSheetScreen />); });
+  expect(root.root.findAllByProps({ accessibilityLabel: 'Visualizer' })).toHaveLength(0);
+  expect(root.root.findAllByProps({ accessibilityLabel: 'Playback speed' })).toHaveLength(0);
 });

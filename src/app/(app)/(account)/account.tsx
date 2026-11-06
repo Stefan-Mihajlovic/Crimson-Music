@@ -1,3 +1,6 @@
+import { playbackSpeedLabel } from '@/services/playback-controls';
+import { VISUALIZER_STYLES } from '@/services/player-visualizer';
+import VisualizerIcon from '@/components/visualizer-icon';
 import Switch from '@/components/app-switch';
 import { equalizerPresetName } from '@/services/equalizer';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
@@ -37,7 +40,7 @@ export default function AccountScreen() {
   const headerScroll = useMainHeaderScroll();
   const { disconnectAndClearLocalData, signOut, user } = useAuth();
   const downloads = useDownloads();
-  const { colors, equalizer, playbackSpeed = 1, preservePitch = true, loudnessNormalization = false, dataSaver, performanceMode, crossfadeEnabled, crossfadeSeconds, requestedReduceMotion, systemReduceMotion, settingsError, retrySaveSettings, theme, updateSettings } = useAppSettings();
+  const { colors, visualizerEnabled, visualizerStyle, equalizer, playbackSpeed = 1, loudnessNormalization = false, dataSaver, performanceMode, crossfadeEnabled, crossfadeSeconds, requestedReduceMotion, systemReduceMotion, settingsError, retrySaveSettings, theme, updateSettings } = useAppSettings();
   const [clearingLocalData, setClearingLocalData] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const photo = user?.ProfilePhoto || '1';
@@ -137,21 +140,27 @@ export default function AccountScreen() {
           <SettingsToggle icon="bolt.fill" title="Performance Mode" subtitle="Uses solid controls and navigation, and reduces animated artwork and visual effects." value={performanceMode} onValueChange={(value) => updateSettings({ performanceMode: value })} />
         </View>
 
+        <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Player visualizer</Text>
+        <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
+          <SettingsToggle icon="waveform" title="Music-reactive background" subtitle="Bring the fullscreen player to life with bass, melody and treble." value={visualizerEnabled} onValueChange={(value) => updateSettings({ visualizerEnabled: value })} />
+          {visualizerEnabled ? <>
+            <Divider />
+            {VISUALIZER_STYLES.map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityLabel={option.name}
+              accessibilityState={{ checked: visualizerStyle === option.id }} onPress={() => updateSettings({ visualizerStyle: option.id })}
+              style={({ pressed }) => [styles.row, (pressed || visualizerStyle === option.id) && { backgroundColor: colors.accentSoft }]}>
+              <VisualizerIcon style={option.id} color={colors.accent} />
+              <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>{option.name}</Text><Text style={[styles.rowSubtitle, { color: colors.secondaryText }]}>{option.description}</Text></View>
+              {visualizerStyle === option.id ? <SymbolView name="checkmark.circle.fill" size={22} tintColor={colors.accent} /> : null}
+            </Pressable>)}
+          </> : null}
+        </View>
+        {visualizerEnabled && (performanceMode || requestedReduceMotion || systemReduceMotion) ? <Text style={[styles.settingScope, { color: colors.secondaryText }]}>Visualizer motion is paused while Reduce Motion or Performance Mode is on.</Text> : null}
+
         <Text style={[styles.settingScope, { color: colors.secondaryText }]}>Appearance and playback settings apply to this device.</Text>
 
         <Text style={[styles.sectionLabel, { color: colors.mutedText }]}>Playback</Text>
         <View style={[styles.group, { backgroundColor: colors.controlSurface, borderColor: colors.border }]}>
-          <View style={styles.row}>
-            <SymbolView name="speedometer" size={21} tintColor={colors.accent} />
-            <View style={styles.rowCopy}><Text style={[styles.rowTitle, { color: colors.text }]}>Playback speed</Text><Text style={[styles.rowSubtitle, { color: colors.secondaryText }]}>{playbackSpeed.toFixed(2)}×</Text></View>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Decrease playback speed" disabled={playbackSpeed <= 0.5} onPress={() => updateSettings({ playbackSpeed: playbackSpeed - 0.05 })} style={{ padding: 12, opacity: playbackSpeed <= 0.5 ? 0.35 : 1 }}><SymbolView name="minus" size={22} tintColor={colors.accent} /></Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Reset playback speed" onPress={() => updateSettings({ playbackSpeed: 1 })} style={{ padding: 12 }}><Text style={{ color: colors.accent }}>1×</Text></Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Increase playback speed" disabled={playbackSpeed >= 2} onPress={() => updateSettings({ playbackSpeed: playbackSpeed + 0.05 })} style={{ padding: 12, opacity: playbackSpeed >= 2 ? 0.35 : 1 }}><SymbolView name="plus" size={22} tintColor={colors.accent} /></Pressable>
-            </View>
-          </View>
-          <Divider />
-          <SettingsToggle icon="music.note" title="Preserve pitch" subtitle={preservePitch ? 'Keep the original tone when changing speed.' : 'Pitch rises or falls with playback speed.'} value={preservePitch} onValueChange={(value) => updateSettings({ preservePitch: value })} />
+          <SettingsLink icon="speedometer" title="Playback speed" subtitle={`${playbackSpeed === 1 ? 'Normal · ' : ''}${playbackSpeedLabel(playbackSpeed)} · Adjust speed and pitch`} onPress={() => router.push('/playback-speed' as Href)} />
           <Divider />
           <SettingsToggle icon="waveform" title="Crossfade" subtitle="Blend the end of a song into the next. Short tracks use a shorter transition; repeat-one plays normally." value={crossfadeEnabled} onValueChange={(value) => updateSettings({ crossfadeEnabled: value })} />
           {crossfadeEnabled && <>

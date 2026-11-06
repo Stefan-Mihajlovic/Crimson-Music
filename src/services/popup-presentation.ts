@@ -1,6 +1,6 @@
 import type { NativeStackNavigationOptions } from 'expo-router/native-stack';
 
-export const popupRouteNames = ['action-sheet', 'player-details', 'search-filters', 'playlist-editor', 'sleep-timer', 'equalizer'];
+export const popupRouteNames = ['action-sheet', 'player-details', 'search-filters', 'playlist-editor', 'sleep-timer', 'equalizer', 'visualizer', 'playback-speed'];
 
 /** All app popups use the same platform presentation and native drag behavior. */
 export function popupPresentationOptions({ platform, elevated, performanceMode, reduceMotion, detent = 0.5 }: {

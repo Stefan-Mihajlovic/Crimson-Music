@@ -1,9 +1,12 @@
 import FrostedSurface from '@/components/frosted-surface';
 import { GlassContainer, GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 import { useAppSettings } from '@/providers/settings-provider';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type PreferencesGlassSurfaceProps = {
   children?: ReactNode;
@@ -87,18 +90,26 @@ export function PreferencesGlassButton({
   const { performanceMode, reduceMotion } = useAppSettings();
   const buttonHeight = Math.max(44, height);
   const buttonRadius = radius ?? buttonHeight / 2;
+  const scale = useSharedValue(1);
+  const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  useEffect(() => {
+    if (disabled || reduceMotion || performanceMode) { cancelAnimation(scale); scale.set(1); }
+    return () => cancelAnimation(scale);
+  }, [disabled, performanceMode, reduceMotion, scale]);
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={{ disabled, selected }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      onPressIn={() => scale.set(reduceMotion || performanceMode ? 1 : withTiming(0.975, { duration: 130 }))}
+      onPressOut={() => scale.set(reduceMotion || performanceMode ? 1 : withSpring(1, { damping: 22, stiffness: 300, mass: 0.65 }))}
+      style={[
         styles.button,
         { height: buttonHeight, borderRadius: buttonRadius },
         style,
-        pressed && !reduceMotion && !performanceMode && styles.pressed,
+        animated,
         styles.minimumTarget,
         styles.opaque,
       ]}>
@@ -114,7 +125,7 @@ export function PreferencesGlassButton({
       <View pointerEvents="none" style={[styles.content, contentStyle, disabled && styles.disabledContent]}>
         {children}
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -130,7 +141,6 @@ const styles = StyleSheet.create({
   button: { alignItems: 'center', justifyContent: 'center' },
   minimumTarget: { minWidth: 44, minHeight: 44 },
   content: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
-  pressed: { transform: [{ scale: 0.97 }] },
   opaque: { opacity: 1 },
   disabledContent: { opacity: 0.5 },
 });

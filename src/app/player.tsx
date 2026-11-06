@@ -53,13 +53,16 @@ function formatTime(value: number) {
 export default function PlayerScreen() {
   const { currentSong } = usePlayer();
   const focused = useIsFocused();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const fold = useFoldingFeature();
+  const artworkLayout = getPlayerArtworkLayout(width, height, insets.top, insets.bottom, insets.left, insets.right, fold);
   const params = useLocalSearchParams<{ tab?: 'queue' | 'lyrics' | 'related' }>();
   if (Platform.OS === 'web' && width >= 960) return <DesktopPlayer initialTab={params.tab || 'queue'} />;
   if (Platform.OS === 'web') return <MobilePlayerSurface />;
   return (
     <View style={styles.screen}>
-      <PlayerArtworkBackground active={focused} song={currentSong} />
+      <PlayerArtworkBackground active={focused} artworkLayout={artworkLayout} song={currentSong} />
       <PlayerContent />
     </View>
   );
@@ -322,13 +325,13 @@ function PlaybackControls() {
 
       <View style={styles.transportGlass}>
         <TransportButton label={isShuffled ? 'Turn shuffle off' : 'Turn shuffle on'} icon="shuffle" motion="shuffle" active={isShuffled} onPress={toggleShuffle} />
-        <TransportButton label="Previous song" icon="backward.fill" motion="backward" onPress={playPrevious} />
+        <TransportButton label="Previous song" icon="backward.end.fill" motion="backward" onPress={playPrevious} />
         <BouncyPressable accessibilityLabel={status.isBuffering ? 'Cancel loading' : status.playing ? 'Pause' : 'Play'} accessibilityRole="button" contentStyle={styles.playButtonContent} hitSlop={6} onPress={togglePlay} pressedScale={0.8} style={styles.playButton}>
           {status.isBuffering
             ? <ActivityIndicator color="#17121D" size="small" />
             : <SymbolView name={status.playing ? 'pause.fill' : 'play.fill'} size={36} tintColor="#17121D" weight="bold" />}
         </BouncyPressable>
-        <TransportButton label="Next song" icon="forward.fill" motion="forward" onPress={playNext} />
+        <TransportButton label="Next song" icon="forward.end.fill" motion="forward" onPress={playNext} />
         <TransportButton
           label={`Repeat ${repeatMode}`}
           icon="repeat"
@@ -344,7 +347,7 @@ function PlaybackControls() {
 
 function TransportButton({ active, icon, label, motion, onPress, repeatOne = false }: {
   active?: boolean;
-  icon: 'shuffle' | 'backward.fill' | 'forward.fill' | 'repeat';
+  icon: 'shuffle' | 'backward.end.fill' | 'forward.end.fill' | 'repeat';
   label: string;
   motion: 'shuffle' | 'backward' | 'forward' | 'repeat';
   onPress: () => void;

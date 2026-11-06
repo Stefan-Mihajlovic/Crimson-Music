@@ -11,6 +11,8 @@ Crimson uses Expo 57 and React Native and supports iOS, Android, and web. The co
 | Optional crossfade | Off by default; 1–12 seconds | Off by default; 1–12 seconds | Off by default; 1–12 seconds |
 | Sleep timer | Native deadline on both audio decks; end of song | Native deadline on both audio decks; end of song | Web Audio deadline mute and player pause; end of song |
 | Five-band equalizer and presets | Float32 audio-tap processing | PCM16 audio-processor processing | Shared Web Audio graph |
+| Five optional audio-reactive visualizers | Playback PCM sampling | Playback PCM sampling | Web Audio sampling; source must allow CORS |
+| Playback speed, presets and pitch preservation | 0.5×–2×, 0.05× steps | 0.5×–2×, 0.05× steps | 0.5×–2×, 0.05× steps |
 | Session storage | SecureStore | SecureStore | Tab-scoped `sessionStorage` |
 | Glass surfaces and controls | Native Liquid Glass and SwiftUI | Frosted glass with live native backdrop blur; bundled icons | Frosted glass with CSS backdrop blur; bundled icons |
 | Crimson previous/next/like remote controls | Native integration | Expo Audio foreground service and MediaSession adapter | Browser Media Session previous/next; favorite in player |
@@ -23,6 +25,12 @@ Crimson uses Expo 57 and React Native and supports iOS, Android, and web. The co
 | Voice search | OS speech recognition | Device/service dependent | Browser dependent |
 
 Navigation, mini players, menus, and queue sheets use frosted backdrops. Vault actions use a darker blurred surface with a light border; main-page header actions display bare icons. Welcome and onboarding primary actions use white fills. Performance Mode removes blur and uses opaque surfaces on every platform.
+
+Up Next presents previously played songs, the current song, and upcoming songs in one list. Only upcoming songs can be reordered or removed. Up Next and Related have labeled icons on mobile and desktop.
+
+Visualizer and Playback speed sheets are available from the full player's song menu; the same preferences are shared with Settings. Visualizers default to off, use the cover's palette, and react to playback samples without microphone input. Orbit and Prism align to the artwork. Motion stops when the player is hidden, the app is backgrounded, Reduce Motion is enabled, or Performance Mode is enabled. Pause, buffering and track changes clear the audio response. Unsupported or CORS-blocked browser sampling cannot provide music reactivity.
+
+Music preferences use descriptive discovery choices and artwork from selected genres. Native/mobile-web controls and the desktop form animate their selection states; the desktop form retains native keyboard-operable checkbox and radio inputs. App and system Reduce Motion are respected. iOS Liquid Glass uses the app's selected appearance, with Auto following the system.
 
 Android uses `expo-blur` with separate `BlurTargetView` layers, including the legacy RenderScript path for Android 7–11. Legacy blur costs more GPU/CPU work than the Android 12+ path; Performance Mode uses opaque surfaces. Targets exclude the controls that sample them to avoid recursive rendering. Web uses `backdrop-filter` and its WebKit counterpart through the same shared material component.
 

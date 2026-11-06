@@ -13,6 +13,7 @@ import { formatPlayerTime, PlayerIconButton, PlayerRange, WebTransport, WebVolum
 import { usePlayer, usePlayerStatus } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { actionSheetHref, useDetailRoutes } from '@/services/action-sheet';
+import type { VisualizerArtworkLayout } from '@/services/player-visualizer';
 
 const DesktopArtworkBackground = memo(PlayerArtworkBackground);
 
@@ -30,6 +31,8 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
   const closing = useRef(false);
   const alive = useRef(true);
   const artworkColumn = useRef<HTMLDivElement>(null);
+  const artworkBox = useRef<HTMLDivElement>(null);
+  const [artworkLayout, setArtworkLayout] = useState<VisualizerArtworkLayout>();
   const controls = useRef<HTMLDivElement>(null);
   const [artworkLoaded, setArtworkLoaded] = useState(0);
   const [availableArtwork, setAvailableArtwork] = useState<number | null>(null);
@@ -90,6 +93,21 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
     return () => window.removeEventListener('keydown', onKey);
   }, [router]);
   const artworkSize = Math.max(140, Math.min(460, (width - 340) * 0.48, availableArtwork ?? height - 425));
+  useLayoutEffect(() => {
+    const cover = artworkBox.current, container = surface.current, column = artworkColumn.current;
+    if (!cover || !container) return;
+    const measure = () => {
+      const box = cover.getBoundingClientRect(), parent = container.getBoundingClientRect();
+      const next = { x: box.left - parent.left, y: box.top - parent.top, size: box.width };
+      setArtworkLayout((previous) => previous?.x === next.x && previous.y === next.y && previous.size === next.size ? previous : next);
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(cover);
+    observer?.observe(container);
+    column?.addEventListener('scroll', measure, { passive: true });
+    return () => { observer?.disconnect(); column?.removeEventListener('scroll', measure); };
+  }, [artworkSize, width, height, hasSong]);
   if (!song) return <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 18, color: colors.text }}>
     <SymbolView name="music.note" size={48} tintColor={colors.accent} />
     <h1 style={{ margin: 0, fontSize: 25 }}>Nothing is playing</h1>
@@ -105,7 +123,7 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
     position: 'relative', isolation: 'isolate', background: colors.background,
   }}>
     <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: -1 }}>
-      <DesktopArtworkBackground active={focused} song={song} artworkLoaded={artworkLoaded} />
+      <DesktopArtworkBackground active={focused} song={song} artworkLayout={artworkLayout} artworkLoaded={artworkLoaded} />
       {!isDark && <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.82)' }} />}
     </div>
     <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 64, padding: '8px 28px', gap: 18, flexShrink: 0 }}>
@@ -119,7 +137,7 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
       width: '100%', maxWidth: 1380, margin: '0 auto', padding: '0 32px 26px', boxSizing: 'border-box', minHeight: 0, flex: 1 }}>
       <div ref={artworkColumn} style={{ minWidth: 0, minHeight: 0, overflowY: 'auto', padding: '12px 4px 8px', scrollbarWidth: 'thin' }}>
         <div style={{ width: artworkSize, maxWidth: '100%', margin: '0 auto' }}>
-          <div style={{ width: '100%', aspectRatio: '1', marginBottom: 24, borderRadius: 18, overflow: 'hidden', boxShadow: '0 18px 48px rgba(0,0,0,.28)' }}>
+          <div ref={artworkBox} style={{ width: '100%', aspectRatio: '1', marginBottom: 24, borderRadius: 18, overflow: 'hidden', boxShadow: '0 18px 48px rgba(0,0,0,.28)' }}>
             <ArtworkImage artwork={song.artwork} source={song.image || song.imageSmall || require('@/assets/images/home/default-song.webp')} contentFit="cover" onLoad={() => setArtworkLoaded((value) => value + 1)} transition={180} style={{ width: '100%', height: '100%' }} />
           </div>
           <div ref={controls}>

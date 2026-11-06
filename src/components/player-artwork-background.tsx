@@ -1,3 +1,5 @@
+import PlayerVisualizer from '@/components/player-visualizer';
+import type { VisualizerArtworkLayout } from '@/services/player-visualizer';
 import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -31,12 +33,14 @@ export default function PlayerArtworkBackground({
   active,
   song,
   artworkLoaded = 0,
+  artworkLayout,
 }: {
   active: boolean;
   song: CrimsonSong | null;
   artworkLoaded?: number;
+  artworkLayout?: VisualizerArtworkLayout;
 }) {
-  const { dataSaver, performanceMode, reduceMotion } = useAppSettings();
+  const { dataSaver, performanceMode, reduceMotion, visualizerEnabled, visualizerStyle } = useAppSettings();
   const systemMotionAtLaunch = useReducedMotion();
   const [systemReduceMotion, setSystemReduceMotion] = useState(systemMotionAtLaunch);
   const { width, height } = useWindowDimensions();
@@ -52,7 +56,9 @@ export default function PlayerArtworkBackground({
   const transition = useSharedValue(1);
   // Data Saver only controls palette downloads. Moving cached color textures
   // consumes no data, and uses the same compositor in either network setting.
-  const animate = active && appActive && !reduceMotion && !systemReduceMotion && !performanceMode;
+  const motionAllowed = active && appActive && !reduceMotion && !systemReduceMotion && !performanceMode;
+  const showVisualizer = visualizerEnabled && motionAllowed;
+  const animate = motionAllowed && !visualizerEnabled;
   const canAnimate = useRef(animate);
   const artworkTransitionOrigin = useRef<{ identity: string; canFade: boolean } | null>(null);
   const finishTransition = useCallback((id: number) => {
@@ -155,9 +161,9 @@ export default function PlayerArtworkBackground({
           <ColorField colors={palette.previous} height={height} phase={phase} simplified={false} width={width} />
         </Animated.View>
       ) : null}
-      <Animated.View style={[StyleSheet.absoluteFill, currentStyle]}>
+      {showVisualizer ? <PlayerVisualizer artworkLayout={artworkLayout} colors={palette.current} style={visualizerStyle} width={width} height={height} /> : <Animated.View style={[StyleSheet.absoluteFill, currentStyle]}>
         <ColorField colors={palette.current} height={height} phase={phase} simplified={performanceMode} width={width} />
-      </Animated.View>
+      </Animated.View>}
       <LinearGradient
         colors={['rgba(0,0,0,0.10)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.44)', 'rgba(0,0,0,0.48)']}
         locations={[0, 0.42, 0.76, 1]}

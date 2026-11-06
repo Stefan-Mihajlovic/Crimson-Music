@@ -77,3 +77,30 @@ test('analysis uses the most recent bounded frame window and resets between play
   analyzer.reset();
   assert.deepEqual(analyzer.analyze({ channels: [{ frames: recent }] }), reference);
 });
+
+
+test('detailed visualizer bands distinguish frequencies inside the same playback marker band', () => {
+  for (const [bin, expectedBand] of [[2, 1], [8, 6], [16, 8], [32, 10], [64, 12], [128, 14]]) {
+    const analyzer = new PlaybackSpectrumAnalyzer();
+    analyzer.analyze(sample(bin), 50, true);
+    const levels = analyzer.getVisualizerLevels();
+    assert.equal(levels.length, 16);
+    const peak = levels.indexOf(Math.max(...levels));
+    assert.equal(peak, expectedBand);
+    assert.ok(levels[peak] > 0.8);
+    assert.ok(levels.every((value) => Number.isFinite(value) && value >= 0 && value <= 1));
+    for (let i = 0; i < 40; i++) analyzer.analyze(sample(0), 50, true);
+    assert.deepEqual(analyzer.getVisualizerLevels(), Array(16).fill(0));
+    analyzer.analyze(sample(bin), 50, true);
+    analyzer.reset();
+    assert.deepEqual(analyzer.getVisualizerLevels(), Array(16).fill(0));
+  }
+});
+
+test('broadband playback can illuminate all sixteen columns without permanently empty bass bands', () => {
+  const analyzer = new PlaybackSpectrumAnalyzer();
+  const impulse = Array(512).fill(0);
+  impulse[256] = 1;
+  analyzer.analyze({ channels: [{ frames: impulse }] }, 50, true);
+  assert.ok(analyzer.getVisualizerLevels().every((value) => value > 0));
+});

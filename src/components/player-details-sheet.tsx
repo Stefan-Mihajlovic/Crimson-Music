@@ -28,7 +28,6 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const [editing, setEditing] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const songId = currentSong?.id;
   const requestKey = `${songId || ''}:${revision}`;
   const loading = tab === 'related' && loadedRequest !== requestKey;
@@ -50,8 +49,9 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
       const occurrence = occurrences.get(song.id) || 0;
       occurrences.set(song.id, occurrence + 1);
       return { song, index, key: `${song.id}:${occurrence}` };
-    }).slice(queueIndex + 1);
-  }, [queue, queueIndex]);
+    });
+  }, [queue]);
+  const hasUpcoming = queueIndex + 1 < items.length;
 
   if (!currentSong) return <ScrollView style={styles.list}><Text style={[styles.empty, Platform.OS === 'web' && { paddingRight: POPUP_MOBILE_INSET + POPUP_CLOSE_CLEARANCE }, { color: colors.secondaryText }]}>Choose a song to start your queue.</Text></ScrollView>;
 
@@ -66,13 +66,10 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
           <Text numberOfLines={2} style={[styles.source, { color: colors.text }]}>{source}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={editing ? 'Finish editing queue' : 'Edit upcoming queue'}
-          disabled={!items.length} onPress={() => setEditing(!editing)} style={styles.textButton}>
-          <Text style={{ color: colors.accent, fontWeight: '700', opacity: items.length ? 1 : 0.4 }}>{editing ? 'Done' : 'Edit'}</Text>
+          disabled={!hasUpcoming} onPress={() => setEditing(!editing)} style={styles.textButton}>
+          <Text style={{ color: colors.accent, fontWeight: '700', opacity: hasUpcoming ? 1 : 0.4 }}>{editing ? 'Done' : 'Edit'}</Text>
         </Pressable>
       </View>
-      <Text style={[styles.section, { color: colors.secondaryText }]}>Now playing</Text>
-      <SongRow song={currentSong} active onPlay={() => playQueueIndex(queueIndex)} subtitle={currentSong.creator} />
-      <Text style={[styles.section, { color: colors.secondaryText }]}>Up next</Text>
       {editing ? <Text style={[styles.editHint, { color: colors.secondaryText }]}>Drag a handle to move a song. Hold near an edge to scroll.</Text> : null}
     </> : null}
   </View>;
@@ -83,13 +80,15 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
         <ReorderableQueue
           items={items}
           editing={editing}
+          currentIndex={queueIndex}
+          minimumMoveIndex={queueIndex + 1}
           onMove={moveQueueItem}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
           ListHeaderComponent={header}
           renderRow={(item, handle) => <View style={styles.queueRow}>
-            <View style={{ flex: 1 }}><SongRow song={item.song} active={false}
+            <View style={{ flex: 1 }}><SongRow song={item.song} active={item.index === queueIndex}
               onPlay={() => playQueueIndex(item.index)} subtitle={item.song.creator} /></View>
-            {editing ? <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.song.title} from queue`}
+            {editing && item.index > queueIndex ? <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.song.title} from queue`}
               onPress={() => removeFromQueue(item.index)} style={styles.rowControl}>
               <SymbolView name="minus.circle" size={22} tintColor={colors.secondaryText} />
             </Pressable> : null}
@@ -97,18 +96,12 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
           </View>}
           ListFooterComponent={<>
             <View style={styles.queueFooter}>
-              {!items.length ? <Text style={[styles.emptyQueue, { color: colors.secondaryText }]}>Your queue is clear. Add a song or explore Related.</Text> : null}
+              {!hasUpcoming ? <Text style={[styles.emptyQueue, { color: colors.secondaryText }]}>No more songs in your queue. Add a song or explore Related.</Text> : null}
               <Pressable accessibilityRole="switch" accessibilityState={{ checked: autoplayEnabled }} onPress={toggleAutoplay} style={styles.footerRow}>
                 <SymbolView name="infinity" size={23} tintColor={autoplayEnabled ? colors.accent : colors.secondaryText} />
                 <View style={{ flex: 1 }}><Text style={{ color: colors.text, fontWeight: '700' }}>Autoplay {autoplayEnabled ? 'on' : 'off'}</Text><Text style={{ color: colors.secondaryText, marginTop: 3 }}>Keep listening when your queue ends.</Text></View>
               </Pressable>
-              {queueIndex > 0 ? <Pressable accessibilityRole="button" onPress={() => setShowHistory(!showHistory)} style={styles.textButton}><Text style={{ color: colors.accent }}>{showHistory ? 'Hide' : 'Show'} previously played ({queueIndex})</Text></Pressable> : null}
             </View>
-            {showHistory && queueIndex > 0 ? <>
-              <Text style={[styles.section, { color: colors.secondaryText }]}>Previously played</Text>
-              {queue.slice(0, queueIndex).map((song, index) => <SongRow key={`${song.id}:${index}`} song={song} active={false}
-                onPlay={() => playQueueIndex(index)} subtitle={song.creator} />)}
-            </> : null}
           </>}
         />
       ) : <FlatList
@@ -149,7 +142,7 @@ function ActiveSongRow({ song, onPlay, subtitle }: { song: CrimsonSong; onPlay: 
 function SongRowContent({ song, onPlay, subtitle, active = false, playing = false }: { song: CrimsonSong; onPlay: () => void; subtitle: string; active?: boolean; playing?: boolean }) {
   const { colors } = useAppSettings();
   return <Pressable accessibilityRole="button" accessibilityLabel={`${playing ? 'Pause' : 'Play'} ${song.title} by ${song.creator}`} accessibilityState={{ selected: active }} onPress={onPlay} style={({ pressed }) => [styles.row, (active || pressed) && { backgroundColor: colors.accentSoft }]}>
-    <NowPlayingArtwork borderRadius={10} size={46} song={song} />
+    <NowPlayingArtwork borderRadius={10} size={46} song={song} active={active} />
     <View style={styles.rowCopy}><Text numberOfLines={1} style={[styles.rowTitle, { color: active ? colors.accent : colors.text }]}>{song.title}</Text><Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.secondaryText }]}>{subtitle}</Text></View>
     <DownloadStatusIcon trackId={song.id} />
     <SymbolView name={active && playing ? 'pause.fill' : 'play.fill'} size={active ? 18 : 14} tintColor={colors.text} />

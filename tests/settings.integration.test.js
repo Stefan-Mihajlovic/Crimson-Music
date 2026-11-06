@@ -2,16 +2,52 @@ import { afterEach, expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Appearance } from 'react-native';
 import { SettingsProvider, useAppSettings } from '../src/providers/settings-provider';
 import { getDataSaverEnabled, setDataSaverEnabled } from '../src/services/data-usage';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+let mockSystemColorScheme = 'dark';
+jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({
+  __esModule: true,
+  default: () => mockSystemColorScheme,
+}));
 
 let root;
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
   root = undefined;
   setDataSaverEnabled(false);
+  jest.restoreAllMocks();
+  mockSystemColorScheme = 'dark';
+});
+
+test.each([
+  ['Light', 'dark', 'light'],
+  ['Dark', 'light', 'dark'],
+])('saved %s theme controls native appearance even when the phone is %s, and Auto resumes system changes', async (theme, system, native) => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  mockSystemColorScheme = system;
+  const setColorScheme = jest.spyOn(Appearance, 'setColorScheme').mockImplementation(() => {});
+  AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify({ theme }));
+  let settings;
+  function Probe() { settings = useAppSettings(); return null; }
+  await act(async () => { root = create(<SettingsProvider><Probe /></SettingsProvider>); });
+  expect(settings.resolvedTheme).toBe(theme);
+  expect(setColorScheme).toHaveBeenLastCalledWith(native);
+
+  const opposite = theme === 'Light' ? 'Dark' : 'Light';
+  await act(async () => settings.updateSettings({ theme: opposite }));
+  expect(settings.resolvedTheme).toBe(opposite);
+  expect(setColorScheme).toHaveBeenLastCalledWith(system);
+
+  await act(async () => settings.updateSettings({ theme: 'Auto' }));
+  expect(setColorScheme).toHaveBeenLastCalledWith('unspecified');
+  expect(settings.isDark).toBe(system === 'dark');
+  mockSystemColorScheme = native;
+  await act(async () => root.update(<SettingsProvider><Probe /></SettingsProvider>));
+  expect(settings.isDark).toBe(native === 'dark');
+  expect(setColorScheme).toHaveBeenLastCalledWith('unspecified');
 });
 
 test('screens mount only after saved data and performance preferences are applied to network policy', async () => {
@@ -83,4 +119,36 @@ test('speed, pitch and normalization persist across app launches', async () => {
   await act(async () => root.unmount());
   await render();
   expect([settings.playbackSpeed, settings.preservePitch, settings.loudnessNormalization]).toEqual([1.25, false, true]);
+});
+
+
+test('visualizers are opt-in, preserve the selected style and normalize obsolete saved styles', async () => {
+  await AsyncStorage.clear();
+  let settings;
+  function Probe() { settings = useAppSettings(); return null; }
+  const render = async () => act(async () => { root = create(<SettingsProvider><Probe /></SettingsProvider>); });
+  await render();
+  expect(settings.visualizerEnabled).toBe(false);
+  expect(settings.visualizerStyle).toBe('aurora');
+  await act(async () => settings.updateSettings({ visualizerEnabled: true, visualizerStyle: 'orbit' }));
+  await act(async () => root.unmount());
+  await render();
+  expect(settings.visualizerEnabled).toBe(true);
+  expect(settings.visualizerStyle).toBe('orbit');
+  await act(async () => settings.updateSettings({ visualizerEnabled: false }));
+  expect(settings.visualizerStyle).toBe('orbit');
+  await act(async () => root.unmount());
+  for (const style of ['tides', 'prism']) {
+    await render();
+    await act(async () => settings.updateSettings({ visualizerEnabled: true, visualizerStyle: style }));
+    await act(async () => root.unmount());
+    await render();
+    expect(settings.visualizerEnabled).toBe(true);
+    expect(settings.visualizerStyle).toBe(style);
+    await act(async () => root.unmount());
+  }
+  await AsyncStorage.setItem('crimson.settings.v1', JSON.stringify({ visualizerStyle: 'unknown', visualizerEnabled: 'true' }));
+  await render();
+  expect(settings.visualizerEnabled).toBe(false);
+  expect(settings.visualizerStyle).toBe('aurora');
 });

@@ -61,12 +61,12 @@ export function WebTransport({ large = false }: { large?: boolean }) {
   return <div style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: large ? 'space-between' : 'center', gap: large ? 0 : 5 }}>
     <PlayerIconButton label={player.isShuffled ? 'Turn shuffle off' : 'Turn shuffle on'} icon="shuffle"
       onPress={player.toggleShuffle} active={player.isShuffled} size={large ? 22 : 18} style={sideButtonStyle} />
-    <PlayerIconButton label="Previous song" icon="backward.fill" onPress={player.playPrevious} size={large ? 26 : 22} style={sideButtonStyle} />
+    <PlayerIconButton label="Previous song" icon="backward.end.fill" onPress={player.playPrevious} size={large ? 26 : 22} style={sideButtonStyle} />
     <PlayerIconButton label={player.playbackState === 'error' ? 'Retry playback' : status.isBuffering ? 'Cancel loading' : status.playing ? 'Pause' : 'Play'}
       icon={status.playing ? 'pause.fill' : 'play.fill'} prominent loading={status.isBuffering}
       onPress={player.playbackState === 'error' ? player.retryPlayback : player.togglePlay}
       size={large ? 29 : 22} style={large ? { width: 60, maxWidth: '24%', height: 'auto', aspectRatio: '1', flexShrink: 1 } : undefined} />
-    <PlayerIconButton label="Next song" icon="forward.fill" onPress={player.playNext} size={large ? 26 : 22} style={sideButtonStyle} />
+    <PlayerIconButton label="Next song" icon="forward.end.fill" onPress={player.playNext} size={large ? 26 : 22} style={sideButtonStyle} />
     <PlayerIconButton label={`Repeat ${player.repeatMode}`} icon={player.repeatMode === 'one' ? 'repeat.1' : 'repeat'}
       onPress={player.toggleRepeat} active={player.repeatMode !== 'none'} size={large ? 22 : 18} style={sideButtonStyle} />
   </div>;
