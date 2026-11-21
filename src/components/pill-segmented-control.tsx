@@ -1,3 +1,4 @@
+import { selectionHaptic } from '@/services/haptics';
 import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { FrostedBackdrop } from '@/components/frosted-surface';
@@ -92,7 +93,7 @@ export default function PillSegmentedControl<T extends string>({
             accessibilityLabel={item.label}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
-            onPress={() => onChange(item.value)}
+            onPress={() => { if (!selected) { selectionHaptic(); onChange(item.value); } }}
             style={styles.tab}>
             {item.icon ? <SymbolView name={item.icon} size={17} tintColor={selected ? '#FFFFFF' : colors.secondaryText} /> : null}
             <Text

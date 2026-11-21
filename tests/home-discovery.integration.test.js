@@ -145,8 +145,7 @@ test('account cleanup removes its chart and spotlight snapshots while retaining 
   await discovery.loadHomeSpotlightTracks('artist', 'listener');
   session.getCurrentAudiusUserId.mockReturnValue('other');
   await discovery.loadHomeDiscovery('other');
-  const cleanup = lifecycle.registerAccountCleanup.mock.calls[0][0];
-  await cleanup('listener');
+  await Promise.all(lifecycle.registerAccountCleanup.mock.calls.map(([cleanup]) => cleanup('listener')));
   const keys = await storage.getAllKeys();
   expect(keys.some((key) => key.includes(':listener:'))).toBe(false);
   expect(keys.some((key) => key.includes(':other:'))).toBe(true);

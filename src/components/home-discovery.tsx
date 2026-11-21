@@ -1,3 +1,5 @@
+import { useRecommendationFeedback } from '@/hooks/use-recommendation-feedback';
+import { allowsRecommendation } from '@/services/recommendation-feedback-model';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -31,6 +33,7 @@ export default function HomeDiscovery(props: Props) {
 
 function AccountHomeDiscovery({ artist, profile, rotation, excludeTrackIds, onOpenArtist, onArtistMenu, onSongMenu, uid }: Props & { uid?: string }) {
   const { isOffline } = useNetwork();
+  const feedback = useRecommendationFeedback();
   const { colors } = useAppSettings();
   const { playSong } = usePlayer();
   const [shelves, setShelves] = useState<Awaited<ReturnType<typeof loadHomeDiscovery>>>({ underground: [] });
@@ -56,15 +59,15 @@ function AccountHomeDiscovery({ artist, profile, rotation, excludeTrackIds, onOp
     return () => { active = false; };
   }, [artistId, uid, isOffline]);
 
-  const spotlightSongs = spotlight && spotlight.artistId === artistId ? spotlight.songs : [];
+  const spotlightSongs = spotlight && spotlight.artistId === artistId ? spotlight.songs.filter((song) => allowsRecommendation(song, feedback)) : [];
   return <>
-    {artist ? <View style={styles.spotlightSection}>
+    {artist && !feedback.hiddenArtists.includes(artist.id) ? <View style={styles.spotlightSection}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>Artist spotlight</Text>
       <ArtistSpotlight artist={artist} songs={spotlightSongs} loading={spotlight?.artistId !== artistId}
         onPlay={() => { if (spotlightSongs.length) playSong(spotlightSongs[0], spotlightSongs, artist.name); }}
         onOpen={() => onOpenArtist(artist)} onMenu={() => onArtistMenu(artist)} />
     </View> : null}
-    <HomeDiscoverySections underground={shelves.underground}
+    <HomeDiscoverySections underground={shelves.underground.filter((song) => allowsRecommendation(song, feedback))}
       excludeTrackIds={[...excludeTrackIds, ...spotlightSongs.map((song) => song.id)]}
       onPlaySong={(song, queue, source) => playSong(song, queue, source)}
       onSongMenu={onSongMenu} />

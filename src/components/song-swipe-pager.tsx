@@ -1,3 +1,5 @@
+import { selectionHaptic } from '@/services/haptics';
+import { songSwipeDirection } from '@/services/song-swipe';
 /* eslint-disable react-hooks/immutability */
 
 import ArtworkImage from '@/components/artwork-image';
@@ -29,8 +31,8 @@ const defaultArtworkPageGap = 30;
 type SongPage = CrimsonSong | null;
 
 function useAdjacentSongs() {
-  const { currentSong, nextSong, previousSong, playNext, playPrevious } = usePlayer();
-  return { currentSong, nextSong, previousSong, selectNext: playNext, selectPrevious: playPrevious };
+  const { currentSong, nextSong, previousSong, queueIndex, playNext, playPrevious } = usePlayer();
+  return { currentSong, nextSong, previousSong, queueIndex, selectNext: playNext, selectPrevious: playPrevious };
 }
 
 function useSwipePager({
@@ -50,26 +52,41 @@ function useSwipePager({
   pageWidth: number;
   previousSong: SongPage;
 }) {
-  const { reduceMotion } = useAppSettings();
+  const { reduceMotion, performanceMode } = useAppSettings();
+  const motionOff = reduceMotion || performanceMode;
   const offset = useSharedValue(0);
+  const settling = useSharedValue(false);
+  const dragging = useSharedValue(false);
+  const latestKey = useSharedValue(pageKey);
 
   useLayoutEffect(() => {
+    latestKey.set(pageKey);
     cancelAnimation(offset);
     offset.value = 0;
-  }, [offset, pageKey]);
+    settling.value = false;
+    dragging.value = false;
+    return () => { latestKey.set('unmounted'); cancelAnimation(offset); };
+  }, [offset, latestKey, pageKey, pageWidth, enabled, settling, dragging]);
 
+  const resetIfUnchanged = useCallback(() => {
+    requestAnimationFrame(() => { if (latestKey.get() === pageKey) { offset.value = 0; settling.value = false; } });
+  }, [offset, latestKey, pageKey, settling]);
   const finishPrevious = useCallback(() => {
-    onPrevious();
-  }, [onPrevious]);
+    if (latestKey.get() !== pageKey) return;
+    selectionHaptic(); onPrevious(); resetIfUnchanged();
+  }, [onPrevious, latestKey, pageKey, resetIfUnchanged]);
   const finishNext = useCallback(() => {
-    onNext();
-  }, [onNext]);
+    if (latestKey.get() !== pageKey) return;
+    selectionHaptic(); onNext(); resetIfUnchanged();
+  }, [onNext, latestKey, pageKey, resetIfUnchanged]);
 
   const gesture = useMemo(() => Gesture.Pan()
     .enabled(enabled && pageWidth > 0)
     .activeOffsetX([-9, 9])
     .failOffsetY([-12, 12])
-    .onBegin(() => {
+    .onTouchesDown((_, manager) => { if (settling.value) manager.fail(); })
+    .onStart(() => {
+      dragging.value = true;
       cancelAnimation(offset);
     })
     .onUpdate((event) => {
@@ -80,18 +97,18 @@ function useSwipePager({
       offset.value = Math.max(-limit, Math.min(limit, rawOffset));
     })
     .onEnd((event) => {
-      const thresholdMet = Math.abs(event.translationX) > pageWidth * 0.2 || Math.abs(event.velocityX) > 620;
-      const goingPrevious = event.translationX > 0;
-      const canCommit = thresholdMet && (goingPrevious ? Boolean(previousSong) : Boolean(nextSong));
-
-      if (!canCommit) {
-        offset.value = withSpring(0, { damping: 22, stiffness: 245, mass: 0.8 });
+      dragging.value = false;
+      const direction = songSwipeDirection(event.translationX, event.velocityX, pageWidth, Boolean(previousSong), Boolean(nextSong));
+      if (!direction) {
+        offset.value = motionOff ? 0 : withSpring(0, { damping: 24, stiffness: 280, mass: 0.7 });
         return;
       }
+      settling.value = true;
+      const goingPrevious = direction > 0;
 
       const destination = goingPrevious ? pageWidth : -pageWidth;
       offset.value = withTiming(destination, {
-        duration: reduceMotion ? 0 : 320,
+        duration: motionOff ? 0 : 210,
         easing: swipeEasing,
       }, (finished) => {
         if (!finished) return;
@@ -100,8 +117,11 @@ function useSwipePager({
       });
     })
     .onFinalize((_event, success) => {
-      if (!success) offset.value = withSpring(0, { damping: 22, stiffness: 245 });
-    }), [enabled, finishNext, finishPrevious, nextSong, offset, pageWidth, previousSong, reduceMotion]);
+      if (!success && dragging.value) {
+        dragging.value = false;
+        offset.value = motionOff ? 0 : withSpring(0, { damping: 24, stiffness: 280 });
+      }
+    }), [enabled, finishNext, finishPrevious, nextSong, offset, pageWidth, previousSong, motionOff, settling, dragging]);
 
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -pageWidth + offset.value }],
@@ -141,14 +161,14 @@ export function SwipeableArtwork({
   pageGap?: number;
   size: number;
 }) {
-  const { currentSong, nextSong, previousSong, selectNext, selectPrevious } = useAdjacentSongs();
+  const { currentSong, nextSong, previousSong, queueIndex, selectNext, selectPrevious } = useAdjacentSongs();
   const pageWidth = size + pageGap;
   const pager = useSwipePager({
     enabled,
     nextSong,
     onNext: selectNext,
     onPrevious: selectPrevious,
-    pageKey: currentSong?.id || '',
+    pageKey: `${currentSong?.id || ''}:${queueIndex}`,
     pageWidth,
     previousSong,
   });
@@ -201,14 +221,14 @@ function ArtworkPage({
 
 export function SwipeableSongCopy({ enabled = true, leadingInset = 0 }: { enabled?: boolean; leadingInset?: number }) {
   const { colors } = useAppSettings();
-  const { currentSong, nextSong, previousSong, selectNext, selectPrevious } = useAdjacentSongs();
+  const { currentSong, nextSong, previousSong, queueIndex, selectNext, selectPrevious } = useAdjacentSongs();
   const [width, setWidth] = useState(0);
   const pager = useSwipePager({
     enabled,
     nextSong,
     onNext: selectNext,
     onPrevious: selectPrevious,
-    pageKey: currentSong?.id || '',
+    pageKey: `${currentSong?.id || ''}:${queueIndex}`,
     pageWidth: width,
     previousSong,
   });

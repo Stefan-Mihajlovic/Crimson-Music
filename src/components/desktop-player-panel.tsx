@@ -1,5 +1,10 @@
+import MusicListState from '@/components/music-list-state';
+import QueueTools, { QueueUndo } from '@/components/queue-tools';
+import { queueOriginLabel } from '@/services/queue-entries';
+import { useRecommendationFeedback } from '@/hooks/use-recommendation-feedback';
+import { allowsRecommendation } from '@/services/recommendation-feedback-model';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties } from 'react';
 import ArtworkImage from '@/components/artwork-image';
 
 import { SymbolView } from '@/components/app-symbol';
@@ -12,8 +17,8 @@ import { loadRelatedSongs, type CrimsonSong, type RelatedSong } from '@/services
 
 export default function DesktopPlayerPanel({ initialTab = 'queue' }: { initialTab?: PlayerDetailsTab }) {
   const router = useRouter();
+  const feedback = useRecommendationFeedback();
   const player = usePlayer();
-  const { playing } = usePlayerStatus();
   const { colors } = useAppSettings();
   const [tab, setTab] = useState<PlayerDetailsTab>(initialTab === 'lyrics' ? 'queue' : initialTab);
   const [related, setRelated] = useState<RelatedSong[]>([]);
@@ -24,7 +29,7 @@ export default function DesktopPlayerPanel({ initialTab = 'queue' }: { initialTa
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const currentRow = useRef<HTMLDivElement>(null);
   const songId = player.currentSong?.id;
-  const requestKey = `${songId || ''}:${revision}`;
+  const requestKey = `${songId || ''}:${revision}:${feedback.updatedAt}`;
   const loading = tab === 'related' && loadedRequest !== requestKey;
   const upcoming = useMemo(() => player.queue.map((song, index) => ({ song, index })).slice(player.queueIndex + 1), [player.queue, player.queueIndex]);
 
@@ -43,7 +48,7 @@ export default function DesktopPlayerPanel({ initialTab = 'queue' }: { initialTa
 
   const openActions = (song: CrimsonSong) => router.push(actionSheetHref({
     type: 'song', id: song.id, title: song.title, subtitle: song.creator,
-    image: song.imageSmall || song.image, artistId: song.artistId, source: song.source, playerPresentation: 'modal',
+    image: song.imageSmall || song.image, artistId: song.artistId, source: song.source, playerPresentation: 'modal', reason: 'reason' in song ? String(song.reason) : undefined,
   }));
   const textButton: CSSProperties = { background: 'transparent', border: 0, color: colors.accent, cursor: 'pointer', fontSize: 12, fontWeight: 650, padding: '10px 4px' };
 
@@ -71,40 +76,35 @@ export default function DesktopPlayerPanel({ initialTab = 'queue' }: { initialTa
             <div style={{ color: colors.text, marginTop: 5, fontSize: 19, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.source || 'Your queue'}</div></div>
           {upcoming.length ? <button type="button" style={textButton} onClick={() => setEditing(!editing)} aria-label={editing ? 'Finish editing queue' : 'Edit upcoming queue'}>{editing ? 'Done' : 'Edit queue'}</button> : null}
         </div>
+        <div style={{ position: 'sticky', top: 0, zIndex: 2, background: colors.background || colors.elevated }}><QueueUndo /></div>
         {editing ? <p style={{ color: colors.secondaryText, fontSize: 12, margin: '0 12px 12px', lineHeight: 1.5 }}>Drag songs to reorder, or use the arrows.</p> : null}
-        {player.queue.map((song, index) => <div key={`${song.id}:${index}`} ref={index === player.queueIndex ? currentRow : undefined} draggable={editing && index > player.queueIndex}
+        {player.queue.map((song, index) => <div key={song.queueEntryId || `${song.id}:${index}`} ref={index === player.queueIndex ? currentRow : undefined} draggable={editing && index > player.queueIndex}
           onDragStart={(event) => { setDragIndex(index); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(index)); }}
           onDragOver={(event) => { if (editing && index > player.queueIndex && dragIndex !== null) event.preventDefault(); }}
           onDrop={(event) => { event.preventDefault(); if (editing && index > player.queueIndex && dragIndex !== null && dragIndex > player.queueIndex) player.moveQueueItem(dragIndex, index); setDragIndex(null); }}
-          onDragEnd={() => setDragIndex(null)} style={{ opacity: dragIndex === index ? 0.45 : 1 }}>
-          <DesktopQueueRow song={song} active={index === player.queueIndex} playing={index === player.queueIndex && playing}
+          onDragEnd={() => setDragIndex(null)} style={{ opacity: dragIndex === index ? 0.45 : 1, contentVisibility: 'auto', containIntrinsicSize: 'auto 62px' }}>
+          <DesktopQueueRow song={song} reason={queueOriginLabel(song)} active={index === player.queueIndex}
             onPlay={index === player.queueIndex ? player.togglePlay : () => player.playQueueIndex(index)} onMenu={() => openActions(song)}
-            editing={editing && index > player.queueIndex} onRemove={() => player.removeFromQueue(index)}
+            editing={editing && index > player.queueIndex} onRemove={index > player.queueIndex ? () => player.removeFromQueue(index) : undefined}
             onMoveUp={index > player.queueIndex + 1 ? () => player.moveQueueItem(index, index - 1) : undefined}
             onMoveDown={index < player.queue.length - 1 ? () => player.moveQueueItem(index, index + 1) : undefined} />
         </div>)}
         {!upcoming.length ? <div style={{ padding: '24px 12px', color: colors.secondaryText, fontSize: 13, lineHeight: 1.7 }}>
           No more songs in your queue.<br /><button type="button" style={textButton} onClick={() => setTab('related')}>Find something in Related</button>
         </div> : null}
-        <button type="button" role="switch" aria-checked={player.autoplayEnabled} onClick={player.toggleAutoplay}
-          style={{ width: 'calc(100% - 24px)', margin: '18px 12px 0', padding: 15, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', border: `1px solid ${colors.border}`, borderRadius: 14, background: 'transparent', color: colors.text, cursor: 'pointer' }}>
-          <SymbolView name="infinity" size={22} tintColor={player.autoplayEnabled ? colors.accent : colors.secondaryText} />
-          <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 12, fontWeight: 650 }}>Autoplay</span><span style={{ display: 'block', marginTop: 4, color: colors.secondaryText, fontSize: 11 }}>Keep the music going after your queue.</span></span>
-          <span style={{ color: player.autoplayEnabled ? colors.accent : colors.secondaryText, fontSize: 11, fontWeight: 700 }}>{player.autoplayEnabled ? 'On' : 'Off'}</span>
-        </button>
+        <QueueTools />
       </> : <>
         <div style={{ margin: '22px 12px 16px' }}><h3 style={{ color: colors.text, fontSize: 19, margin: '0 0 6px', fontWeight: 750 }}>Keep exploring</h3>
           <p style={{ color: colors.secondaryText, fontSize: 12, margin: 0 }}>More music inspired by this song.</p></div>
-        {loading ? <p role="status" style={{ color: colors.secondaryText, padding: '24px 12px', fontSize: 13 }}>Finding your next favorite…</p>
-          : error ? <div role="status" style={{ padding: 12, color: colors.secondaryText, fontSize: 13 }}>{error}<br /><button type="button" style={textButton} onClick={() => setRevision(revision + 1)}>Try again</button></div>
-          : related.length ? related.map((song) => <DesktopQueueRow key={song.id} song={song} reason={song.reason} onPlay={() => player.playSong(song, related, 'Related')} onMenu={() => openActions(song)} />)
-          : <p style={{ color: colors.secondaryText, padding: '24px 12px', fontSize: 13 }}>No related songs available yet.</p>}
+        {loading || error || !related.filter((song) => allowsRecommendation(song, feedback)).length
+          ? <MusicListState loading={loading} title={error ? 'Let’s try that again' : 'A new direction awaits'} message={error || 'Try another song to discover more music.'} action={error ? 'Retry' : 'Back to queue'} onAction={() => error ? setRevision(revision + 1) : setTab('queue')} />
+          : related.filter((song) => allowsRecommendation(song, feedback)).map((song) => <DesktopQueueRow key={song.id} song={song} reason={song.reason} onPlay={() => player.playSong(song, related.filter((item) => allowsRecommendation(item, feedback)), 'Related')} onMenu={() => openActions(song)} />)}
       </>}
     </div>
   </section>;
 }
 
-function DesktopQueueRow({ song, active, playing, reason, onPlay, onMenu, editing, onRemove, onMoveUp, onMoveDown }: {
+function DesktopQueueRowContent({ song, active, playing, reason, onPlay, onMenu, editing, onRemove, onMoveUp, onMoveDown }: {
   song: CrimsonSong; active?: boolean; playing?: boolean; reason?: string; onPlay: () => void; onMenu: () => void;
   editing?: boolean; onRemove?: () => void; onMoveUp?: () => void; onMoveDown?: () => void;
 }) {
@@ -126,6 +126,15 @@ function DesktopQueueRow({ song, active, playing, reason, onPlay, onMenu, editin
       <PlayerIconButton label={`Move ${song.title} down`} icon="arrow.down" onPress={onMoveDown || (() => {})} disabled={!onMoveDown} size={15} style={{ width: 28 }} />
       <PlayerIconButton label={`Remove ${song.title} from queue`} icon="xmark" onPress={onRemove || (() => {})} size={15} style={{ width: 28 }} />
     </div> : <><span style={{ color: colors.secondaryText, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{formatPlayerTime(song.duration)}</span>
+      {onRemove ? <PlayerIconButton label={`Remove ${song.title} from queue`} icon="xmark" onPress={onRemove} size={15} /> : null}
       <PlayerIconButton label={`More options for ${song.title}`} icon="ellipsis" onPress={onMenu} size={18} style={{ width: 28 }} /></>}
   </div>;
+}
+
+function DesktopQueueRow(props: ComponentProps<typeof DesktopQueueRowContent>) {
+  return props.active ? <ActiveDesktopQueueRow {...props} /> : <DesktopQueueRowContent {...props} />;
+}
+function ActiveDesktopQueueRow(props: ComponentProps<typeof DesktopQueueRowContent>) {
+  const { playing } = usePlayerStatus();
+  return <DesktopQueueRowContent {...props} playing={playing} />;
 }

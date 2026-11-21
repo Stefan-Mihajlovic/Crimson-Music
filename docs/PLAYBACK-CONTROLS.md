@@ -28,3 +28,36 @@ Playlist photos are uploaded through Audius image storage and the returned CID
 is sent as `playlist_image_sizes_multihash` in the create request. Failed uploads
 stop creation. Empty playlists use a music-list icon; one to three available
 covers use a single image, and four covers use a collage without a logo overlay.
+
+## Queue and discovery controls
+
+Artwork follows horizontal drags on iOS, Android and web; a committed swipe gives
+one native haptic tick. Desktop artwork also accepts left/right arrow keys. Track
+changes and unmounts cancel pending transitions, and reduced motion skips them.
+
+Up Next keeps history, the current occurrence and upcoming songs together.
+Swipe left on an upcoming mobile row to remove it; desktop offers a remove button.
+Undo restores that occurrence without replacing newer queue edits. Manual entries
+are labeled “Added by you” and automatically appended entries “Autoplay”. Save
+queue captures the full order when opened, then creates a private playlist only
+when Save playlist is pressed; repeated songs are saved once. The save action sits below the songs, replacing
+the queue footer’s autoplay switch; Undo remains accessible above the list.
+
+Song menus offer More like this and reversible exclusions for a song or artist.
+These preferences are account-scoped on the device/browser and affect discovery,
+Related, personal mixes and autoplay. Explicitly selected music and library
+contents remain available. Picked for you shows the ranking reason.
+
+High-frequency artwork meters update Reanimated shared values without React
+commits. Web cover dragging writes only its transform; the desktop playback clock
+subscribes separately from the artwork and queue. Tests exercise 200 audio packets
+and pointer movements without additional React commits. This verifies render
+isolation, not a measured battery-life improvement on physical hardware.
+
+Vault retains its original artwork and glass styling. Its expansion and control
+slides run through Reanimated on the UI thread; closed mood buttons are unmounted
+after the closing animation. Animated artwork explicitly stops decoding when Home
+loses focus, the app backgrounds, or the card leaves the viewport. Web uses the
+original first frame while inactive because browser animated images cannot pause.
+Native selection haptics accompany direct control actions and option changes;
+automatic playback and web controls do not trigger vibration.

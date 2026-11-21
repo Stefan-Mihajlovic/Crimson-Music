@@ -1,3 +1,4 @@
+import { selectionHaptic } from '@/services/haptics';
 /* eslint-disable react-hooks/immutability */
 
 import { PropsWithChildren } from 'react';
@@ -16,9 +17,10 @@ export default function BouncyPressable({
   children,
   contentStyle,
   disabled,
+  onPress,
   onPressIn,
   onPressOut,
-  pressedScale = 0.86,
+  pressedScale = 0.96,
   style,
   ...props
 }: PropsWithChildren<BouncyPressableProps>) {
@@ -32,12 +34,13 @@ export default function BouncyPressable({
         accessibilityRole="button"
         {...props}
         disabled={disabled}
+        onPress={(event) => { if (onPress) { selectionHaptic(); onPress(event); } }}
         onPressIn={(event) => {
           scale.value = reduceMotion || performanceMode ? 1 : withTiming(pressedScale, { duration: 90 });
           onPressIn?.(event);
         }}
         onPressOut={(event) => {
-          scale.value = reduceMotion || performanceMode ? 1 : withSpring(1, { damping: 7, mass: 0.42, stiffness: 330 });
+          scale.value = reduceMotion || performanceMode ? 1 : withSpring(1, { damping: 20, mass: 0.5, stiffness: 280 });
           onPressOut?.(event);
         }}
         style={[styles.pressable, contentStyle]}>

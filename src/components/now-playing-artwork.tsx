@@ -1,9 +1,10 @@
 import { BrandAccent } from '@/constants/brand-accent';
 import ArtworkImage from '@/components/artwork-image';
-import { useEffect, useState } from 'react';
-import { Animated, Platform, StyleSheet, View } from 'react-native';
+import { memo, useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 
-import { usePlayer, usePlayerSpectrum, usePlayerStatus } from '@/providers/player-provider';
+import { usePlayer, usePlayerSpectrumStore } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { CrimsonSong } from '@/services/music';
 import { PAUSED_SPECTRUM as pausedBars } from '@/services/playback-spectrum';
@@ -11,46 +12,24 @@ import { PAUSED_SPECTRUM as pausedBars } from '@/services/playback-spectrum';
 const fallbackArtwork = require('@/assets/images/home/default-song.webp');
 
 function PlaybackSpectrum({ size }: { size: number }) {
-  const levels = usePlayerSpectrum();
-  const status = usePlayerStatus();
+  const store = usePlayerSpectrumStore();
   const { performanceMode, reduceMotion } = useAppSettings();
-  const [bars] = useState(() => pausedBars.map((value) => new Animated.Value(value)));
-  const playing = status.playing && !status.isBuffering;
-
+  const levels = useSharedValue([...pausedBars]);
   useEffect(() => {
-    const animation = Animated.parallel(bars.map((bar, index) => Animated.timing(bar, {
-      // The analyzer already applies fast attack/short decay; this only bridges
-      // sampling frames so drum transients aren't smoothed a second time.
-      duration: performanceMode || reduceMotion ? 0 : playing ? 35 : 120,
-      toValue: playing && !performanceMode && !reduceMotion ? levels[index] : pausedBars[index],
-      useNativeDriver: Platform.OS !== 'web',
-    })));
-    animation.start();
-    return () => animation.stop();
-  }, [bars, levels, performanceMode, playing, reduceMotion]);
-
-  const spectrumHeight = Math.max(16, Math.round(size * 0.54));
-  return (
-    <View
-      pointerEvents="none"
-      style={[styles.spectrum, { gap: Math.max(2, Math.round(size * 0.045)) }]}>
-      {bars.map((bar, index) => (
-        <Animated.View
-          key={index}
-          style={[
-            styles.bar,
-            performanceMode && { shadowOpacity: 0 },
-            {
-              height: spectrumHeight,
-              width: Math.max(2.5, Math.round(size * 0.065)),
-              transform: [{ scaleY: bar }],
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
+    if (performanceMode || reduceMotion) { levels.set([...pausedBars]); return; }
+    const update = () => { levels.set(withTiming([...store.getSnapshot()], { duration: 35 })); };
+    const unsubscribe = store.subscribe(update);
+    update();
+    return () => { unsubscribe(); cancelAnimation(levels); };
+  }, [levels, performanceMode, reduceMotion, store]);
+  return <View pointerEvents="none" style={[styles.spectrum, { gap: Math.max(2, Math.round(size * 0.045)) }]}>
+    {pausedBars.map((_, index) => <SpectrumBar key={index} levels={levels} index={index} size={size} />)}
+  </View>;
 }
+const SpectrumBar = memo(function SpectrumBar({ levels, index, size }: { levels: SharedValue<number[]>; index: number; size: number }) {
+  const animated = useAnimatedStyle(() => ({ transform: [{ scaleY: levels.value[index] }] }));
+  return <Animated.View style={[styles.bar, { height: Math.max(16, Math.round(size * 0.54)), width: Math.max(2.5, Math.round(size * 0.065)) }, animated]} />;
+});
 
 export function NowPlayingOverlay({
   active,
@@ -143,7 +122,7 @@ const styles = StyleSheet.create({
     borderRadius: 99,
     backgroundColor: '#F4EBFF',
     shadowColor: BrandAccent.dark,
-    shadowOpacity: 0.9,
+    shadowOpacity: 0,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 0 },
   },

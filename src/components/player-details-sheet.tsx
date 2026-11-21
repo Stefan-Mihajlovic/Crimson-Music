@@ -1,7 +1,13 @@
+import MusicListState from '@/components/music-list-state';
+import QueueTools, { QueueUndo } from '@/components/queue-tools';
+import QueueSwipeRow from '@/components/queue-swipe-row';
+import { queueOriginLabel } from '@/services/queue-entries';
+import { useRecommendationFeedback } from '@/hooks/use-recommendation-feedback';
+import { allowsRecommendation } from '@/services/recommendation-feedback-model';
 import { SymbolView } from '@/components/app-symbol';
 import { useRouter } from 'expo-router';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import PlayerDetailsTabs from '@/components/player-details-tabs';
@@ -18,9 +24,10 @@ import { actionSheetHref } from '@/services/action-sheet';
 
 export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTab?: PlayerDetailsTab }) {
   const router = useRouter();
+  const feedback = useRecommendationFeedback();
   const insets = useSafeAreaInsets();
   const { colors } = useAppSettings();
-  const { currentSong, playSong, queue, queueIndex, source, autoplayEnabled, toggleAutoplay,
+  const { currentSong, playSong, queue, queueIndex, source,
     playQueueIndex, removeFromQueue, moveQueueItem } = usePlayer();
   const [tab, setTab] = useState<PlayerDetailsTab>(initialTab === 'lyrics' ? 'queue' : initialTab);
   const [related, setRelated] = useState<RelatedSong[]>([]);
@@ -29,7 +36,7 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
   const [revision, setRevision] = useState(0);
   const [editing, setEditing] = useState(false);
   const songId = currentSong?.id;
-  const requestKey = `${songId || ''}:${revision}`;
+  const requestKey = `${songId || ''}:${revision}:${feedback.updatedAt}`;
   const loading = tab === 'related' && loadedRequest !== requestKey;
 
   useEffect(() => {
@@ -48,7 +55,7 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
     return queue.map((song, index) => {
       const occurrence = occurrences.get(song.id) || 0;
       occurrences.set(song.id, occurrence + 1);
-      return { song, index, key: `${song.id}:${occurrence}` };
+      return { song, index, key: song.queueEntryId || `${song.id}:${occurrence}` };
     });
   }, [queue]);
   const hasUpcoming = queueIndex + 1 < items.length;
@@ -70,6 +77,7 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
           <Text style={{ color: colors.accent, fontWeight: '700', opacity: hasUpcoming ? 1 : 0.4 }}>{editing ? 'Done' : 'Edit'}</Text>
         </Pressable>
       </View>
+      <QueueUndo />
       {editing ? <Text style={[styles.editHint, { color: colors.secondaryText }]}>Drag a handle to move a song. Hold near an edge to scroll.</Text> : null}
     </> : null}
   </View>;
@@ -85,44 +93,40 @@ export default function PlayerDetailsSheet({ initialTab = 'queue' }: { initialTa
           onMove={moveQueueItem}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
           ListHeaderComponent={header}
-          renderRow={(item, handle) => <View style={styles.queueRow}>
+          renderRow={(item, handle) => <QueueSwipeRow enabled={!editing && item.index > queueIndex} onRemove={() => removeFromQueue(item.index)}><View style={styles.queueRow}>
             <View style={{ flex: 1 }}><SongRow song={item.song} active={item.index === queueIndex}
-              onPlay={() => playQueueIndex(item.index)} subtitle={item.song.creator} /></View>
+              onPlay={() => playQueueIndex(item.index)} subtitle={[item.song.creator, queueOriginLabel(item.song)].filter(Boolean).join(' · ')} /></View>
             {editing && item.index > queueIndex ? <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.song.title} from queue`}
               onPress={() => removeFromQueue(item.index)} style={styles.rowControl}>
               <SymbolView name="minus.circle" size={22} tintColor={colors.secondaryText} />
             </Pressable> : null}
             {handle}
-          </View>}
+          </View></QueueSwipeRow>}
           ListFooterComponent={<>
             <View style={styles.queueFooter}>
-              {!hasUpcoming ? <Text style={[styles.emptyQueue, { color: colors.secondaryText }]}>No more songs in your queue. Add a song or explore Related.</Text> : null}
-              <Pressable accessibilityRole="switch" accessibilityState={{ checked: autoplayEnabled }} onPress={toggleAutoplay} style={styles.footerRow}>
-                <SymbolView name="infinity" size={23} tintColor={autoplayEnabled ? colors.accent : colors.secondaryText} />
-                <View style={{ flex: 1 }}><Text style={{ color: colors.text, fontWeight: '700' }}>Autoplay {autoplayEnabled ? 'on' : 'off'}</Text><Text style={{ color: colors.secondaryText, marginTop: 3 }}>Keep listening when your queue ends.</Text></View>
-              </Pressable>
+              {!hasUpcoming ? <MusicListState title="You’re all caught up" message="Explore Related to find your next song." action="Explore Related" onAction={() => setTab('related')} /> : null}
+
             </View>
+            <QueueTools />
           </>}
         />
       ) : <FlatList
           key="related"
-          data={loading || error ? [] : related}
+          data={loading || error ? [] : related.filter((song) => allowsRecommendation(song, feedback))}
           keyExtractor={(song) => song.id}
           style={styles.list}
           contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
           ListHeaderComponent={header}
-          ListEmptyComponent={loading ? <ActivityIndicator color={colors.accent} style={styles.loader} />
-            : error ? <View style={styles.error}><Text style={{ color: colors.secondaryText }}>{error}</Text><Pressable accessibilityRole="button" onPress={() => setRevision(revision + 1)} style={styles.textButton}><Text style={{ color: colors.accent }}>Retry</Text></Pressable></View>
-            : <Text style={[styles.empty, { color: colors.secondaryText }]}>No related songs available yet.</Text>}
+          ListEmptyComponent={<MusicListState loading={loading} title={error ? 'Let’s try that again' : 'A new direction awaits'} message={error || 'Try another song to discover more music, or return to your queue.'} action={error ? 'Retry' : 'Back to queue'} onAction={() => error ? setRevision(revision + 1) : setTab('queue')} />}
           renderItem={({ item }) => <View style={styles.relatedRow}>
             <SongListRow
               song={item}
-              onPress={() => playSong(item, related, 'Related')}
+              onPress={() => playSong(item, related.filter((song) => allowsRecommendation(song, feedback)), 'Related')}
               onMenuPress={() => router.push(actionSheetHref({
                 type: 'song', id: item.id, title: item.title, subtitle: item.creator,
-                image: item.imageSmall || item.image, artistId: item.artistId, source: item.source,
+                image: item.imageSmall || item.image, artistId: item.artistId, source: item.source, reason: item.reason,
               }))}
             />
           </View>}

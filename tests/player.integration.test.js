@@ -20,6 +20,8 @@ const mockAudio = {
 let mockStatus;
 let mockUser;
 let mockSettings;
+let mockFeedback;
+jest.mock('../src/hooks/use-recommendation-feedback', () => ({ useRecommendationFeedback: () => mockFeedback }));
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('expo-audio', () => ({
   useAudioPlayer: () => mockAudio,
@@ -70,6 +72,7 @@ beforeEach(async () => {
   });
   mockUser = { uid: 'listener' };
   mockSettings = { reduceMotion: false, performanceMode: false };
+  mockFeedback = { updatedAt: 0, liked: {}, hiddenSongs: [], hiddenArtists: [] };
   mockStatus = { id: 1, isLoaded: true, playing: false, isBuffering: false, currentTime: 0, duration: 180, didJustFinish: false };
   getUserCollectionState.mockResolvedValue(false);
   resolveTrackPlaybackUrl.mockResolvedValue('https://example.test/audio.mp3');
@@ -320,4 +323,35 @@ test('a visualizer alone receives real audio bands, clears on pause, and stops a
     await act(async () => { jest.advanceTimersByTime(100); onSample(sample); });
     expect(analyze).not.toHaveBeenCalled();
   } finally { analyze.mockRestore(); }
+});
+
+test('queue undo restores the same occurrence after another insertion and clears on a new collection', async () => {
+  await act(async () => player.playSong(song('a'), [song('a'), song('b'), song('c')]));
+  const entry = player.queue[1].queueEntryId;
+  await act(async () => player.removeFromQueue(1));
+  expect(player.removedQueueSong.id).toBe('b');
+  await act(async () => player.playNextInQueue(song('manual')));
+  expect(player.queue[1].queueOrigin).toBe('manual');
+  await act(async () => player.undoQueueRemoval());
+  expect(player.queue.map((item) => item.id)).toEqual(['a', 'manual', 'b', 'c']);
+  expect(player.queue[2].queueEntryId).toBe(entry);
+  expect(player.removedQueueSong).toBeNull();
+  await act(async () => player.removeFromQueue(2));
+  await start('fresh');
+  await act(async () => player.undoQueueRemoval());
+  expect(player.queue.map((item) => item.id)).toEqual(['fresh']);
+});
+
+
+test('excluded recommendations leave the playing and manually queued music intact', async () => {
+  loadRelatedSongs.mockResolvedValue([{ ...song('auto-one'), artistId: 'excluded', streamable: true }, { ...song('auto-two'), artistId: 'excluded', streamable: true }]);
+  await start('a');
+  await act(async () => player.playNext());
+  expect(player.queue[1].queueOrigin).toBe('autoplay');
+  await act(async () => player.addToQueue({ ...song('manual'), artistId: 'excluded' }));
+  mockFeedback = { ...mockFeedback, updatedAt: 1, hiddenArtists: ['excluded'] };
+  await act(async () => root.update(tree()));
+  expect(player.currentSong.id).toBe('auto-one');
+  expect(player.queue.map((item) => item.id)).toEqual(['a', 'auto-one', 'manual']);
+  loadRelatedSongs.mockResolvedValue([]);
 });

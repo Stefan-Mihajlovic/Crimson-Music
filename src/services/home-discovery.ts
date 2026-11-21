@@ -1,3 +1,5 @@
+import { readRecommendationFeedback } from '@/services/recommendation-feedback';
+import { allowsRecommendation } from '@/services/recommendation-feedback-model';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { isAccountDeleted, registerAccountCleanup } from '@/services/account-lifecycle';
@@ -71,12 +73,13 @@ export async function loadHomeDiscovery(
 ): Promise<HomeDiscovery> {
   const isCurrent = currentAccountGuard(uid);
   if (!isCurrent()) return emptyDiscovery();
+  profile = { ...profile, feedback: await readRecommendationFeedback(uid) };
   const limit = getDataSaverEnabled() ? 6 : 12;
   const profileKey = encodeURIComponent(JSON.stringify([preferredGenres(profile).sort(), profile.recommendationStyle || 'balanced']));
   const key = `${accountPrefix(uid)}charts:${limit}:${profileKey}`;
   if (offlineOnly) {
     const saved = savedDiscovery(await readSnapshot(key));
-    return isCurrent() ? saved : emptyDiscovery();
+    return isCurrent() ? { underground: saved.underground.filter((song) => allowsRecommendation(song, profile.feedback)) } : emptyDiscovery();
   }
 
   try {
@@ -90,7 +93,7 @@ export async function loadHomeDiscovery(
     return isCurrent() ? discovery : emptyDiscovery();
   } catch {
     const saved = savedDiscovery(await readSnapshot(key));
-    return isCurrent() ? saved : emptyDiscovery();
+    return isCurrent() ? { underground: saved.underground.filter((song) => allowsRecommendation(song, profile.feedback)) } : emptyDiscovery();
   }
 }
 

@@ -1,0 +1,24 @@
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+import RecommendationControls from '../src/components/recommendation-controls';
+import { saveRecommendationFeedback } from '../src/services/recommendation-feedback';
+jest.mock('../src/providers/auth-provider', () => ({ useAuth: () => ({ user: { uid: 'listener' } }) }));
+jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ colors: { secondaryText: '#aaa' } }) }));
+jest.mock('../src/hooks/use-recommendation-feedback', () => ({ useRecommendationFeedback: () => ({ liked: {}, hiddenSongs: [], hiddenArtists: [] }) }));
+jest.mock('../src/services/recommendation-feedback', () => ({ saveRecommendationFeedback: jest.fn(async () => {}) }));
+let root;
+const song = { id: 'one', artistId: 'artist' };
+const Row = (props) => <ActionRow {...props} />;
+const ActionRow = 'PopupAction';
+afterEach(async () => { if (root) await act(async () => root.unmount()); });
+test('recommendation choices reuse popup action rows, without a separate heading or helper paragraphs', async () => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  await act(async () => { root = create(<RecommendationControls song={song} ActionComponent={Row} />); });
+  const rows = root.root.findAllByType(ActionRow);
+  expect(rows.map((row) => row.props.label)).toEqual(['More like this', 'Don’t recommend this song', 'Don’t recommend this artist']);
+  expect(JSON.stringify(root.toJSON())).not.toContain('Shape your');
+  expect(JSON.stringify(root.toJSON())).not.toContain('Applies');
+  await act(async () => { rows[0].props.onPress(); rows[0].props.onPress(); });
+  expect(saveRecommendationFeedback).toHaveBeenCalledTimes(1);
+  expect(saveRecommendationFeedback).toHaveBeenCalledWith('listener', song, 'more');
+});

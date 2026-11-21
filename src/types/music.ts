@@ -6,6 +6,9 @@ export type ArtworkSet = {
 };
 
 export type CrimsonSong = {
+  /** Local queue occurrence metadata; never sent to Audius. */
+  queueEntryId?: string;
+  queueOrigin?: 'collection' | 'manual' | 'autoplay';
   id: string;
   source: 'audius' | 'local';
   local?: { kind: 'import' | 'device'; filename: string; size?: number };

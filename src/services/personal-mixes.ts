@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAudiusDiscoveryMix, getFollowedAudiusReleases, getPersonalizedAudiusTracks, getRecommendedAudiusTracks, getTrendingAudiusTracks } from '@/services/audius';
 import { getAudiusSessionRevision, getCurrentAudiusUserId } from '@/services/audius-session';
 import { isAccountDeleted, registerAccountCleanup } from '@/services/account-lifecycle';
+import { readRecommendationFeedback } from '@/services/recommendation-feedback';
+import { allowsRecommendation } from '@/services/recommendation-feedback-model';
 import { preferredGenres, rankDiscoveryTracks, type DiscoveryProfile } from '@/services/discovery-profile';
 import { loadFavoriteSongs, loadLibraryFeed, readLocalListeningEvents } from '@/services/music';
 import type { CrimsonSong } from '@/types/music';
@@ -179,13 +181,14 @@ export async function loadPersonalMixes(uid = getCurrentAudiusUserId() || undefi
   if (!current()) return [];
   const now = options.now || new Date();
   const key = `${prefix(uid)}${getAudiusSessionRevision()}:${dayKey(now)}:${Boolean(options.offlineOnly)}`;
-  const pending = pendingLoads.get(key) || generateMixes(uid, profile, options, current);
+  const feedback = await readRecommendationFeedback(uid);
+  const pending = pendingLoads.get(key) || generateMixes(uid, { ...profile, feedback }, options, current);
   pendingLoads.set(key, pending);
   try {
     const generated = await pending;
     if (!current()) return [];
     const bookmarks = new Set(uid ? await readPersonalMixBookmarkIds(uid) : []);
-    return current() ? generated.map((mix) => ({ ...mix, bookmarked: bookmarks.has(mix.id) })) : [];
+    return current() ? generated.map((mix) => ({ ...mix, songs: mix.songs.filter((song) => allowsRecommendation(song, feedback)), bookmarked: bookmarks.has(mix.id) })) : [];
   } catch (error) { if (!current()) return []; throw error; }
   finally { if (pendingLoads.get(key) === pending) pendingLoads.delete(key); }
 }

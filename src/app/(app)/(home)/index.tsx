@@ -1,3 +1,8 @@
+import VaultArtwork from '@/components/vault-artwork';
+import { useVaultMotion } from '@/hooks/use-vault-motion';
+import MusicListState from '@/components/music-list-state';
+import { useRecommendationFeedback } from '@/hooks/use-recommendation-feedback';
+import { allowsRecommendation, recommendationAffinity } from '@/services/recommendation-feedback-model';
 import { BrandAccent, brandAccentTint } from '@/constants/brand-accent';
 import { FrostedLayer } from '@/components/frosted-surface';
 import HomeQuickAccess from '@/components/home-quick-access';
@@ -9,12 +14,11 @@ import {
   type DiscoveryProfile,
 } from '@/services/discovery-profile';
 import { useNetwork } from '@/providers/network-provider';
-import { Image } from 'expo-image';
 import ArtworkImage from '@/components/artwork-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { SymbolView, type SymbolViewProps } from '@/components/app-symbol';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -179,6 +183,7 @@ export default function HomeScreen({
   const [vaultCopyBottom, setVaultCopyBottom] = useState(68);
   const { user } = useAuth();
   const { playSong } = usePlayer();
+  const feedback = useRecommendationFeedback();
   const { colors, performanceMode, reduceMotion, dataSaver } = useAppSettings();
   const favoriteCategories =
     personalizationOverride?.favoriteCategories ??
@@ -193,6 +198,7 @@ export default function HomeScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const profile = {
+    feedback,
     favoriteCategories,
     recommendationStyle: recommendationStyle || 'balanced',
   } as DiscoveryProfile;
@@ -201,6 +207,7 @@ export default function HomeScreen({
     recommendationStyle,
     String(dataSaver),
     String(rotation),
+    String(feedback.updatedAt),
   ].join(':');
   const homeFeedKey = homeFeedCacheKey(user?.uid, personalizationKey);
   const cachedFeed = homeSessionFeedValues.get(homeFeedKey);
@@ -219,6 +226,7 @@ export default function HomeScreen({
   const [loadedFeedKey, setLoadedFeedKey] = useState<string | null>(() =>
     cachedFeed ? homeFeedKey : null,
   );
+  const [reasons, setReasons] = useState<Record<string, string>>(cachedFeed?.reasons || {});
   const [newReleases, setNewReleases] = useState<CrimsonSong[]>(
     cachedFeed?.newReleases || [],
   );
@@ -231,9 +239,9 @@ export default function HomeScreen({
   );
   const vaultLoadingRef = useRef(false);
   const vaultMountedRef = useRef(true);
-  const [vaultExpansion] = useState(() => new Animated.Value(0));
-  const [vaultOpenerOffset] = useState(() => new Animated.Value(0));
-  const [vaultMoodsOffset] = useState(() => new Animated.Value(280));
+  const [vaultMoodsMounted, setVaultMoodsMounted] = useState(false);
+  const closeVaultMaterials = useCallback(() => { if (!vaultOpenRef.current) setVaultMoodsMounted(false); }, []);
+  const vaultMotion = useVaultMotion(desktop, vaultCopyBottom, reduceMotion || performanceMode, closeVaultMaterials);
   const [skeletonShimmer] = useState(() => new Animated.Value(0));
   const [songsFeedKey, setSongsFeedKey] = useState<string | null>(
     cachedFeed ? homeFeedKey : null,
@@ -254,6 +262,7 @@ export default function HomeScreen({
       setPlaylists(feed.playlists);
       setFeaturedArtist(feed.featuredArtist);
       setNewReleases(feed.newReleases || []);
+      setReasons(feed.reasons || {});
       setLoadedFeedKey(homeFeedKey);
     });
     loadHomeSessionFeed(
@@ -280,6 +289,7 @@ export default function HomeScreen({
         setPlaylists(feed.playlists);
         setFeaturedArtist(feed.featuredArtist);
         setNewReleases(feed.newReleases || []);
+        setReasons(feed.reasons || {});
       })
       .catch((error) => {
         reportError(error, 'home.feed');
@@ -327,68 +337,20 @@ export default function HomeScreen({
 
   useEffect(() => {
     vaultMountedRef.current = true;
-    return () => {
-      vaultMountedRef.current = false;
-      vaultExpansion.stopAnimation();
-      vaultOpenerOffset.stopAnimation();
-      vaultMoodsOffset.stopAnimation();
-    };
-  }, [vaultExpansion, vaultMoodsOffset, vaultOpenerOffset]);
+    return () => { vaultMountedRef.current = false; };
+  }, []);
 
-  const transitionVault = async (open: boolean) => {
+  const transitionVault = (open: boolean) => {
     if (vaultOpenRef.current === open) return;
-    // Visible controls respond immediately, even while the spring is settling.
-    // A new direction cancels the old sequence and continues from its position.
     vaultOpenRef.current = open;
     setVaultOpen(open);
-    const revision = ++vaultTransitionRevision.current;
-    vaultExpansion.stopAnimation();
-    vaultOpenerOffset.stopAnimation();
-    vaultMoodsOffset.stopAnimation();
-    if (reduceMotion || performanceMode) {
-      vaultExpansion.setValue(open ? 1 : 0);
-      vaultOpenerOffset.setValue(open ? 80 : 0);
-      vaultMoodsOffset.setValue(open ? 0 : 280);
-      return;
-    }
-
-    const run = (animation: Animated.CompositeAnimation) =>
-      new Promise<boolean>((resolve) => {
-        animation.start(({ finished }) =>
-          resolve(finished && vaultMountedRef.current && revision === vaultTransitionRevision.current),
-        );
-      });
-    const exit = (value: Animated.Value, toValue: number) =>
-      Animated.timing(value, {
-        toValue, duration: 140, easing: Easing.inOut(Easing.quad), useNativeDriver: Platform.OS !== 'web',
-      });
-    const spring = (value: Animated.Value, toValue: number, useNativeDriver: boolean) =>
-      Animated.spring(value, {
-        toValue, stiffness: 260, damping: 21, mass: 0.9,
-        restDisplacementThreshold: useNativeDriver ? 0.5 : 0.005,
-        restSpeedThreshold: useNativeDriver ? 3 : 0.05,
-        useNativeDriver: useNativeDriver && Platform.OS !== 'web',
-      });
-
-    // Keep native glass mounted and opaque. Each group slides behind a fixed
-    // clip instead of swapping material views during the height animation.
-    if (open) {
-      if (!(await run(exit(vaultOpenerOffset, 80)))) return;
-      if (!(await run(Animated.parallel([
-        spring(vaultExpansion, 1, false),
-        spring(vaultMoodsOffset, 0, true),
-      ])))) return;
-    } else {
-      if (!(await run(exit(vaultMoodsOffset, 280)))) return;
-      if (!(await run(Animated.parallel([
-        spring(vaultExpansion, 0, false),
-        spring(vaultOpenerOffset, 0, true),
-      ])))) return;
-    }
+    ++vaultTransitionRevision.current;
+    if (open) setVaultMoodsMounted(true);
+    vaultMotion.transition(open);
   };
 
   const openSong = (song: CrimsonSong) => {
-    playSong(song, songs, 'Home');
+    playSong(song, songs.filter((item) => allowsRecommendation(item, feedback)), 'Home');
   };
 
   const openSongActions = (song: CrimsonSong) => {
@@ -400,6 +362,7 @@ export default function HomeScreen({
         subtitle: song.creator,
         image: song.imageSmall || song.image,
         artistId: song.artistId,
+        reason: reasons[song.id] || recommendationAffinity(song, feedback).reason,
       }),
     );
   };
@@ -463,23 +426,6 @@ export default function HomeScreen({
     }
   };
 
-  const vaultHeight = vaultExpansion.interpolate({
-    inputRange: [0, 1],
-    outputRange: desktop ? [190, 286] : [Math.max(140, vaultCopyBottom + 90), Math.max(348, vaultCopyBottom + 292)],
-  });
-  const vaultBackgroundScale = vaultExpansion.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.08],
-  });
-  const vaultBorderColor = vaultExpansion.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['rgba(182,140,255,0.42)', 'rgba(206,178,255,0.82)'],
-  });
-  const vaultShadowOpacity = vaultExpansion.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.34, 0.58],
-  });
-
   return (
     <MainScreenBackground overlay={<MainHeaderOverlay
         compact={!personalizationOverride}
@@ -517,30 +463,16 @@ export default function HomeScreen({
         <MainHeaderSpacer title="Home" />
         <View onLayout={onContentLayout} />
 
-        <Animated.View
-          style={[
-            styles.vault,
-            {
-              height: vaultHeight,
-              borderColor: vaultBorderColor,
-              shadowOpacity: vaultShadowOpacity,
-            },
-          ]}
-        >
+        <Reanimated.View style={[styles.vault, vaultMotion.frameStyle]}>
           <FrostedLayer style={StyleSheet.absoluteFill} background={<>
-          <Animated.View
+          <Reanimated.View
             style={[
               StyleSheet.absoluteFill,
-              { transform: [{ scale: vaultBackgroundScale }] },
+              vaultMotion.backgroundStyle,
             ]}
           >
-            <Image
-              autoplay={!reduceMotion && !performanceMode}
-              contentFit="cover"
-              source={require('@/assets/images/home/vault-background.webp')}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
+            <VaultArtwork scrollOffset={headerScroll.offset} bottom={insets.top + 100 + (vaultOpen ? Math.max(348, vaultCopyBottom + 292) : Math.max(140, vaultCopyBottom + 90))} />
+          </Reanimated.View>
           </>}>
           {desktop ? (
             <View style={styles.desktopVaultContent}>
@@ -588,7 +520,7 @@ export default function HomeScreen({
             importantForAccessibility={vaultOpen ? 'no-hide-descendants' : 'auto'}
             style={[styles.vaultOpenerClip, { top: vaultCopyBottom }]}
           >
-            <Animated.View style={[styles.vaultOpener, { transform: [{ translateY: vaultOpenerOffset }] }]}>
+            <Reanimated.View style={[styles.vaultOpener, vaultMotion.openerStyle]}>
               <VaultGlassButton
                 accessibilityLabel="Open Vault"
                 height={56}
@@ -607,15 +539,15 @@ export default function HomeScreen({
                   weight="semibold"
                 />
               </VaultGlassButton>
-            </Animated.View>
+            </Reanimated.View>
           </View>
-          <View
+          {vaultMoodsMounted ? <View
             pointerEvents={vaultOpen ? 'auto' : 'none'}
             accessibilityElementsHidden={!vaultOpen}
             importantForAccessibility={vaultOpen ? 'auto' : 'no-hide-descendants'}
             style={[styles.vaultMoodClip, { top: vaultCopyBottom + 28 }]}
           >
-            <Animated.View style={{ transform: [{ translateY: vaultMoodsOffset }] }}>
+            <Reanimated.View style={vaultMotion.moodsStyle}>
               <View style={styles.vaultMoodGroup}>
                 <View style={styles.moods}>
                   {vaultMoods.map(({ mood, icon }) => (
@@ -660,11 +592,11 @@ export default function HomeScreen({
                   <Text style={styles.moodText}>Close</Text>
                 </VaultGlassButton>
               </View>
-            </Animated.View>
-          </View>
+            </Reanimated.View>
+          </View> : null}
           </>}
           </FrostedLayer>
-        </Animated.View>
+        </Reanimated.View>
 
         {!personalizationOverride ? <HomeQuickAccess /> : null}
         {feedError ? (
@@ -681,20 +613,20 @@ export default function HomeScreen({
             </Text>
           </Pressable>
         ) : null}
-        {newReleases.length ? (
+        {newReleases.some((song) => allowsRecommendation(song, feedback)) ? (
           <>
             <SectionHeader
               title="From artists you follow"
               subtitle="Their latest tracks on Audius"
             />
             <View style={[styles.songList, desktop && styles.desktopSongGrid]}>
-              {newReleases.slice(0, desktop ? 6 : 3).map((song) => (
+              {newReleases.filter((song) => allowsRecommendation(song, feedback)).slice(0, desktop ? 6 : 3).map((song) => (
                 <View key={song.id} style={desktop && styles.desktopSongCell}>
                 <SongListRow
                   key={song.id}
                   song={song}
                   onPress={() =>
-                    playSong(song, newReleases, 'Artists you follow')
+                    playSong(song, newReleases.filter((item) => allowsRecommendation(item, feedback)), 'Artists you follow')
                   }
                   onMenuPress={() => openSongActions(song)}
                 />
@@ -716,7 +648,7 @@ export default function HomeScreen({
           {loading ? (
             <ArtistListSkeleton shimmer={skeletonShimmer} />
           ) : (
-            artists.map((artist) => (
+            artists.filter((artist) => !feedback.hiddenArtists.includes(artist.id)).map((artist) => (
               <Pressable
                 key={artist.id}
                 onHoverIn={() => setHoveredCard(`artist:${artist.id}`)}
@@ -788,10 +720,11 @@ export default function HomeScreen({
         </View>
 
         <View style={[styles.songList, desktop && !songsLoading && styles.desktopSongGrid]}>
+          {!songsLoading && !songs.some((song) => allowsRecommendation(song, feedback)) ? <MusicListState title="A fresh mix is waiting" message="Refresh to find more music shaped by your preferences." action="Refresh recommendations" onAction={refresh} /> : null}
           {songsLoading ? (
             <SongListSkeleton shimmer={skeletonShimmer} />
           ) : (
-            songs.map((song) => (
+            songs.filter((song) => allowsRecommendation(song, feedback)).map((song) => (
               <View key={song.id} style={desktop && styles.desktopSongCell}>
               <SongListRow
                 key={song.id}
@@ -799,6 +732,7 @@ export default function HomeScreen({
                 onPress={() => openSong(song)}
                 onMenuPress={() => openSongActions(song)}
               />
+              {reasons[song.id] ? <Text style={{ color: colors.secondaryText, fontSize: 12, lineHeight: 18, paddingLeft: 62, paddingBottom: 6 }}>{reasons[song.id]}</Text> : null}
               </View>
             ))
           )}

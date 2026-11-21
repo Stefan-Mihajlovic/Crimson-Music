@@ -1,3 +1,6 @@
+import { newQueueEntry, normalizeQueueEntries, removeQueueEntry, restoreQueueEntry, type RemovedQueueEntry } from '@/services/queue-entries';
+import { useRecommendationFeedback } from '@/hooks/use-recommendation-feedback';
+import { allowsRecommendation } from '@/services/recommendation-feedback-model';
 import { audiusMediaHeaders } from '@/services/audius-session';
 /* eslint-disable react-hooks/set-state-in-effect */
 
@@ -18,6 +21,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -70,6 +74,9 @@ type PlayerContextValue = {
   playNextInQueue: (song: CrimsonSong) => void;
   addToQueue: (song: CrimsonSong) => void;
   removeFromQueue: (index: number) => void;
+  removedQueueSong: CrimsonSong | null;
+  undoQueueRemoval: () => void;
+  dismissQueueUndo: () => void;
   moveQueueItem: (from: number, to: number) => void;
   playQueueIndex: (index: number) => void;
   retryPlayback: () => void;
@@ -144,6 +151,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [restoredPosition, setRestoredPosition] = useState<number | null>(null);
   const [resumeReady, setResumeReady] = useState(false);
   const [playbackGeneration, setPlaybackGeneration] = useState(0);
+  const [removedQueueEntry, setRemovedQueueEntry] = useState<RemovedQueueEntry | null>(null);
+  const removedQueueRef = useRef<RemovedQueueEntry | null>(null);
+  const feedback = useRecommendationFeedback();
+  const feedbackRef = useRef(feedback);
+  useLayoutEffect(() => { feedbackRef.current = feedback; }, [feedback]);
+  const dismissQueueUndo = useCallback(() => { removedQueueRef.current = null; setRemovedQueueEntry(null); }, []);
+  useEffect(dismissQueueUndo, [dismissQueueUndo, user?.uid]);
   const [autoplayCandidates, setAutoplayCandidates] = useState<CrimsonSong[]>([]);
   const autoplayCandidatesRef = useRef<CrimsonSong[]>([]);
   const [spectrumStore] = useState(() => createValueStore(pausedSpectrum));
@@ -231,14 +245,16 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     // A late autoplay response must not overwrite songs manually inserted or
     // reordered while its request was in flight.
     autoplayRequestRef.current += 1;
-    queueRef.current = songs;
+    const entries = normalizeQueueEntries(songs);
+    queueRef.current = entries;
     indexRef.current = index;
-    setQueue(songs);
+    setQueue(entries);
     setQueueIndex(index);
   }, []);
 
   useEffect(() => registerAccountCleanup((uid) => {
     if (uid !== user?.uid) return;
+    dismissQueueUndo();
     // Cleanup can fail before sign-out. Stop playback and invalidate work before
     // its files disappear, without waiting for the authenticated UID to change.
     sleepTimer.cancel();
@@ -255,7 +271,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setIsPreparing(false);
     setRestoredPosition(null);
     setResumeReady(true);
-  }), [sleepTimer, updateQueue, user?.uid]);
+  }), [dismissQueueUndo, sleepTimer, updateQueue, user?.uid]);
 
   useEffect(() => subscribeToListeningHistoryReset((uid) => {
     const session = listeningSessionRef.current;
@@ -535,6 +551,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [audioPlayer, flushListening, getPlaybackUri, mixer, reconcileSleepTimer, setSpectrumLevels, sleepTimer, spectrumAnalyzer, user?.uid]);
 
   const playSong = useCallback((song: CrimsonSong, nextQueue: CrimsonSong[] = [song], playedFrom = 'Home', playedFromId = '', shuffle = isShuffled) => {
+    dismissQueueUndo();
     const unique = [...new Map(nextQueue.map((item) => [item.id, item])).values()];
     if (!unique.some((item) => item.id === song.id)) unique.unshift(song);
     const selected = unique.findIndex((item) => item.id === song.id);
@@ -542,12 +559,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     // rows stay upcoming, never masquerading as already-played history.
     const ordered = [...unique.slice(selected), ...unique.slice(0, selected)];
     originalOrderRef.current = ordered.map((item) => item.id);
-    const normalized = shuffle ? [song, ...shuffledSongs(ordered.slice(1))] : ordered;
+    const normalized = (shuffle ? [song, ...shuffledSongs(ordered.slice(1))] : ordered).map((item) => newQueueEntry(item));
     setIsShuffled(shuffle);
     const index = normalized.findIndex((item) => item.id === song.id);
     updateQueue(normalized, index);
     activateSong(song, index, playedFrom, playedFromId);
-  }, [activateSong, isShuffled, updateQueue]);
+  }, [activateSong, dismissQueueUndo, isShuffled, updateQueue]);
 
   const playQueueIndex = useCallback((index: number) => {
     const song = queueRef.current[index];
@@ -580,11 +597,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         reconcileSleepTimer();
         if (activation !== activationRef.current || request !== autoplayRequestRef.current) return;
         const heard = new Set(songs.map((song) => song.id));
-        const candidates = related.filter((song) => song.streamable && !heard.has(song.id));
+        const candidates = related.filter((song) => song.streamable && !heard.has(song.id) && allowsRecommendation(song, feedbackRef.current));
         if (!candidates.length) { desiredPlaying.current = false; audioPlayer.pause(); return; }
         // Candidates already have a stable preview order. Never re-roll them
         // when a swipe commits, or its displayed next cover would be wrong.
-        const upcoming = candidates;
+        const upcoming = candidates.map((song) => newQueueEntry(song, 'autoplay'));
         const updated = [...songs, ...upcoming];
         originalOrderRef.current.push(...upcoming.map((song) => song.id));
         updateQueue(updated, index + 1);
@@ -609,13 +626,20 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const heard = new Set(queue.map((song) => song.id));
     void loadRelatedSongs(currentSong.id).then((related) => {
       if (!active) return;
-      const candidates = related.filter((song) => song.streamable && !heard.has(song.id));
-      const ordered = isShuffled ? shuffledSongs(candidates) : candidates;
+      const candidates = related.filter((song) => song.streamable && !heard.has(song.id) && allowsRecommendation(song, feedbackRef.current));
+      const ordered = (isShuffled ? shuffledSongs(candidates) : candidates).map((song) => newQueueEntry(song, 'autoplay'));
       autoplayCandidatesRef.current = ordered;
       setAutoplayCandidates(ordered);
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [autoplayEnabled, currentSong, isPreparing, isShuffled, queue, queueIndex, repeatMode]);
+  }, [autoplayEnabled, currentSong, isPreparing, isShuffled, queue, queueIndex, repeatMode, feedback.updatedAt]);
+
+  useEffect(() => {
+    // Feedback affects automatic discovery, never an explicitly chosen track.
+    const songs = queueRef.current;
+    const allowed = songs.filter((song, index) => index <= indexRef.current || song.queueOrigin !== 'autoplay' || allowsRecommendation(song, feedback));
+    if (allowed.length !== songs.length) updateQueue(allowed, indexRef.current);
+  }, [feedback, updateQueue]);
 
   const playPrevious = useCallback(() => {
     const songs = queueRef.current;
@@ -624,19 +648,34 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [activateSong, repeatMode, source, sourceId]);
 
   const addQueueSong = useCallback((song: CrimsonSong, next: boolean) => {
-    if (!queueRef.current.length || indexRef.current < 0) { playSong(song, [song], 'Queue'); return; }
+    if (!queueRef.current.length || indexRef.current < 0) {
+      dismissQueueUndo();
+      originalOrderRef.current = [song.id];
+      const entry = newQueueEntry(song, 'manual');
+      updateQueue([entry], 0);
+      activateSong(entry, 0, 'Queue', '');
+      return;
+    }
     const updated = [...queueRef.current];
-    updated.splice(next ? indexRef.current + 1 : updated.length, 0, song);
+    updated.splice(next ? indexRef.current + 1 : updated.length, 0, newQueueEntry(song, 'manual'));
     originalOrderRef.current.push(song.id);
     updateQueue(updated, indexRef.current);
-  }, [playSong, updateQueue]);
+  }, [activateSong, dismissQueueUndo, updateQueue]);
   const playNextInQueue = useCallback((song: CrimsonSong) => addQueueSong(song, true), [addQueueSong]);
   const addToQueue = useCallback((song: CrimsonSong) => addQueueSong(song, false), [addQueueSong]);
   const removeFromQueue = useCallback((index: number) => {
-    if (index === indexRef.current || index < 0 || index >= queueRef.current.length) return;
-    const updated = queueRef.current.filter((_, position) => position !== index);
-    updateQueue(updated, index < indexRef.current ? indexRef.current - 1 : indexRef.current);
+    const result = removeQueueEntry(queueRef.current, index, indexRef.current);
+    if (!result) return;
+    removedQueueRef.current = result.removed;
+    setRemovedQueueEntry(result.removed);
+    updateQueue(result.queue, indexRef.current);
   }, [updateQueue]);
+  const undoQueueRemoval = useCallback(() => {
+    const removed = removedQueueRef.current;
+    if (!removed) return;
+    updateQueue(restoreQueueEntry(queueRef.current, indexRef.current, removed), indexRef.current);
+    dismissQueueUndo();
+  }, [dismissQueueUndo, updateQueue]);
   const moveQueueItem = useCallback((from: number, to: number) => {
     if (from <= indexRef.current || to <= indexRef.current || from >= queueRef.current.length || to >= queueRef.current.length) return;
     const updated = [...queueRef.current];
@@ -911,6 +950,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     playNextInQueue,
     addToQueue,
     removeFromQueue,
+    removedQueueSong: removedQueueEntry?.song || null,
+    undoQueueRemoval,
+    dismissQueueUndo,
     moveQueueItem,
     playQueueIndex,
     retryPlayback,
@@ -925,7 +967,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     togglePlay,
     toggleRepeat,
     toggleShuffle,
-  }), [addToQueue, autoplayEnabled, currentSong, playbackError, playbackState, volume, setVolume, nextSong, previousSong, isLiked, isShuffled, moveQueueItem, playNext, playNextInQueue, playPrevious, playQueueIndex, playSong, queue, queueIndex, removeFromQueue, repeatMode, resumeReady, retryPlayback, seekTo, sleepTimer, startSleepTimer, source, sourceId, toggleAutoplay, toggleLike, togglePlay, toggleRepeat, toggleShuffle]);
+  }), [addToQueue, autoplayEnabled, currentSong, playbackError, playbackState, volume, setVolume, nextSong, previousSong, isLiked, isShuffled, moveQueueItem, playNext, playNextInQueue, playPrevious, playQueueIndex, playSong, queue, queueIndex, removeFromQueue, removedQueueEntry, undoQueueRemoval, dismissQueueUndo, repeatMode, resumeReady, retryPlayback, seekTo, sleepTimer, startSleepTimer, source, sourceId, toggleAutoplay, toggleLike, togglePlay, toggleRepeat, toggleShuffle]);
   const publicStatus = useMemo<AudioStatus>(() => {
     if (playbackError) return { ...status, currentTime: restoredPosition ?? status.currentTime, duration: currentSong?.duration || status.duration, playing: false, isBuffering: false };
     if (isPreparing) {
@@ -970,6 +1012,8 @@ export function usePlayerStatus() {
   if (!value) throw new Error('usePlayerStatus must be used inside PlayerProvider.');
   return value;
 }
+
+export function usePlayerSpectrumStore() { return useContext(PlayerSpectrumContext); }
 
 export function usePlayerSpectrum() {
   const store = useContext(PlayerSpectrumContext);
