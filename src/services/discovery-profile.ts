@@ -1,7 +1,9 @@
+import { allowsRecommendation, recommendationAffinity, type RecommendationFeedback } from '@/services/recommendation-feedback-model';
 import type { RecommendationStyle } from '@/services/auth';
 import type { CrimsonSong } from '@/types/music';
 
 export type DiscoveryProfile = {
+  feedback?: RecommendationFeedback;
   favoriteCategories?: string[];
   recommendationStyle?: RecommendationStyle;
 };
@@ -44,17 +46,18 @@ export function rankDiscoveryTracks(
     return (value >>> 0) / 4294967296;
   };
   return [...new Map(songs.map((song) => [song.id, song])).values()]
-    .filter((song) => song.streamable)
+    .filter((song) => song.streamable && allowsRecommendation(song, profile.feedback))
     .map((song) => {
       const genreMatch = genres.includes(song.genre.toLowerCase());
       const familiar = followed.has(song.artistId);
-      const reason = familiar
+      const affinity = recommendationAffinity(song, profile.feedback);
+      const reason = affinity.reason || (familiar
         ? `From ${song.creator}, who you follow`
         : genreMatch
           ? `From your ${song.genre} preferences`
-          : 'Discover something different';
+          : 'Discover something different');
       let score =
-        noise(song.id) * 3 +
+        affinity.score + noise(song.id) * 3 +
         (genreMatch ? 4 : 0) -
         (skipped.has(song.id) ? 12 : 0);
       score += familiar

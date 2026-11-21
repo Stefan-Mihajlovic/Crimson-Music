@@ -15,7 +15,7 @@ The application's public Audius key identifies the OAuth client. Authenticated r
 | Data | Storage and purpose |
 | --- | --- |
 | OAuth access/refresh tokens and session profile | SecureStore on iOS/Android; `sessionStorage` on web |
-| Selected genres and recommendation preferences | Account-scoped AsyncStorage records on the device/browser |
+| Selected genres, More like this, and excluded recommendation song/artist IDs | Account-scoped AsyncStorage records on the device/browser |
 | Theme, Data Saver, Reduce Motion, Performance Mode, crossfade | Local app settings; crossfade is off by default |
 | Listening history and statistics | Local account-scoped records, including track metadata, timestamps, and playback duration |
 | Your Mixes editions | Account-scoped local song caches, calendar periods, and bookmarked mix IDs |

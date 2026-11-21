@@ -1,5 +1,5 @@
 import { SymbolView } from '@/components/app-symbol';
-import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { FlatList, View, type FlatListProps, type ViewProps, StyleSheet, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -110,7 +110,7 @@ export default function ReorderableQueue({ items, editing, onMove, renderRow, mi
   const onScroll = useAnimatedScrollHandler((event) => {
     scrollOffset.set(event.contentOffset.y);
   });
-  useFrameCallback((frame) => {
+  const autoScroll = useFrameCallback((frame) => {
     if (!touching.get()) return;
     const bounds = measure(list);
     if (!bounds) return;
@@ -122,7 +122,8 @@ export default function ReorderableQueue({ items, editing, onMove, renderRow, mi
     const next = Math.max(0, Math.min(Math.max(0, contentHeight.get() - bounds.height),
       scrollOffset.get() + speed * Math.min(frame.timeSincePreviousFrame || 16, 32) * 0.48));
     scrollTo(list, 0, next, false);
-  });
+  }, false);
+  useEffect(() => { autoScroll.setActive(dragging); return () => autoScroll.setActive(false); }, [autoScroll, dragging]);
   const context = useMemo(() => ({ source, target, offset, rowHeight, reduceMotion, backgroundColor: colors.elevated }),
     [source, target, offset, rowHeight, reduceMotion, colors.elevated]);
 

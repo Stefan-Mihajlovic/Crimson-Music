@@ -1,3 +1,6 @@
+jest.mock('../src/providers/auth-provider', () => ({ useAuth: () => ({ user: { uid: 'listener' } }) }));
+jest.mock('../src/components/queue-swipe-row', () => ({ children }) => children);
+jest.mock('../src/hooks/use-recommendation-feedback', () => ({ useRecommendationFeedback: () => ({ updatedAt: 0, liked: {}, hiddenSongs: [], hiddenArtists: [] }) }));
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Text } from 'react-native';
@@ -9,7 +12,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 34 }) }));
 jest.mock('../src/providers/player-provider', () => ({ usePlayer: () => mockPlayer, usePlayerStatus: () => ({ playing: true }) }));
 jest.mock('../src/providers/settings-provider', () => ({ useAppSettings: () => ({ colors: { text: '#fff', secondaryText: '#aaa', accent: '#a78aff' } }) }));
-jest.mock('../src/services/music', () => ({ loadRelatedSongs: jest.fn(async () => []) }));
+jest.mock('../src/services/music', () => ({ loadRelatedSongs: jest.fn(async () => []), createOwnedPlaylist: jest.fn(async () => ({ id: 'saved' })) }));
 jest.mock('../src/components/player-details-tabs', () => 'DetailsTabs');
 jest.mock('../src/components/now-playing-artwork', () => 'Artwork');
 jest.mock('../src/components/download-status-icon', () => () => null);
@@ -54,4 +57,20 @@ test('editing only offers deletion for upcoming songs and preserves queue indice
   expect([...new Set(removals.map((item) => item.props.accessibilityLabel))]).toEqual(['Remove Next from queue', 'Remove Later from queue']);
   await act(async () => button('Remove Next from queue').props.onPress());
   expect(mockPlayer.removeFromQueue).toHaveBeenCalledWith(3);
+});
+
+test('saving captures the entire queue order at opening, submits once, and keeps Undo available', async () => {
+  const { createOwnedPlaylist } = require('../src/services/music');
+  mockPlayer.removedQueueSong = song('Removed');
+  mockPlayer.undoQueueRemoval = jest.fn();
+  mockPlayer.dismissQueueUndo = jest.fn();
+  await act(async () => { root = create(<PlayerDetailsSheet />); });
+  await act(async () => button('Undo remove from queue').props.onPress());
+  expect(mockPlayer.undoQueueRemoval).toHaveBeenCalledTimes(1);
+  await act(async () => button('Save queue as playlist').props.onPress());
+  mockPlayer.queue = [song('Changed')];
+  await act(async () => root.update(<PlayerDetailsSheet />));
+  await act(async () => { button('Save queue playlist').props.onPress(); button('Save queue playlist').props.onPress(); });
+  expect(createOwnedPlaylist).toHaveBeenCalledTimes(1);
+  expect(createOwnedPlaylist).toHaveBeenCalledWith('listener', 'Listening queue', undefined, { visibility: 'private', trackIds: ['Repeat', 'Previous', 'Repeat', 'Next', 'Later'] });
 });

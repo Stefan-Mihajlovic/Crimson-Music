@@ -1,3 +1,6 @@
+import { selectionHaptic } from '@/services/haptics';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import RecommendationControls from '@/components/recommendation-controls';
 import LocalMusicActionsSheet from '@/components/local-music-actions-sheet';
 import VisualizerIcon from '@/components/visualizer-icon';
 import { VISUALIZER_STYLES } from '@/services/player-visualizer';
@@ -652,6 +655,7 @@ function MusicActionsSheet() {
               />
             </>
           ) : null}
+          {type === 'song' && song && !localSong ? <RecommendationControls song={song} ActionComponent={ActionRow} /> : null}
           {localSong && song?.local?.kind === 'import' ? <ActionRow icon="trash" label="Remove imported copy" disabled={working} onPress={() => {
             Alert.alert('Remove imported copy?', 'The copy in Crimson will be removed. Your original file is kept.', [
               { text: 'Cancel', style: 'cancel' },
@@ -750,6 +754,9 @@ const ActionRow = memo(function ActionRow({
 }) {
   const { colors } = useAppSettings();
   const desktop = useContext(DesktopActionsContext);
+  const { reduceMotion, performanceMode } = useAppSettings();
+  const pressedScale = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: pressedScale.value }] }));
   const [hovered, setHovered] = useState(false);
   const contentColor = selected
     ? colors.accent
@@ -757,15 +764,18 @@ const ActionRow = memo(function ActionRow({
       ? colors.mutedText
       : colors.text;
   return (
-    <Pressable
+    <Animated.View style={pressStyle}><Pressable
+      onPressIn={() => { pressedScale.set(withTiming(reduceMotion || performanceMode ? 1 : 0.985, { duration: 100 })); }}
+      onPressOut={() => { pressedScale.set(withTiming(1, { duration: 180 })); }}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled, selected }}
       accessibilityValue={value ? { text: value } : undefined}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => { selectionHaptic(); onPress(); }}
       onHoverIn={() => setHovered(true)}
       onHoverOut={() => setHovered(false)}
-      style={({ pressed }) => [
+      style={({ pressed }: { pressed: boolean }) => [
         styles.row,
         Platform.OS === 'web' && !desktop && styles.webMobileRow,
         desktop && styles.desktopRow,
@@ -796,7 +806,7 @@ const ActionRow = memo(function ActionRow({
       </Text>
       {value ? <Text numberOfLines={1} style={{ color: colors.secondaryText, fontSize: desktop ? 12 : 14, maxWidth: '30%' }}>{value}</Text> : null}
       {!desktop ? <SymbolView name="chevron.right" size={13} tintColor={colors.mutedText} /> : null}
-    </Pressable>
+    </Pressable></Animated.View>
   );
 });
 
@@ -828,7 +838,7 @@ const PlaylistPickerRow = memo(function PlaylistPickerRow({
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={({ pressed }: { pressed: boolean }) => [
         styles.row,
         Platform.OS === 'web' && !desktop && styles.webMobileRow,
         desktop && styles.desktopPlaylistRow,

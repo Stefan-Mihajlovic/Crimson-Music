@@ -1,3 +1,6 @@
+jest.mock('../src/components/vault-artwork', () => () => null);
+jest.mock('../src/hooks/use-vault-motion', () => ({ useVaultMotion: () => ({ transition: jest.fn() }) }));
+jest.mock('../src/hooks/use-recommendation-feedback', () => ({ useRecommendationFeedback: () => ({ updatedAt: 0, liked: {}, hiddenSongs: [], hiddenArtists: [] }) }));
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { Platform, RefreshControl, ScrollView, StyleSheet } from 'react-native';
@@ -10,7 +13,7 @@ jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: mockTopInset, bottom: 34, left: 0, right: 0 }) }));
-jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { ScrollView: require('react-native').ScrollView } }));
+jest.mock('react-native-reanimated', () => ({ __esModule: true, default: { ScrollView: require('react-native').ScrollView, View: require('react-native').View } }));
 jest.mock('../src/hooks/use-main-header-scroll', () => ({ useMainHeaderScroll: () => ({ offset: { value: 0 }, onScroll: jest.fn() }) }));
 jest.mock('../src/providers/auth-provider', () => ({ useAuth: () => ({ user: { uid: 'listener', FavoriteCategories: [], RecommendationStyle: 'balanced' } }) }));
 jest.mock('../src/providers/player-provider', () => ({ usePlayer: () => ({ playSong: jest.fn() }) }));

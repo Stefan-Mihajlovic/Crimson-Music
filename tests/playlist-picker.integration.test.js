@@ -1,3 +1,6 @@
+jest.mock('../src/components/recommendation-controls', () => () => null);
+jest.mock('react-native-reanimated', () => { const React = require('react'); return { __esModule: true, default: { View: 'AnimatedView' }, useSharedValue: (value) => React.useRef({ value, set(next) { this.value = next; } }).current, useAnimatedStyle: (fn) => fn(), withTiming: (value) => value }; });
+jest.mock('../src/hooks/use-recommendation-feedback', () => ({ useRecommendationFeedback: () => ({ updatedAt: 0, liked: {}, hiddenSongs: [], hiddenArtists: [] }) }));
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { act, create } from 'react-test-renderer';

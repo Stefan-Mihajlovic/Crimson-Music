@@ -110,7 +110,7 @@ test('account cleanup deletes only its own mixes', async () => {
   await load();
   session.getCurrentAudiusUserId.mockReturnValue('other');
   await mixes.loadPersonalMixes('other', {}, { now });
-  await lifecycle.registerAccountCleanup.mock.calls[0][0]('listener');
+  await Promise.all(lifecycle.registerAccountCleanup.mock.calls.map(([cleanup]) => cleanup('listener')));
   expect((await storage.getAllKeys()).some((key) => key.includes(':listener:'))).toBe(false);
   expect((await storage.getAllKeys()).some((key) => key.includes(':other:'))).toBe(true);
 });
@@ -165,7 +165,7 @@ test('account bookmarks are isolated and clearing one account preserves the othe
   await mixes.setPersonalMixBookmarked('other', 'monthly', true);
   expect(await mixes.readPersonalMixBookmarkIds('other')).toEqual(['monthly']);
   await expect(mixes.readPersonalMixBookmarkIds('listener')).rejects.toThrow('account changed');
-  await lifecycle.registerAccountCleanup.mock.calls[0][0]('listener');
+  await Promise.all(lifecycle.registerAccountCleanup.mock.calls.map(([cleanup]) => cleanup('listener')));
   expect(await mixes.readPersonalMixBookmarkIds('other')).toEqual(['monthly']);
   expect((await storage.getAllKeys()).some((key) => key.endsWith(':listener'))).toBe(false);
 });

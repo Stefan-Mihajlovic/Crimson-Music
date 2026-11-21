@@ -1,3 +1,4 @@
+jest.mock('../src/hooks/use-recommendation-feedback', () => ({ useRecommendationFeedback: () => ({ updatedAt: 0, liked: {}, hiddenSongs: [], hiddenArtists: [] }) }));
 import React from 'react';
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import { Text } from 'react-native';

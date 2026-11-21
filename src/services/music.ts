@@ -1,4 +1,6 @@
 import { uploadAudiusImage, type ProfilePhotoUpload } from '@/services/audius-image-upload';
+import { readRecommendationFeedback } from '@/services/recommendation-feedback';
+import { allowsRecommendation, recommendationAffinity } from '@/services/recommendation-feedback-model';
 import { withLocalPlaylistTracks, withLocalPlaylistDetail, savePlaylistOrder, removePlaylistOrder } from '@/services/playlist-local-tracks';
 import { getLocalSong, isLocalTrackId, readLocalFavoriteIds, readLocalFavorites, resolveLocalPlaybackUrl, setLocalFavorite } from '@/services/local-music';
 import { musicCategories as categories } from '@/constants/music-categories';
@@ -722,15 +724,17 @@ export async function loadRelatedSongs(songId: string, count = 8): Promise<Relat
     current.genre ? getTrendingAudiusTracks(24, current.genre).catch(() => []) : Promise.resolve([]),
     loadCachedHomeTracks(getCurrentAudiusUserId() || undefined).catch(() => []),
   ]);
+  const feedback = await readRecommendationFeedback(getCurrentAudiusUserId() || undefined);
   const related: RelatedSong[] = [];
   const seen = new Set([songId]);
   const add = (song: CrimsonSong, reason: RelatedSong['reason']) => {
-    if (!song.id || seen.has(song.id) || related.length >= count) return;
+    if (!song.id || !song.streamable || !allowsRecommendation(song, feedback) || seen.has(song.id) || related.length >= count) return;
     seen.add(song.id);
     related.push({ ...song, reason });
   };
   const recent = new Set((getCurrentAudiusUserId() ? await readLocalListeningEvents(getCurrentAudiusUserId()!) : []).filter((event) => event.type === 'play').slice(0, 20).map((event) => event.trackId));
-  const sources: [CrimsonSong[], RelatedSong['reason']][] = [[genreTracks, 'Similar vibe'], [recommendedTracks, 'For you'], [artistTracks.slice(0, 2), 'Artist']];
+  const byAffinity = (songs: CrimsonSong[]) => [...songs].sort((a, b) => recommendationAffinity(b, feedback).score - recommendationAffinity(a, feedback).score);
+  const sources: [CrimsonSong[], RelatedSong['reason']][] = [[byAffinity(genreTracks), 'Similar vibe'], [byAffinity(recommendedTracks), 'For you'], [byAffinity(artistTracks).slice(0, 2), 'Artist']];
   for (let index = 0; index < Math.max(...sources.map(([items]) => items.length)); index++) {
     for (const [items, reason] of sources) if (items[index] && !recent.has(items[index].id)) add(items[index], reason);
   }
@@ -763,6 +767,7 @@ function vaultTrackScore(track: CrimsonSong, profile: (typeof vaultMoodProfiles)
 
 export async function loadVaultMood(mood: VaultMood, uid = getCurrentAudiusUserId() || undefined, variation = 0) {
   const profile = vaultMoodProfiles[mood];
+  const feedback = await readRecommendationFeedback(uid);
   const limits = discoveryRequestLimits();
   const [personalized, recommended, ...genreGroups] = await Promise.all([
     loadCachedHomeTracks(uid, limits.tracks).catch(() => []),
@@ -776,7 +781,8 @@ export async function loadVaultMood(mood: VaultMood, uid = getCurrentAudiusUserI
   const recent = new Set(history.filter((event) => event.type === 'play').slice(0, 30).map((event) => event.trackId));
   const seed = `${uid || 'guest'}:${mood}:${Math.floor(Date.now() / 3_600_000)}:${variation}`;
   const ranked = shuffled(candidates, seed)
-    .map((song) => ({ score: vaultTrackScore(song, profile) - (recent.has(song.id) ? 3 : 0), song }))
+    .filter((song) => allowsRecommendation(song, feedback))
+    .map((song) => ({ score: recommendationAffinity(song, feedback).score + vaultTrackScore(song, profile) - (recent.has(song.id) ? 3 : 0), song }))
     .filter((item) => item.score > 0)
     .sort((first, second) => second.score - first.score)
     .map((item) => item.song);
@@ -799,6 +805,7 @@ export type HomeFeed = {
   reasons: Record<string, string>; updatedAt: number;
 };
 export async function loadHomeFeed(uid = getCurrentAudiusUserId() || undefined, rotation = Date.now(), onSongsReady?: (songs: CrimsonSong[]) => void, profile: DiscoveryProfile = {}): Promise<HomeFeed> {
+  profile = { ...profile, feedback: await readRecommendationFeedback(uid) };
   const limits = discoveryRequestLimits();
   const profileKey = `${preferredGenres(profile).join(',')}:${profile.recommendationStyle || 'balanced'}`;
   const scope = `home:${uid || 'guest'}:${profileKey}`;
@@ -834,14 +841,14 @@ export async function loadHomeFeed(uid = getCurrentAudiusUserId() || undefined, 
       Promise.all(follows.slice(0, limits.extraArtists ? 4 : 2).map((artist) => getAudiusArtistTracks(artist.id!, 2).catch(() => []))),
     ]);
     const songs = selected.map((item) => item.song);
-    const artists = shuffled(topArtists, `${uid}:${rotation}:artists`).slice(0, 10);
-    const newReleases = [...new Map(releaseGroups.flat().map((song) => [song.id, song])).values()].sort((a, b) => (Date.parse(b.releaseDate) || 0) - (Date.parse(a.releaseDate) || 0)).slice(0, 6);
+    const artists = shuffled(topArtists.filter((artist) => !profile.feedback?.hiddenArtists.includes(artist.id)), `${uid}:${rotation}:artists`).slice(0, 10);
+    const newReleases = [...new Map(releaseGroups.flat().map((song) => [song.id, song])).values()].filter((song) => allowsRecommendation(song, profile.feedback)).sort((a, b) => (Date.parse(b.releaseDate) || 0) - (Date.parse(a.releaseDate) || 0)).slice(0, 6);
     const feed: HomeFeed = { songs, artists, playlists: playlistRecords.map((r) => playlistFromAudius(r, uid)).slice(0, 6), featuredArtist: artists[0] || null, newReleases, reasons: Object.fromEntries(selected.map((item) => [item.song.id, item.reason])), updatedAt: Date.now() };
     void saveOfflineData(scope, feed).catch(() => undefined);
     return feed;
   } catch (error) {
     const cached = await readOfflineData<HomeFeed>(scope);
-    if (cached) return cached;
+    if (cached) return { ...cached, songs: cached.songs.filter((song) => allowsRecommendation(song, profile.feedback)), newReleases: (cached.newReleases || []).filter((song) => allowsRecommendation(song, profile.feedback)) };
     throw error;
   }
 }

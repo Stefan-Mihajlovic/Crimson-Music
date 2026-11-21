@@ -37,6 +37,8 @@ Crimson incorporates visual resources into its interface with app-specific sizin
 
 The Sonata app icon's editable vector layers and platform assets are documented in [APP-ICON.md](docs/APP-ICON.md). The static Favorites and Local Music covers were generated with OpenAI's image generation tool for Crimson. These app assets are separate from artist artwork supplied by Audius.
 
+The Vault still image, `assets/images/home/vault-still.webp`, is the unchanged first frame extracted from the existing `vault-background.webp` animation with `webpmux`. It is used when web animation is paused and retains the source asset's licensing; no new external artwork was introduced.
+
 ## Web icon outlines
 
 ### Ionicons

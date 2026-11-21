@@ -1,3 +1,4 @@
+import { selectionHaptic } from '@/services/haptics';
 import FrostedSurface from '@/components/frosted-surface';
 /* eslint-disable react-hooks/immutability */
 
@@ -38,7 +39,7 @@ export default function VaultGlassButton({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => { selectionHaptic(); onPress(); }}
       onPressIn={() => {
         scale.value = reduceMotion || performanceMode ? 1 : withTiming(0.95, { duration: 80 });
       }}

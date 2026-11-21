@@ -1,3 +1,5 @@
+jest.mock('../../src/providers/auth-provider', () => ({ useAuth: () => ({ user: { uid: 'listener' } }) }));
+jest.mock('../../src/hooks/use-recommendation-feedback', () => ({ useRecommendationFeedback: () => ({ updatedAt: 0, liked: {}, hiddenSongs: [], hiddenArtists: [] }) }));
 import { afterEach, beforeEach, expect, jest, test } from '@jest/globals';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';

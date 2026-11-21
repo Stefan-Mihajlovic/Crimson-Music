@@ -6,6 +6,7 @@ export { releaseWebNavigationFocus } from '@/services/navigation-focus';
 export type AppRouteGroup = '(home)' | '(search)' | '(library)' | '(account)';
 
 export type ActionSheetItem = {
+  reason?: string;
   type: 'song' | 'artist' | 'playlist' | 'local-music';
   id: string;
   title: string;

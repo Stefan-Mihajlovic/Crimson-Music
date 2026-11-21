@@ -183,7 +183,7 @@ test('horizontal cover swipes change songs without a vertical player drag', () =
   act(() => pointer(container.querySelector('[data-testid="web-artwork-swipe"]'), 'pointerdown', 220, 200));
   act(() => pointer(window, 'pointermove', 70, 203));
   act(() => pointer(window, 'pointerup', 70, 203));
-  act(() => jest.advanceTimersByTime(180));
+  act(() => jest.advanceTimersByTime(220));
   expect(mockPlayer.playNext).toHaveBeenCalledTimes(1);
   expect(mockRouter.push).not.toHaveBeenCalled();
 });
@@ -287,4 +287,32 @@ test('dragging keeps the dock material outside the fading and clipped player con
   }
   act(() => pointer(window, 'pointercancel', 100, 580));
   act(() => jest.advanceTimersByTime(280));
+});
+
+test('cover dragging follows the pointer without React commits and cancels a stale transition', () => {
+  const onRender = jest.fn();
+  const render = () => <React.Profiler id="swipe" onRender={onRender}><SwipeableArtwork size={200} /></React.Profiler>;
+  act(() => root.render(render()));
+  onRender.mockClear();
+  const cover = container.querySelector('[data-testid="web-artwork-swipe"]');
+  act(() => pointer(cover, 'pointerdown', 220, 200));
+  for (let x = 210; x > 70; x -= 2) act(() => pointer(window, 'pointermove', x, 200));
+  expect(onRender).not.toHaveBeenCalled();
+  expect(cover.firstChild.style.transform).not.toBe('translateX(-230px)');
+  act(() => pointer(window, 'pointerup', 70, 200));
+  // A track chosen with another control wins over an in-flight cover swipe.
+  const previous = mockPlayer.currentSong;
+  mockPlayer.currentSong = { ...previous, id: 'selected-elsewhere' };
+  act(() => root.render(render()));
+  act(() => jest.advanceTimersByTime(300));
+  expect(mockPlayer.playNext).not.toHaveBeenCalled();
+  mockPlayer.currentSong = previous;
+});
+
+test('keyboard cover navigation commits only once during its transition', () => {
+  act(() => root.render(<SwipeableArtwork size={200} />));
+  const cover = container.querySelector('[data-testid="web-artwork-swipe"]');
+  act(() => { cover.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); cover.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); });
+  act(() => jest.advanceTimersByTime(220));
+  expect(mockPlayer.playNext).toHaveBeenCalledTimes(1);
 });

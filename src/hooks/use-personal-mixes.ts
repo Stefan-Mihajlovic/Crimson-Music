@@ -1,3 +1,5 @@
+import { useRecommendationFeedback } from '@/hooks/use-recommendation-feedback';
+import { allowsRecommendation } from '@/services/recommendation-feedback-model';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -16,6 +18,7 @@ export function useBookmarkedPersonalMixes() {
 
 function useMixes(bookmarkedOnly: boolean) {
   const { user } = useAuth();
+  const feedback = useRecommendationFeedback();
   const { isOffline } = useNetwork();
   const [mixes, setMixes] = useState<PersonalMix[]>([]);
   const [resolvedKey, setResolvedKey] = useState('');
@@ -25,7 +28,7 @@ function useMixes(bookmarkedOnly: boolean) {
   const uid = user?.uid;
   const categories = JSON.stringify(user?.FavoriteCategories || []);
   const style = user?.RecommendationStyle;
-  const requestKey = JSON.stringify([uid, categories, style, isOffline, revision, bookmarkedOnly]);
+  const requestKey = JSON.stringify([uid, categories, style, isOffline, revision, bookmarkedOnly, feedback.updatedAt]);
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') refresh(); });
@@ -45,5 +48,5 @@ function useMixes(bookmarkedOnly: boolean) {
       .finally(() => { if (active) setResolvedKey(requestKey); });
     return () => { active = false; };
   }, [uid, categories, style, isOffline, requestKey, bookmarkedOnly]);
-  return { mixes: mixes.filter((mix) => mix.owner === (uid || 'guest')), loading: resolvedKey !== requestKey, error: resolvedKey === requestKey && error, refresh };
+  return { mixes: mixes.filter((mix) => mix.owner === (uid || 'guest')).map((mix) => ({ ...mix, songs: mix.songs.filter((song) => allowsRecommendation(song, feedback)) })), loading: resolvedKey !== requestKey, error: resolvedKey === requestKey && error, refresh };
 }

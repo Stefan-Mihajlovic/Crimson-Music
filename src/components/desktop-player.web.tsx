@@ -1,5 +1,5 @@
 import { setDesktopPlayerPresented } from '@/services/desktop-player-presentation';
-import ArtworkImage from '@/components/artwork-image';
+import { SwipeableArtwork } from '@/components/song-swipe-pager';
 import { useIsFocused, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -22,7 +22,6 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
   const navigation = useNavigation();
   const focused = useIsFocused();
   const player = usePlayer();
-  const status = usePlayerStatus();
   const { colors, isDark, reduceMotion } = useAppSettings();
   const { artistHref } = useDetailRoutes();
   const { width, height } = useWindowDimensions();
@@ -34,7 +33,6 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
   const artworkBox = useRef<HTMLDivElement>(null);
   const [artworkLayout, setArtworkLayout] = useState<VisualizerArtworkLayout>();
   const controls = useRef<HTMLDivElement>(null);
-  const [artworkLoaded, setArtworkLoaded] = useState(0);
   const [availableArtwork, setAvailableArtwork] = useState<number | null>(null);
   const song = player.currentSong;
   const hasSong = Boolean(song);
@@ -123,7 +121,7 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
     position: 'relative', isolation: 'isolate', background: colors.background,
   }}>
     <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: -1 }}>
-      <DesktopArtworkBackground active={focused} song={song} artworkLayout={artworkLayout} artworkLoaded={artworkLoaded} />
+      <DesktopArtworkBackground active={focused} song={song} artworkLayout={artworkLayout} />
       {!isDark && <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.82)' }} />}
     </div>
     <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 64, padding: '8px 28px', gap: 18, flexShrink: 0 }}>
@@ -138,7 +136,7 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
       <div ref={artworkColumn} style={{ minWidth: 0, minHeight: 0, overflowY: 'auto', padding: '12px 4px 8px', scrollbarWidth: 'thin' }}>
         <div style={{ width: artworkSize, maxWidth: '100%', margin: '0 auto' }}>
           <div ref={artworkBox} style={{ width: '100%', aspectRatio: '1', marginBottom: 24, borderRadius: 18, overflow: 'hidden', boxShadow: '0 18px 48px rgba(0,0,0,.28)' }}>
-            <ArtworkImage artwork={song.artwork} source={song.image || song.imageSmall || require('@/assets/images/home/default-song.webp')} contentFit="cover" onLoad={() => setArtworkLoaded((value) => value + 1)} transition={180} style={{ width: '100%', height: '100%' }} />
+            <SwipeableArtwork size={artworkSize} pageGap={32} borderRadius={22} />
           </div>
           <div ref={controls}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 17 }}>
@@ -148,8 +146,7 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
             <PlayerIconButton label={`More options for ${song.title}`} icon="ellipsis" onPress={openActions} />
             <PlayerIconButton label={player.isLiked ? 'Remove from favorites' : 'Add to favorites'} icon={player.isLiked ? 'heart.fill' : 'heart'} active={player.isLiked} onPress={() => void player.toggleLike()} size={23} />
           </div>
-          <PlayerRange label="Playback position" value={status.currentTime} max={status.duration} onChange={player.seekTo} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: colors.secondaryText, fontSize: 11, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}><span>{formatPlayerTime(status.currentTime)}</span><span>{formatPlayerTime(status.duration)}</span></div>
+          <DesktopPlaybackPosition />
           <div style={{ marginTop: 16 }}><WebTransport large /></div>
           <div style={{ marginTop: 17 }}><WebVolume fill /></div>
           {player.playbackError ? <div role="status" style={{ border: `1px solid ${colors.border}`, borderRadius: 12, padding: 12, marginTop: 14, fontSize: 12, color: colors.secondaryText, lineHeight: 1.6 }}>
@@ -164,4 +161,12 @@ export default function DesktopPlayer({ initialTab = 'queue' }: { initialTab?: P
       <DesktopPlayerPanel key={initialTab} initialTab={initialTab} />
     </div>
   </section>;
+}
+
+function DesktopPlaybackPosition() {
+  const status = usePlayerStatus();
+  const { seekTo } = usePlayer();
+  const { colors } = useAppSettings();
+  return <><PlayerRange label="Playback position" value={status.currentTime} max={status.duration} onChange={seekTo} />
+    <div style={{ display: 'flex', justifyContent: 'space-between', color: colors.secondaryText, fontSize: 11, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}><span>{formatPlayerTime(status.currentTime)}</span><span>{formatPlayerTime(status.duration)}</span></div></>;
 }
