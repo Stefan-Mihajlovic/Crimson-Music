@@ -74,6 +74,7 @@
       "./plugins/with-android-media-controls",
       "./plugins/with-crimson-equalizer",
       "./plugins/with-crimson-sleep-timer",
+      "./plugins/with-crimson-native-tabs",
       "./plugins/with-android-frosted-glass",
       "./plugins/with-local-music",
       "./plugins/with-crimson-widgets",

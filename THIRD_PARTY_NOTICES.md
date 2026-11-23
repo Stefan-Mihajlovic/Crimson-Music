@@ -400,3 +400,7 @@ Copyright 2025 Dmytro Saviuk
    See the License for the specific language governing permissions and
    limitations under the License.
 ```
+
+## Onboarding completion sound
+
+`assets/audio/pull-complete.wav` is an original synthesized chime created for Crimson from sine harmonics, with no sampled third-party recording. It is distributed under the project MIT license.

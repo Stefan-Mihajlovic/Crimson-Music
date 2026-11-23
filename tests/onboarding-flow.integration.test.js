@@ -10,6 +10,8 @@ let mockComplete;
 let mockParams;
 let mockOffline;
 const mockSave = jest.fn();
+const mockFeedback = { prepare: jest.fn(), start: jest.fn(), update: jest.fn(), stop: jest.fn(), complete: jest.fn(), dispose: jest.fn() };
+jest.mock('../src/services/onboarding-feedback', () => ({ createOnboardingFeedback: () => mockFeedback }));
 const mockRouter = { canGoBack: () => true, back: jest.fn(), replace: jest.fn() };
 jest.mock('expo-router', () => ({
   get router() { return mockRouter; },
@@ -103,6 +105,7 @@ test('Next is white and does not persist completion before the final action', as
   await finish();
   expect(mockSave).toHaveBeenCalledWith(['rock', 'pop'], 'balanced');
   expect(mockRouter.replace).toHaveBeenCalledWith('/(app)/(home)');
+  expect(mockFeedback.complete).toHaveBeenCalledTimes(1);
 });
 
 test('saved preferences skip first-run setup while the explicit editor remains available', async () => {
@@ -122,6 +125,7 @@ test('a failed final save keeps selections available for retry', async () => {
   await advance();
   await finish();
   expect(mockRouter.replace).not.toHaveBeenCalled();
+  expect(mockFeedback.complete).not.toHaveBeenCalled();
   expect(root.root.findAllByType(Text).some((node) => String(node.props.children).includes('could not save'))).toBe(true);
   await finish();
   expect(mockSave).toHaveBeenCalledTimes(2);

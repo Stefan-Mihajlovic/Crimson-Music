@@ -1,34 +1,28 @@
 # Dependency security status
 
-Dependency review dated **2026-09-10**. These notes explain known alerts and compatibility constraints at that date, not a current exhaustive audit. Recheck the installed lockfile and upstream advisories before a release.
+Review date: **2026-11-23**. The updated lockfile reports **zero known vulnerabilities** with `npm audit`, including development dependencies. This is a point-in-time dependency check, not a guarantee that the application has no security defects.
 
-## Released fix applied: uuid
+## Applied fixes
 
-Path: `expo-splash-screen@57.0.8 → @expo/config-plugins@57.0.9 → xcode@3.0.1 → uuid@7.0.3`.
+| Package | Locked version | Fix |
+| --- | --- | --- |
+| shell-quote | 1.12.0 | Rejects line terminators after comment tokens ([advisory](https://github.com/advisories/GHSA-pqg4-j6r4-53mv)). |
+| image-size | 2.1.0 | Bounds parser progress for malformed [ICNS](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) and [JXL/HEIF](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq) input. |
+| decode-uri-component | 0.5.1 | Fixes both [exponential decoding](https://github.com/advisories/GHSA-vcc3-ghjq-m6fr) and [quadratic replacement](https://github.com/advisories/GHSA-qr28-fpjm-wq7f). |
+| minimatch (affected 7–10 releases) | 11.0.9 | Fixes [globparts amplification](https://github.com/advisories/GHSA-g3hv-75wg-m249). Unaffected legacy 3.x callers retain their callable CommonJS API. |
+| brace-expansion | 1.1.22 / 5.1.0 | Fixes [quadratic expansion](https://github.com/advisories/GHSA-q2hr-2g5m-vwhr) and recursion exhaustion. |
+| zod | 4.6.7 | Fixes [oversized constrained collection validation](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5). |
 
-[GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq) concerns buffer bounds in the `v3()`, `v5()`, and `v6()` APIs. Its fix was backported to [uuid 11.1.1](https://github.com/uuidjs/uuid/releases/tag/v11.1.1). The package files now override only `xcode`'s `uuid` dependency to that exact version.
+## Compatibility boundaries
 
-The inspected `xcode/lib/pbxProject.js` uses `require('uuid')` and calls `uuid.v4()` without arguments, then formats the returned string as an Xcode identifier. It does not use the affected APIs or caller-provided buffers. Version 11.1.1 preserves this call and a [CommonJS export](https://github.com/uuidjs/uuid/blob/v11.1.1/package.json). This establishes source-level compatibility for the observed caller, not a completed native-build test. Remove the override when the upstream dependency range permits a patched release.
+Expo SDK 57 and React Native remain on their existing versions. Scoped npm overrides provide the patched dependencies without upgrading the native SDK.
 
-## Open: image-size parser loops
+Metro passes asset bytes to the default `image-size` export. Version 2.1.0 retains that API; tests exercise Metro's actual `getAssetSize` against app artwork and reject malformed container headers in a timeout-bounded child process. Filesystem-based APIs removed in image-size 2 are not used by the installed Metro caller.
 
-Path: `react-native@0.86.3 → @react-native/community-cli-plugin@0.86.3 → metro@0.84.4 → image-size@1.2.1`.
+Expo Router 57 uses `query-string@7.1.3`'s named parse/stringify API. Its decoder is now ESM-only. The repeatable postinstall adapter in `scripts/lib/dependency-compat.cjs` selects the decoder's default export, preserving query-string's public API. It checks the exact caller version and fails on an unknown import instead of silently leaving an incompatible install. Node 24 supports the synchronous ESM import, and Metro handles it in native/web bundles. No decoder implementation is vendored or rewritten. Remove this adapter and override when upgrading to a Router version that no longer needs them.
 
-- [GHSA-w3rx-r6r6-pgpr / CVE-2025-71330](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr): malformed ICNS entries can prevent parser progress.
-- [GHSA-5p2g-fcmc-qvqq / CVE-2025-71329](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq): malformed JXL/HEIF boxes can prevent parser progress.
+The minimatch override only targets affected majors 7–10, whose object exports match the upgraded API. The lockfile retains minimatch 3 for older ESLint/Jest callers. Existing `qs` and `xcode → uuid@11.1.1` security overrides remain in place.
 
-Both advisories list releases through 2.0.2 as affected and no patched version. npm's latest release is 2.0.2, and the [upstream repository is archived](https://github.com/image-size/image-size). These alerts require a further fix beyond the earlier parser advisory addressed in 1.2.1.
+## Verification
 
-The traced caller is Metro's Node-side `src/Assets.js`: `getAssetSize` passes project asset bytes to `image-size` during asset processing. No direct import was found in the application's `src/` tree. This trace identifies build/development tooling exposure; it is not a comprehensive shipped-bundle audit or a claim that every runtime path is unaffected. A malicious image added to the project can reach the parser under a recognized asset extension, so extension checks alone are not a mitigation.
-
-Review contributed assets before processing them, keep development servers off untrusted networks, and retain bounded CI job timeouts. These measures limit exposure or duration; they do not repair the parser. Keep both alerts open pending a compatible upstream replacement or separately reviewed remediation.
-
-## Open: decode-uri-component
-
-Path: `expo-router@57.0.20 → query-string@7.1.3 → decode-uri-component@0.2.2`.
-
-[GHSA-vcc3-ghjq-m6fr / CVE-2026-45822](https://github.com/advisories/GHSA-vcc3-ghjq-m6fr) describes excessive work on malformed percent-encoded input. [Version 0.5.0](https://github.com/SamVerschueren/decode-uri-component/releases/tag/v0.5.0) is the published fix, but it is ESM-only. The installed `query-string` calls `require('decode-uri-component')` directly as a function, so a decoder-only override changes its expected module shape.
-
-Upgrading `query-string` alone is also not a compatible drop-in: its newer [entry point exports a default object](https://github.com/sindresorhus/query-string/blob/v9.5.1/index.js), while Expo Router 57's inspected path/query helpers use namespace imports and call `queryString.parse` and `queryString.stringify`. The decoder therefore remains unchanged in this focused fix.
-
-Malformed query strings are a routing concern, unlike Metro's asset-processing path. No new in-app mitigation is claimed here. The advisory recommends limiting input size; adding a routing boundary guard, a supported CommonJS backport, or a coordinated Router/module migration requires a separate compatible implementation and validation. Keep the alert open rather than masking it with an incompatible override or dismissing it.
+Use `npm ci`, `npm audit`, `npm run check`, `npm test`, `npx expo-doctor`, and production exports/builds when revisiting these overrides. `tests/dependency-security.test.mjs` covers Router query compatibility and malformed input, Metro asset parsing, shell quoting rejection, and glob matching. Keep Dependabot enabled; do not dismiss alerts to hide an unresolved dependency.
