@@ -91,7 +91,7 @@ jobs:
           retention-days: 7
 
   ios-build:
-    # The layered Sonata icon uses Icon Composer 2 / Xcode 27 materials.
+    # The layered Crimson icon uses Icon Composer 2 / Xcode 27 materials.
     runs-on: xcode-27
     timeout-minutes: 45
     steps:

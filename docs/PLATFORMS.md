@@ -54,7 +54,7 @@ Queue drag handles reorder visible rows and offer accessible move actions; edge 
 
 - Node.js 24 and npm; install the lockfile with `npm ci`.
 - A registered Audius application and its public app key, configured using `.env.example`.
-- iOS: macOS, Xcode 27 or newer, its command-line tools, and an appropriate signing setup for physical devices. The layered Sonata icon uses Icon Composer 2.0 refractivity and requires the Xcode 27 asset compiler; this build-tool requirement does not raise the app's deployment target.
+- iOS: macOS, Xcode 27 or newer, its command-line tools, and an appropriate signing setup for physical devices. The layered Crimson icon uses Icon Composer 2.0 refractivity and requires the Xcode 27 asset compiler; this build-tool requirement does not raise the app's deployment target.
 - Android: Android 7.0 (API 24) or newer. Build with JDK 21 and the Android SDK (compile/target SDK 36), including the NDK/CMake versions requested by Gradle. Android Studio can install these tools. Both 32-bit `armeabi-v7a` and 64-bit `arm64-v8a` phones are supported.
 - Web: a modern browser; use HTTPS for a hosted build.
 
