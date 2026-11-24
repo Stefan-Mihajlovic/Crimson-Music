@@ -18,6 +18,7 @@ import Animated, {
   interpolate,
   SharedValue,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -28,33 +29,61 @@ import { getPlayerArtworkLayout, PlayerContent } from '@/app/player';
 import { BOTTOM_BAR_HORIZONTAL_INSET, MINI_PLAYER_HEIGHT } from '@/components/player-layout';
 import { SwipeableArtwork, SwipeableSongCopy } from '@/components/song-swipe-pager';
 import BouncyPressable from '@/components/bouncy-pressable';
+import { AccessoryPlayerContents, type NativePlayerFrame, type PlayerDestination } from '@/components/native-player-accessory';
 import PlayerArtworkBackground from '@/components/player-artwork-background';
 import { usePlayer, usePlayerStatus } from '@/providers/player-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 
 const fallbackArtwork = require('@/assets/images/home/default-song.webp');
 const miniPlayerHorizontalInset = BOTTOM_BAR_HORIZONTAL_INSET;
+const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
-export default function DraggablePlayerSurface({
-  collapsedTop,
-  expanded,
-  height,
-  onBeginExpand,
-  onCollapse,
-  onExpand,
-  position,
-}: {
+type PlayerSurfaceProps = {
   collapsedTop: number;
   expanded: boolean;
   height: number;
+  nativeAccessory?: boolean;
+  nativeFrame?: NativePlayerFrame | null;
   onBeginExpand: () => void;
+  onSurfaceReady?: () => void;
   onCollapse: (velocity?: number) => void;
   onExpand: (velocity?: number) => void;
   position: SharedValue<number>;
-}) {
+  returnProgress?: SharedValue<number>;
+  returnFrame?: SharedValue<PlayerDestination | null>;
+};
+
+export default function DraggablePlayerSurface(props: PlayerSurfaceProps) {
+  // useAnimatedStyle retains its first computed style for attaching native
+  // views. Keeping those hooks alive behind `return null` seeds the next open
+  // with stale regular/fullscreen geometry before the UI mapper catches up.
+  // Mount the entire morph only once its native frame has been captured.
+  if (props.nativeAccessory && !props.expanded) return null;
+  return <PlayerSurface {...props} />;
+}
+
+function PlayerSurface({
+  collapsedTop,
+  expanded,
+  height,
+  nativeAccessory = false,
+  nativeFrame,
+  onBeginExpand,
+  onSurfaceReady,
+  onCollapse,
+  onExpand,
+  position,
+  returnProgress,
+  returnFrame,
+}: PlayerSurfaceProps) {
   const { currentSong } = usePlayer();
-  const { dataSaver, reduceMotion } = useAppSettings();
+  const { dataSaver, reduceMotion, isDark } = useAppSettings();
   const [artworkLoaded, setArtworkLoaded] = useState(0);
+  const [laidOut, setLaidOut] = useState(false);
+  const [artworkDisplayed, setArtworkDisplayed] = useState(false);
+  useEffect(() => {
+    if (laidOut && artworkDisplayed) onSurfaceReady?.();
+  }, [laidOut, artworkDisplayed, onSurfaceReady]);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const fold = useFoldingFeature();
@@ -66,6 +95,7 @@ export default function DraggablePlayerSurface({
   const safeCollapsedTop = Math.max(1, collapsedTop);
   const dragStartPosition = useSharedValue(expanded ? 0 : collapsedTop);
   const gestureActive = useSharedValue(false);
+  const heldTransition = useSharedValue(false);
   const expandedGesture = useSharedValue(expanded);
   const entranceProgress = useSharedValue(currentSong ? 1 : 0);
 
@@ -85,57 +115,153 @@ export default function DraggablePlayerSurface({
       });
   }, [currentSong, entranceProgress, reduceMotion]);
 
-  const gesture = useMemo(() => Gesture.Pan()
-    .activeOffsetY([-4, 4])
-    .failOffsetX([-12, 12])
-    .onTouchesDown((event, manager) => {
-      // Transport/large-text content owns its scrolling and scrubbing gestures.
-      // The header and cover remain the direct manipulation handle.
-      const touch = event.allTouches[0];
-      if (expandedGesture.get() && touch && touch.y > expansionHeaderBottom
-        && (touch.y > expansionHandleBottom || touch.x > expansionHandleRight)) manager.fail();
-    })
-    .onStart(() => {
-      cancelAnimation(position);
-      gestureActive.value = true;
-      dragStartPosition.value = position.value;
-      scheduleOnRN(onBeginExpand);
-    })
-    .onUpdate((event) => {
-      position.value = Math.max(0, Math.min(safeCollapsedTop, dragStartPosition.value + event.translationY));
-    })
-    .onEnd((event) => {
-      gestureActive.value = false;
-      const currentPosition = Math.max(0, Math.min(safeCollapsedTop, position.value));
-      const projectedPosition = currentPosition + event.velocityY * 0.12;
-      if (projectedPosition > safeCollapsedTop * 0.5) scheduleOnRN(onCollapse, event.velocityY);
-      else scheduleOnRN(onExpand, event.velocityY);
-    })
-    .onFinalize((_, success) => {
-      // A tap also finalizes a Pan gesture, but it must remain a tap. Only
-      // settle here when an already-active drag was actually cancelled.
-      if (success || !gestureActive.value) return;
-      gestureActive.value = false;
-      if (position.value > safeCollapsedTop * 0.5) scheduleOnRN(onCollapse, 0);
-      else scheduleOnRN(onExpand, 0);
-    }), [dragStartPosition, expandedGesture, expansionHandleBottom, expansionHandleRight, expansionHeaderBottom, gestureActive, onBeginExpand, onCollapse, onExpand, position, safeCollapsedTop]);
-
   // UIKit does not expose the physical display radius to apps. The top safe
   // area tracks the rounded-display generations closely, while continuous
   // corners reproduce the same superellipse curve used by the device bezel.
   const deviceCornerRadius = insets.top > 24
     ? Math.max(36, Math.min(56, insets.top - 6))
     : 0;
-  const miniArtworkSize = 34;
+  const miniHeight = nativeFrame?.height ?? MINI_PLAYER_HEIGHT;
+  const miniLeft = nativeFrame?.x ?? miniPlayerHorizontalInset;
+  const miniWidth = nativeFrame?.width ?? width - miniPlayerHorizontalInset * 2;
+  const logicalWidth = nativeFrame?.contentWidth || miniWidth;
+  const logicalHeight = nativeFrame?.contentHeight || miniHeight;
   const fullArtworkRadius = 28;
   const miniArtworkRadius = 8;
-  const miniArtworkX = miniPlayerHorizontalInset + 14;
-  const miniArtworkY = (MINI_PLAYER_HEIGHT - miniArtworkSize) / 2;
+  const mini = useDerivedValue(() => {
+    const target = returnFrame?.value ?? nativeFrame?.restingFrame;
+    const t = target ? returnProgress?.value ?? 0 : 0;
+    const mix = (start: number, end: number) => start + (end - start) * t;
+    const x = mix(miniLeft, target?.x ?? miniLeft);
+    const y = mix(safeCollapsedTop, target?.y ?? safeCollapsedTop);
+    const w = mix(miniWidth, target?.width ?? miniWidth);
+    const h = mix(miniHeight, target?.height ?? miniHeight);
+    const inline = mix(Number(Boolean(nativeFrame?.inline)), returnFrame?.value?.inline ?? Number(Boolean(nativeFrame?.inline)));
+    const contentWidth = mix(logicalWidth, target?.width ?? logicalWidth);
+    const contentHeight = mix(logicalHeight, target?.height ?? logicalHeight);
+    const artSize = 34 - 8 * inline;
+    return { x, y, width: w, height: h, inline, contentWidth, contentHeight,
+      scaleX: w / contentWidth, scaleY: h / contentHeight,
+      artworkX: x + (14 - 6 * inline) * w / contentWidth,
+      artworkY: (h - artSize * h / contentHeight) / 2,
+      artworkWidth: artSize * w / contentWidth,
+      artworkHeight: artSize * h / contentHeight };
+  });
+  // Closing can rebound past the mini position; finger tracking stays clamped.
+  // Bound that travel so a fast flick cannot reach the home indicator. UIKit
+  // takes over only after the spring has come to rest.
+  const surfacePosition = useDerivedValue(() => {
+    if (!nativeAccessory) return position.value;
+    const excess = Math.max(0, position.value - safeCollapsedTop);
+    return Math.max(0, Math.min(safeCollapsedTop, position.value)) + 12 * excess / (12 + excess);
+  });
+  const surfaceTop = useDerivedValue(() => surfacePosition.value
+    + (mini.value.y - safeCollapsedTop) * Math.max(0, Math.min(1, position.value / safeCollapsedTop)));
+  const pan = useMemo(() => Gesture.Pan()
+    .activeOffsetY([-4, 4])
+    .failOffsetX([-12, 12])
+    .onTouchesDown((event, manager) => {
+      const touch = event.allTouches[0];
+      if (!touch) { manager.fail(); return; }
+      if (nativeAccessory) {
+        // Hit-test the visible, moving card in window coordinates. Gesture
+        // touch.y can belong to a nested/fullscreen child, even while that
+        // child is visually clipped to the small capsule during settling.
+        const t = Math.max(0, Math.min(1, position.value / safeCollapsedTop));
+        const left = mini.value.x * t;
+        const cardWidth = width + (mini.value.width - width) * t;
+        const cardHeight = height + (mini.value.height - height) * t;
+        const localY = touch.absoluteY - surfaceTop.value;
+        if (touch.absoluteX < left || touch.absoluteX > left + cardWidth
+          || localY < 0 || localY > cardHeight) { manager.fail(); return; }
+        // Every visible part of a transitioning card is a handle. At rest in
+        // fullscreen, leave transport controls and content scrolling alone.
+        if (position.value <= 1 && localY > expansionHeaderBottom
+          && (localY > expansionHandleBottom || touch.absoluteX > expansionHandleRight)) { manager.fail(); return; }
+        if (position.value > 1) {
+          // Hold the moving card at touch-down, not after the pan threshold.
+          // Otherwise it can unmount between finger-down and finger-up and
+          // swallow a perfectly valid tap near the end of the closing spring.
+          cancelAnimation(position);
+          if (returnProgress) cancelAnimation(returnProgress);
+          if (returnFrame) cancelAnimation(returnFrame);
+          heldTransition.value = true;
+          scheduleOnRN(onBeginExpand);
+        }
+      } else if (expandedGesture.get() && touch.y > expansionHeaderBottom
+        && (touch.y > expansionHandleBottom || touch.x > expansionHandleRight)) manager.fail();
+    })
+    .onStart(() => {
+      cancelAnimation(position);
+      if (returnProgress) cancelAnimation(returnProgress);
+      if (returnFrame) cancelAnimation(returnFrame);
+      gestureActive.value = true;
+      dragStartPosition.value = position.value;
+      if (!heldTransition.value) scheduleOnRN(onBeginExpand);
+      heldTransition.value = false;
+    })
+    .onUpdate((event) => {
+      position.value = Math.max(0, Math.min(Math.max(safeCollapsedTop, dragStartPosition.value), dragStartPosition.value + event.translationY));
+    })
+    .onEnd((event) => {
+      gestureActive.value = false;
+      const currentPosition = Math.max(0, Math.min(safeCollapsedTop, position.value));
+      if (nativeAccessory) {
+        // A short deliberate pull/flick is enough; reversing a closing card
+        // should reopen it even when it is already near the bottom.
+        const projectedTravel = event.translationY + event.velocityY * 0.18;
+        if (event.translationY > 8 && projectedTravel > 72) scheduleOnRN(onCollapse, event.velocityY);
+        else if (event.translationY < -8 && projectedTravel < -72) scheduleOnRN(onExpand, event.velocityY);
+        else if (currentPosition > safeCollapsedTop * 0.5) scheduleOnRN(onCollapse, event.velocityY);
+        else scheduleOnRN(onExpand, event.velocityY);
+      } else if (currentPosition + event.velocityY * 0.12 > safeCollapsedTop * 0.5) scheduleOnRN(onCollapse, event.velocityY);
+      else scheduleOnRN(onExpand, event.velocityY);
+    })
+    .onFinalize((_, success) => {
+      if (success || !gestureActive.value) return;
+      gestureActive.value = false;
+      if (position.value > safeCollapsedTop * 0.5) scheduleOnRN(onCollapse, 0);
+      else scheduleOnRN(onExpand, 0);
+    }), [dragStartPosition, expandedGesture, expansionHandleBottom, expansionHandleRight, expansionHeaderBottom,
+      gestureActive, height, heldTransition, mini, nativeAccessory, onBeginExpand, onCollapse, onExpand, position, returnFrame, returnProgress, safeCollapsedTop, surfaceTop, width]);
+  const gesture = useMemo(() => {
+    if (!nativeAccessory) return pan;
+    // The native accessory is detached until settling finishes. Its temporary
+    // replacement must therefore accept taps as well as drags during that time.
+    const tap = Gesture.Tap().maxDistance(8)
+      .onTouchesDown((event, manager) => {
+        const touch = event.allTouches[0];
+        const t = Math.max(0, Math.min(1, position.value / safeCollapsedTop));
+        const left = mini.value.x * t;
+        const cardWidth = width + (mini.value.width - width) * t;
+        const cardHeight = height + (mini.value.height - height) * t;
+        if (!touch || position.value <= 1 || touch.absoluteX < left || touch.absoluteX > left + cardWidth
+          || touch.absoluteY < surfaceTop.value || touch.absoluteY > surfaceTop.value + cardHeight) manager.fail();
+      })
+      .onEnd((_, success) => {
+        if (!success) return;
+        heldTransition.value = false;
+        cancelAnimation(position);
+        if (returnProgress) cancelAnimation(returnProgress);
+        if (returnFrame) cancelAnimation(returnFrame);
+        scheduleOnRN(onExpand);
+      })
+      .onFinalize(() => {
+        // A cancelled tap / sideways movement must not leave a held card stuck.
+        // A successful pan clears this flag when it takes ownership.
+        if (!heldTransition.value) return;
+        heldTransition.value = false;
+        if (position.value > safeCollapsedTop * 0.5) scheduleOnRN(onCollapse, 0);
+        else scheduleOnRN(onExpand, 0);
+      });
+    return Gesture.Exclusive(pan, tap);
+  }, [height, heldTransition, mini, nativeAccessory, onCollapse, onExpand, pan, position, returnFrame, returnProgress, safeCollapsedTop, surfaceTop, width]);
+  const contentPosition = position;
   // Keep the native GlassView fully opaque while it mounts. Animating an
   // ancestor from opacity 0 can prevent iOS from establishing glass compositing.
   const surfaceAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{
-      translateY: position.value + interpolate(
+      translateY: surfaceTop.value + interpolate(
         entranceProgress.value,
         [0, 1],
         [18, 0],
@@ -148,39 +274,45 @@ export default function DraggablePlayerSurface({
   // rounded offscreen surface during a gesture, even when their net scale is 1.
   // The child keeps its full dimensions so resizing the mask cannot reflow it.
   const playerClipAnimatedStyle = useAnimatedStyle(() => ({
-    left: interpolate(position.value, [0, safeCollapsedTop], [0, miniPlayerHorizontalInset], Extrapolation.CLAMP),
-    width: interpolate(position.value, [0, safeCollapsedTop], [width, width - miniPlayerHorizontalInset * 2], Extrapolation.CLAMP),
-    height: interpolate(position.value, [0, safeCollapsedTop], [height, MINI_PLAYER_HEIGHT], Extrapolation.CLAMP),
-    borderRadius: interpolate(position.value, [0, safeCollapsedTop], [deviceCornerRadius, MINI_PLAYER_HEIGHT / 2], Extrapolation.CLAMP),
+    left: interpolate(position.value, [0, safeCollapsedTop], [0, mini.value.x], Extrapolation.CLAMP),
+    width: interpolate(position.value, [0, safeCollapsedTop], [width, mini.value.width], Extrapolation.CLAMP),
+    height: interpolate(position.value, [0, safeCollapsedTop], [height, mini.value.height], Extrapolation.CLAMP),
+    borderRadius: interpolate(position.value, [0, safeCollapsedTop], [deviceCornerRadius, mini.value.height / 2], Extrapolation.CLAMP),
+  }));
+  // Round the material itself, not just its parent's clipping mask: UIKit's
+  // refraction follows the GlassView's own corner configuration.
+  const glassAnimatedStyle = useAnimatedStyle(() => ({
+    borderRadius: interpolate(position.value, [0, safeCollapsedTop], [deviceCornerRadius, mini.value.height / 2], Extrapolation.CLAMP),
   }));
   const clipContentAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -interpolate(position.value, [0, safeCollapsedTop], [0, miniPlayerHorizontalInset], Extrapolation.CLAMP) }],
+    transform: [{ translateX: -interpolate(contentPosition.value, [0, safeCollapsedTop], [0, mini.value.x], Extrapolation.CLAMP) }],
   }));
   const colorLayerAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(position.value, [0, safeCollapsedTop * 0.955, safeCollapsedTop], [1, 1, 0], Extrapolation.CLAMP),
+    opacity: interpolate(contentPosition.value, [0, safeCollapsedTop * (nativeAccessory ? 0.82 : 0.955), safeCollapsedTop], [1, 1, 0], Extrapolation.CLAMP),
   }));
   const bodyAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(position.value, [0, safeCollapsedTop * 0.58, safeCollapsedTop * 0.92], [1, 0.58, 0], Extrapolation.CLAMP),
+    opacity: interpolate(contentPosition.value, [0, safeCollapsedTop * 0.58, safeCollapsedTop * 0.92], [1, 0.58, 0], Extrapolation.CLAMP),
     transform: [{
-      translateY: interpolate(position.value, [0, safeCollapsedTop * 0.88], [0, 74], Extrapolation.CLAMP),
+      translateY: interpolate(contentPosition.value, [0, safeCollapsedTop * 0.88], [0, 74], Extrapolation.CLAMP),
     }],
   }));
   const topBarAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(position.value, [0, safeCollapsedTop * 0.14, safeCollapsedTop * 0.44], [1, 0.2, 0], Extrapolation.CLAMP),
+    opacity: interpolate(contentPosition.value, [0, safeCollapsedTop * 0.14, safeCollapsedTop * 0.44], [1, 0.2, 0], Extrapolation.CLAMP),
     transform: [{
-      translateY: interpolate(position.value, [0, safeCollapsedTop * 0.44], [0, -28], Extrapolation.CLAMP),
+      translateY: interpolate(contentPosition.value, [0, safeCollapsedTop * 0.44], [0, -28], Extrapolation.CLAMP),
     }],
   }));
   const artworkAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: interpolate(position.value, [0, safeCollapsedTop], [0, miniArtworkX - fullArtwork.x], Extrapolation.CLAMP) },
-      { translateY: interpolate(position.value, [0, safeCollapsedTop], [0, miniArtworkY - fullArtwork.y], Extrapolation.CLAMP) },
-      { scale: interpolate(position.value, [0, safeCollapsedTop], [1, miniArtworkSize / fullArtwork.size], Extrapolation.CLAMP) },
+      { translateX: interpolate(contentPosition.value, [0, safeCollapsedTop], [0, mini.value.artworkX - fullArtwork.x], Extrapolation.CLAMP) },
+      { translateY: interpolate(contentPosition.value, [0, safeCollapsedTop], [0, mini.value.artworkY - fullArtwork.y], Extrapolation.CLAMP) },
+      { scaleX: interpolate(contentPosition.value, [0, safeCollapsedTop], [1, mini.value.artworkWidth / fullArtwork.size], Extrapolation.CLAMP) },
+      { scaleY: interpolate(contentPosition.value, [0, safeCollapsedTop], [1, mini.value.artworkHeight / fullArtwork.size], Extrapolation.CLAMP) },
     ],
   }));
   const artworkClipAnimatedStyle = useAnimatedStyle(() => {
-    const scale = interpolate(position.value, [0, safeCollapsedTop], [1, miniArtworkSize / fullArtwork.size], Extrapolation.CLAMP);
-    const displayedRadius = interpolate(position.value, [0, safeCollapsedTop], [fullArtworkRadius, miniArtworkRadius], Extrapolation.CLAMP);
+    const scale = interpolate(contentPosition.value, [0, safeCollapsedTop], [1, mini.value.artworkWidth / fullArtwork.size], Extrapolation.CLAMP);
+    const displayedRadius = interpolate(contentPosition.value, [0, safeCollapsedTop], [fullArtworkRadius, miniArtworkRadius], Extrapolation.CLAMP);
     // The clip is inside the scaled layer, so compensate to keep its visible
     // radius changing smoothly in screen space.
     return { borderRadius: displayedRadius / scale };
@@ -194,9 +326,12 @@ export default function DraggablePlayerSurface({
     opacity: position.value <= 0.5 ? 1 : 0,
   }));
   const compactAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(position.value, [safeCollapsedTop * 0.955, safeCollapsedTop], [0, 1], Extrapolation.CLAMP),
-
+    opacity: interpolate(contentPosition.value, [safeCollapsedTop * (nativeAccessory ? 0.94 : 0.955), safeCollapsedTop], [0, 1], Extrapolation.CLAMP),
+    ...(nativeFrame ? { left: mini.value.x, width: mini.value.contentWidth, height: mini.value.contentHeight, transform: [{ scaleX: mini.value.scaleX }, { scaleY: mini.value.scaleY }] } : {}),
   }));
+
+  const regularCopyStyle = useAnimatedStyle(() => ({ opacity: 1 - mini.value.inline }));
+  const inlineCopyStyle = useAnimatedStyle(() => ({ opacity: mini.value.inline }));
 
   if (!currentSong) return null;
 
@@ -205,6 +340,7 @@ export default function DraggablePlayerSurface({
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
+        onLayout={() => setLaidOut(true)}
         pointerEvents={expanded ? 'auto' : 'box-none'}
         style={[styles.surface, { height }, surfaceAnimatedStyle]}>
         <Animated.View
@@ -213,6 +349,8 @@ export default function DraggablePlayerSurface({
             styles.playerClip,
             playerClipAnimatedStyle,
           ]}>
+          {nativeAccessory ? <AnimatedGlassView colorScheme={isDark ? 'dark' : 'light'}
+            glassEffectStyle="regular" style={[StyleSheet.absoluteFill, glassAnimatedStyle]} /> : null}
           <Animated.View style={[styles.clipContent, { height, width }, clipContentAnimatedStyle]}>
               <Animated.View
                 pointerEvents="none"
@@ -236,6 +374,9 @@ export default function DraggablePlayerSurface({
                   />
                 ) : null}
               </Animated.View>
+              {nativeAccessory ? <CompactPlayer compactAnimatedStyle={compactAnimatedStyle} expanded={expanded}
+                onExpand={onExpand} nativeFrame={nativeFrame} contentsOnly
+                regularCopyStyle={regularCopyStyle} inlineCopyStyle={inlineCopyStyle} /> : null}
           </Animated.View>
         </Animated.View>
 
@@ -257,6 +398,7 @@ export default function DraggablePlayerSurface({
             <ArtworkImage
               artwork={currentSong.artwork}
               contentFit="cover"
+              onDisplay={() => setArtworkDisplayed(true)}
               onLoad={() => setArtworkLoaded((value) => value + 1)}
               recyclingKey={currentSong.id}
               source={dataSaver && currentSong.imageSmall ? { uri: currentSong.imageSmall } : playerArtworkSource ? { uri: playerArtworkSource } : fallbackArtwork}
@@ -280,7 +422,7 @@ export default function DraggablePlayerSurface({
           {expanded ? <SwipeableArtwork pageGap={width > height ? width - fullArtwork.size : fullArtwork.x + 8} size={fullArtwork.size} /> : null}
         </Animated.View>
 
-        <CompactPlayer compactAnimatedStyle={compactAnimatedStyle} expanded={expanded} onExpand={onExpand} />
+        {!nativeAccessory ? <CompactPlayer compactAnimatedStyle={compactAnimatedStyle} expanded={expanded} onExpand={onExpand} /> : null}
       </Animated.View>
     </GestureDetector>
   );
@@ -290,10 +432,18 @@ function CompactPlayer({
   compactAnimatedStyle,
   expanded,
   onExpand,
+  nativeFrame,
+  contentsOnly = false,
+  regularCopyStyle,
+  inlineCopyStyle,
 }: {
   compactAnimatedStyle: AnimatedStyle<ViewStyle>;
   expanded: boolean;
   onExpand: () => void;
+  nativeFrame?: NativePlayerFrame | null;
+  contentsOnly?: boolean;
+  regularCopyStyle?: AnimatedStyle<ViewStyle>;
+  inlineCopyStyle?: AnimatedStyle<ViewStyle>;
 }) {
   const { currentSong, isLiked, toggleLike, togglePlay } = usePlayer();
   const status = usePlayerStatus();
@@ -303,7 +453,7 @@ function CompactPlayer({
 
   const progress = status.duration > 0 ? Math.max(0, Math.min(1, status.currentTime / status.duration)) : 0;
 
-  const contents = (
+  const contents = nativeFrame ? <AccessoryPlayerContents inline={nativeFrame.inline} onExpand={onExpand} artworkHidden swipeEnabled={false} /> : (
     <>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
@@ -322,16 +472,34 @@ function CompactPlayer({
     </>
   );
 
+  // The iPhone mini controls share the growing surface's glass and clipping
+  // bounds. A second fixed-size GlassView here creates a second capsule.
+  if (contentsOnly && nativeFrame) return <Animated.View pointerEvents="none" style={[
+    { position: 'absolute', left: nativeFrame.x, top: 0,
+      width: nativeFrame.contentWidth || nativeFrame.width, height: nativeFrame.contentHeight || nativeFrame.height,
+      transformOrigin: 'top left', transform: [
+        { scaleX: nativeFrame.width / (nativeFrame.contentWidth || nativeFrame.width) },
+        { scaleY: nativeFrame.height / (nativeFrame.contentHeight || nativeFrame.height) },
+      ] },
+    compactAnimatedStyle,
+  ]}>
+    <Animated.View style={[StyleSheet.absoluteFill, regularCopyStyle]}><AccessoryPlayerContents inline={false} onExpand={onExpand} artworkHidden swipeEnabled={false} /></Animated.View>
+    <Animated.View style={[StyleSheet.absoluteFill, inlineCopyStyle]}><AccessoryPlayerContents inline onExpand={onExpand} artworkHidden swipeEnabled={false} /></Animated.View>
+  </Animated.View>;
+
   return (
-    <Animated.View pointerEvents={expanded ? 'none' : 'auto'} style={[styles.compact, compactAnimatedStyle]}>
+    <Animated.View pointerEvents={expanded ? 'none' : 'auto'} style={[styles.compact,
+      nativeFrame && { left: nativeFrame.x, right: undefined, width: nativeFrame.width, height: nativeFrame.height, borderRadius: nativeFrame.height / 2 },
+      compactAnimatedStyle]}>
       {performanceMode || !isGlassEffectAPIAvailable() || !isLiquidGlassAvailable() ? (
-        <FrostedSurface radius={26} style={styles.compactInterior}>{contents}</FrostedSurface>
+        <FrostedSurface radius={nativeFrame ? nativeFrame.height / 2 : 26}
+          style={[styles.compactInterior, nativeFrame && { paddingHorizontal: 0, borderRadius: nativeFrame.height / 2 }]}>{contents}</FrostedSurface>
       ) : (
         <GlassView
           colorScheme={isDark ? 'dark' : 'light'}
           glassEffectStyle="regular"
           isInteractive
-          style={styles.compactInterior}>
+          style={[styles.compactInterior, nativeFrame && { paddingHorizontal: 0, borderRadius: nativeFrame.height / 2 }]}>
           {contents}
         </GlassView>
       )}

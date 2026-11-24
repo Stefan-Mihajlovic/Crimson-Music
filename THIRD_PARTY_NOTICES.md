@@ -35,7 +35,7 @@ Crimson incorporates visual resources into its interface with app-specific sizin
 
 ## Crimson artwork and design sources
 
-The Sonata app icon's editable vector layers and platform assets are documented in [APP-ICON.md](docs/APP-ICON.md). The static Favorites and Local Music covers were generated with OpenAI's image generation tool for Crimson. These app assets are separate from artist artwork supplied by Audius.
+Crimson’s Soundfold app icon was developed from an AI-assisted concept exploration with OpenAI’s image generation tool, then redrawn as three editable SVG layers and finished in Apple Icon Composer. The source and derived platform assets are documented in [APP-ICON.md](docs/APP-ICON.md). Competitor logos were examined as design research only; none are included in the app or its icon assets. The static Favorites and Local Music covers were generated with OpenAI's image generation tool for Crimson. These app assets are separate from artist artwork supplied by Audius.
 
 The Vault still image, `assets/images/home/vault-still.webp`, is the unchanged first frame extracted from the existing `vault-background.webp` animation with `webpmux`. It is used when web animation is paused and retains the source asset's licensing; no new external artwork was introduced.
 
@@ -400,3 +400,7 @@ Copyright 2025 Dmytro Saviuk
    See the License for the specific language governing permissions and
    limitations under the License.
 ```
+
+## Onboarding completion sound
+
+`assets/audio/pull-complete.wav` is an original synthesized chime created for Crimson from sine harmonics, with no sampled third-party recording. It is distributed under the project MIT license.

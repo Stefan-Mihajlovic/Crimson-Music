@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { AppState, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle } from 'react-native';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AppState, Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import MarqueeMask from '@/components/marquee-mask';
@@ -9,12 +11,24 @@ const repeatGap = 32;
 const pointsPerSecond = 20;
 const startPause = 1800;
 
+type MarqueeTextProps = { text: string; textStyle: StyleProp<TextStyle>; active?: boolean; fadeOnly?: boolean };
+
+export default function MarqueeText(props: MarqueeTextProps) {
+  if (props.fadeOnly) {
+    // A static title must be drawable on its first native layout. Measuring
+    // natural width before drawing created two blank frames during handoff.
+    const label = <Text numberOfLines={1} ellipsizeMode="clip" style={props.textStyle}>{props.text.replace(/\s+/g, ' ').trim()}</Text>;
+    if (Platform.OS === 'web') return <View style={{ maskImage: 'linear-gradient(to right, #000 calc(100% - 18px), transparent)' } as ViewStyle}>{label}</View>;
+    return <MaskedView maskElement={<View style={{ flex: 1, flexDirection: 'row' }}>
+      <View style={{ flex: 1, backgroundColor: '#000' }} />
+      <LinearGradient colors={['#000', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ width: 18 }} />
+    </View>}>{label}</MaskedView>;
+  }
+  return <MovingMarqueeText {...props} />;
+}
+
 /** A single line measured at its natural width, with motion confined to its viewport. */
-export default function MarqueeText({ text, textStyle, active = true }: {
-  text: string;
-  textStyle: StyleProp<TextStyle>;
-  active?: boolean;
-}) {
+function MovingMarqueeText({ text, textStyle, active = true, fadeOnly = false }: MarqueeTextProps) {
   const { reduceMotion } = useAppSettings();
   const { fontScale } = useWindowDimensions();
   const label = text.replace(/\s+/g, ' ').trim();
@@ -27,13 +41,14 @@ export default function MarqueeText({ text, textStyle, active = true }: {
   const [textWidth, setTextWidth] = useState(0);
   const offset = useSharedValue(0);
   const overflows = viewportWidth > 0 && textWidth > viewportWidth + 1;
-  const motionAllowed = !reduceMotion;
+  const motionAllowed = !reduceMotion && !fadeOnly;
   const copyWidth = textWidth || viewportWidth;
 
   useEffect(() => {
+    if (fadeOnly) return;
     const subscription = AppState.addEventListener('change', (state) => setAppActive(state === 'active'));
     return () => subscription.remove();
-  }, []);
+  }, [fadeOnly]);
 
   useEffect(() => {
     cancelAnimation(offset);
@@ -88,13 +103,13 @@ export default function MarqueeText({ text, textStyle, active = true }: {
           if (line) setTextWidth(Math.ceil(line.width) + 1);
         }}
         style={[textStyle, styles.measurement, { width: measurementWidth }]}>{label}</Text>
-      {motionAllowed ? (
+      {motionAllowed || fadeOnly ? (
         <MarqueeMask offset={offset} textWidth={textWidth} viewportWidth={viewportWidth} repeatGap={repeatGap}>
           <Animated.View
             pointerEvents="none"
-            style={[styles.track, { width: overflows ? copyWidth * 2 + repeatGap : copyWidth }, animatedStyle]}>
+            style={[styles.track, { width: overflows && !fadeOnly ? copyWidth * 2 + repeatGap : copyWidth }, animatedStyle]}>
             {title}
-            {overflows ? (
+            {overflows && !fadeOnly ? (
               <Text
                 accessible={false}
                 accessibilityElementsHidden

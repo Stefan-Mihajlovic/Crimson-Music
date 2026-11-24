@@ -26,6 +26,8 @@ Crimson uses Expo 57 and React Native and supports iOS, Android, and web. The co
 
 Navigation, mini players, menus, and queue sheets use frosted backdrops. Vault actions use a darker blurred surface with a light border; main-page header actions display bare icons. Welcome and onboarding primary actions use white fills. Performance Mode removes blur and uses opaque surfaces on every platform.
 
+On iPhone with iOS 26 or newer, the mini player uses the native tab bar bottom accessory. Scrolling down minimizes the tabs and moves the player inline; scrolling up restores the full row. Both sizes show artwork, title, artist, and playback controls; the regular row also shows the favorite control. Opening the fullscreen player uses the measured accessory frame in either placement, and closing follows the current tab bar position even if it changes during the animation. On iOS 27, Search stays separate at the right edge. Reduce Motion keeps the tab bar expanded. iPad, older iOS, Android, web, and Performance Mode retain their existing navigation/player layouts.
+
 Up Next presents previously played songs, the current song, and upcoming songs in one list. Only upcoming songs can be reordered or removed. Up Next and Related have labeled icons on mobile and desktop.
 
 Visualizer and Playback speed sheets are available from the full player's song menu; the same preferences are shared with Settings. Visualizers default to off, use the cover's palette, and react to playback samples without microphone input. Orbit and Prism align to the artwork. Motion stops when the player is hidden, the app is backgrounded, Reduce Motion is enabled, or Performance Mode is enabled. Pause, buffering and track changes clear the audio response. Unsupported or CORS-blocked browser sampling cannot provide music reactivity.
@@ -54,7 +56,7 @@ Queue drag handles reorder visible rows and offer accessible move actions; edge 
 
 - Node.js 24 and npm; install the lockfile with `npm ci`.
 - A registered Audius application and its public app key, configured using `.env.example`.
-- iOS: macOS, Xcode 27 or newer, its command-line tools, and an appropriate signing setup for physical devices. The layered Sonata icon uses Icon Composer 2.0 refractivity and requires the Xcode 27 asset compiler; this build-tool requirement does not raise the app's deployment target.
+- iOS: macOS, Xcode 27 or newer, its command-line tools, and an appropriate signing setup for physical devices. The layered Crimson icon uses Icon Composer 2.0 refractivity and requires the Xcode 27 asset compiler; this build-tool requirement does not raise the app's deployment target.
 - Android: Android 7.0 (API 24) or newer. Build with JDK 21 and the Android SDK (compile/target SDK 36), including the NDK/CMake versions requested by Gradle. Android Studio can install these tools. Both 32-bit `armeabi-v7a` and 64-bit `arm64-v8a` phones are supported.
 - Web: a modern browser; use HTTPS for a hosted build.
 

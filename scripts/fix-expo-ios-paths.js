@@ -4,11 +4,13 @@ const path = require('path');
 const { fixSentryBuildScript, fixSceneStartup, fixSceneDelegate } = require('./lib/ios-build-scripts.cjs');
 
 const projectRoot = path.join(__dirname, '..');
+require('./lib/dependency-compat.cjs').patchDependencyCompatibility(projectRoot);
 
 // Also runs during npm postinstall: keep the installed Expo Audio DSP adapter
 // identical to the canonical config plugin before either native build begins.
 require('../plugins/with-crimson-equalizer').patchEqualizer(projectRoot);
 require('../plugins/with-crimson-sleep-timer').patchCrimsonSleepTimer(projectRoot);
+require('../plugins/with-crimson-native-tabs').patchCrimsonNativeTabs(projectRoot);
 
 function replaceOnce(filePath, brokenValue, fixedValue, label, { optional = false, supportedValues = [] } = {}) {
   if (!fs.existsSync(filePath)) {

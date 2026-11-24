@@ -30,6 +30,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Audit dependencies
+        run: npm audit --audit-level=low
       - name: Typecheck and lint
         run: npm run check
       - name: Unit tests
@@ -91,7 +93,7 @@ jobs:
           retention-days: 7
 
   ios-build:
-    # The layered Sonata icon uses Icon Composer 2 / Xcode 27 materials.
+    # The layered Crimson icon uses Icon Composer 2 / Xcode 27 materials.
     runs-on: xcode-27
     timeout-minutes: 45
     steps:

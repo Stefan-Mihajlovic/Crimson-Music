@@ -21,4 +21,20 @@ RCT_EXTERN_METHOD(extractArtworkPalette:(NSString *)source
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(beginPlayerTransition:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(finishPlayerTransition:(NSString *)token
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(cancelPlayerTransition)
+RCT_EXTERN_METHOD(completePlayerTransition)
+
+RCT_EXTERN_METHOD(measurePlayerDestination:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(prepareOnboardingFeedback:(NSString *)uri)
+RCT_EXTERN_METHOD(startOnboardingPull)
+RCT_EXTERN_METHOD(updateOnboardingPull:(double)progress)
+RCT_EXTERN_METHOD(stopOnboardingPull)
+RCT_EXTERN_METHOD(completeOnboardingPull)
 @end

@@ -50,6 +50,7 @@ import { DiscoveryPreview, RecommendationChoice } from '@/components/recommendat
 import { useAuth } from '@/providers/auth-provider';
 import { useAppSettings } from '@/providers/settings-provider';
 import { RecommendationStyle } from '@/services/auth';
+import { createOnboardingFeedback } from '@/services/onboarding-feedback';
 import { MINIMUM_PERSONALIZATION_CATEGORIES, normalizeFavoriteCategories, type PersonalizationCategoryId } from '@/services/personalization';
 
 type CategoryOption = {
@@ -131,6 +132,17 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
   const saving = useRef(false);
   const mounted = useRef(true);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  const [pullFeedback] = useState(createOnboardingFeedback);
+  const hapticStep = useSharedValue(-1);
+  useEffect(() => () => pullFeedback.dispose(), [pullFeedback]);
+  useEffect(() => {
+    if (step === 2 && appActive) void pullFeedback.prepare();
+    else pullFeedback.stop();
+    return () => pullFeedback.stop();
+  }, [appActive, pullFeedback, step]);
+  const startPullFeedback = useCallback(() => pullFeedback.start(), [pullFeedback]);
+  const updatePullFeedback = useCallback((progress: number) => pullFeedback.update(progress), [pullFeedback]);
+  const stopPullFeedback = useCallback(() => pullFeedback.stop(), [pullFeedback]);
   const pullProgress = useSharedValue(0);
   const pullStart = useSharedValue(0);
   const pullInteraction = useSharedValue(0);
@@ -236,6 +248,7 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
 
   const finishOnboarding = useCallback(async (releaseVelocity = 0) => {
     if (saving.current || !user || selectedCategories.length < minimumCategoryCount) return;
+    pullFeedback.stop();
     saving.current = true;
     setFinishing(true);
     setError('');
@@ -255,6 +268,7 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
         new Promise((resolve) => setTimeout(resolve, reduceMotion || desktop ? 0 : 620)),
       ]);
       if (!mounted.current) return;
+      pullFeedback.complete();
       if (isEditing && router.canGoBack()) {
         router.back();
       } else {
@@ -271,6 +285,7 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
     }
   }, [
     completeOnboarding,
+    pullFeedback,
     desktop,
     isEditing,
     pullInteraction,
@@ -289,11 +304,21 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
       pullInteraction.value = withTiming(1, { duration: 90 });
       pullStart.value = pullProgress.value;
     })
+    .onStart(() => {
+      hapticStep.value = -1;
+      scheduleOnRN(startPullFeedback);
+    })
     .onUpdate((event) => {
       pullProgress.value = Math.max(
         0,
         Math.min(1, pullStart.value + Math.max(0, -event.translationY) / pullDistance),
       );
+      // Quantize bridge updates, never enqueue haptics on every render frame.
+      const step = Math.round(pullProgress.value * 32);
+      if (step !== hapticStep.value) {
+        hapticStep.value = step;
+        scheduleOnRN(updatePullFeedback, pullProgress.value);
+      }
     })
     // eslint-disable-next-line react-hooks/refs -- onEnd only registers this callback; ref-guarded completion runs after the gesture ends.
     .onEnd((event) => {
@@ -309,12 +334,17 @@ function OnboardingFlow({ editing }: { editing: boolean }) {
       }
     })
     .onFinalize(() => {
+      scheduleOnRN(stopPullFeedback);
       pullInteraction.value = withTiming(0, {
         duration: 260,
         easing: Easing.out(Easing.cubic),
       });
     }), [
     appActive,
+    hapticStep,
+    startPullFeedback,
+    updatePullFeedback,
+    stopPullFeedback,
     finishOnboarding,
     finishing,
     pullInteraction,

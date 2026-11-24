@@ -10,6 +10,12 @@ jest.mock('expo-router', () => ({ get router() { return mockRouter; }, useLocalS
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('expo-linear-gradient', () => ({ LinearGradient: () => null }));
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
+// Media/haptics are covered by onboarding-feedback.integration.test.js;
+// this DOM suite exercises the desktop preference form without browser audio.
+jest.mock('../../src/services/onboarding-feedback', () => ({ createOnboardingFeedback: () => ({
+  prepare: jest.fn(), start: jest.fn(), update: jest.fn(), stop: jest.fn(),
+  complete: jest.fn(), dispose: jest.fn(),
+}) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
 jest.mock('react-native-gesture-handler', () => ({ Gesture: { Pan: () => {
   const gesture = new Proxy({}, { get: () => () => gesture }); return gesture;

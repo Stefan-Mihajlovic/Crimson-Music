@@ -1,6 +1,6 @@
 # App icon and artwork
 
-The live Apple icon source is `assets/Crimson.icon`, containing `icon.json` and two SVG note layers. Icon Composer supplies the material, lighting, and system mask. Android and web assets use the same geometry.
+The live Apple icon source is `assets/Crimson.icon`, containing `icon.json` and three SVG layers for **Soundfold**, Crimson’s folded sound-wave emblem. Icon Composer supplies the material, lighting, and system mask. Android and web assets use the same geometry.
 
 | Asset | Use |
 | --- | --- |
@@ -15,9 +15,27 @@ The live Apple icon source is `assets/Crimson.icon`, containing `icon.json` and 
 | `assets/images/favorites/heart-matte.png` | Static Favorites cover |
 | `assets/images/local-music/cover-matte.png` | Static Local Music cover |
 
+## Soundfold
+
+![Soundfold in Apple appearances](images/crimson-icon-appearances.png)
+
+The asymmetric wave rises into one tall crest, folds across the front, then returns through a smaller echo. Two open negative spaces keep the silhouette legible without relying on lighting. The three editable layers are **Attack** (front), **Wave** (middle), and **Echo** (back). Their ordering matters at the folds.
+
+The palette comes from the app: violet `#965CFF`, highlight `#B18AFF`, and deep violet `#6D28D9` / `#7C3AED`. Icon Composer supplies restrained edge lighting, refraction, translucency, and the system mask. Dark and tinted layer overrides preserve the same geometry. The composition was checked at 60 pt and in Default, Dark, Clear Light/Dark, and Tinted Light/Dark appearances. The image above is an actual Composer export; system lighting and wallpaper can change the live appearance.
+
+The design direction and source references are recorded in [icon research](ICON-RESEARCH.md).
+
 ## Updating assets
 
-Edit the live Composer document and refresh the corresponding raster assets from the same geometry. Keep an opaque PNG in Expo's root `icon` setting and `.icon` in `ios.icon`. Android adaptive foreground and monochrome layers must fit within the central 66 dp safe circle on a 108 dp canvas, without a baked launcher mask.
+Edit the vector layers in the live Composer document. The current layout is authored directly inside the 1024-unit SVG canvases, with Composer layer positions at identity. After changing the geometry, run this on macOS from the repository root:
+
+```sh
+swift scripts/export-app-icon.swift
+```
+
+This dependency-free AppKit script reads the SVG layers in Composer’s stacking order and regenerates the six flat platform images. It deliberately does not bake Apple’s dynamic material or rounded system mask into these images. If changing layer positions in Composer, incorporate those transforms into the SVG canvases before exporting. The Apple and flat background gradients are independently styled; the flat gradient uses the existing splash/adaptive purple palette.
+
+For review images, use **File → Export → All → 1024 pt** in Icon Composer. Keep review exports out of the production icon paths. Keep an opaque PNG in Expo's root `icon` setting and `.icon` in `ios.icon`. Android adaptive foreground and monochrome layers must fit within the central 66 dp safe circle on a 108 dp canvas, without a baked launcher mask.
 
 Favorites and Local Music use `BuiltInCollectionArtwork` through their shared cover components. Preserve proportional thumbnail cropping and contained hero scaling; do not substitute a fixed-size glyph.
 

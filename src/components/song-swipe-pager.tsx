@@ -3,6 +3,7 @@ import { songSwipeDirection } from '@/services/song-swipe';
 /* eslint-disable react-hooks/immutability */
 
 import ArtworkImage from '@/components/artwork-image';
+import MarqueeText from '@/components/marquee-text';
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -219,7 +220,7 @@ function ArtworkPage({
   );
 }
 
-export function SwipeableSongCopy({ enabled = true, leadingInset = 0 }: { enabled?: boolean; leadingInset?: number }) {
+export function SwipeableSongCopy({ enabled = true, leadingInset = 0, compact = false, fadeOverflow = false }: { enabled?: boolean; leadingInset?: number; compact?: boolean; fadeOverflow?: boolean }) {
   const { colors } = useAppSettings();
   const { currentSong, nextSong, previousSong, queueIndex, selectNext, selectPrevious } = useAdjacentSongs();
   const [width, setWidth] = useState(0);
@@ -241,32 +242,40 @@ export function SwipeableSongCopy({ enabled = true, leadingInset = 0 }: { enable
 
   return (
     <View onLayout={onLayout} style={styles.copyViewport}>
-      {width > 0 ? (
+      {enabled && width > 0 ? (
         <GestureDetector gesture={pager.gesture}>
           <Animated.View style={[styles.track, { width: width * 3 }, pager.trackStyle]}>
-            <CopyPage animatedStyle={pager.previousStyle} colors={colors} leadingInset={leadingInset} song={previousSong} width={width} />
-            <CopyPage animatedStyle={pager.currentStyle} colors={colors} leadingInset={leadingInset} song={currentSong} width={width} />
-            <CopyPage animatedStyle={pager.nextStyle} colors={colors} leadingInset={leadingInset} song={nextSong} width={width} />
+            <CopyPage animatedStyle={pager.previousStyle} colors={colors} compact={compact} fadeOverflow={fadeOverflow} leadingInset={leadingInset} song={previousSong} width={width} />
+            <CopyPage animatedStyle={pager.currentStyle} colors={colors} compact={compact} fadeOverflow={fadeOverflow} leadingInset={leadingInset} song={currentSong} width={width} />
+            <CopyPage animatedStyle={pager.nextStyle} colors={colors} compact={compact} fadeOverflow={fadeOverflow} leadingInset={leadingInset} song={nextSong} width={width} />
           </Animated.View>
         </GestureDetector>
-      ) : null}
+      ) : <CopyPage animatedStyle={{}} colors={colors} compact={compact} fadeOverflow={fadeOverflow}
+        leadingInset={leadingInset} song={currentSong} width="100%" />}
     </View>
   );
 }
 
-function CopyPage({ animatedStyle, colors, leadingInset, song, width }: {
+function CopyPage({ animatedStyle, colors, compact, fadeOverflow, leadingInset, song, width }: {
   animatedStyle: AnimatedStyle<ViewStyle>;
   colors: { secondaryText: string; text: string };
+  compact: boolean;
+  fadeOverflow: boolean;
   leadingInset: number;
   song: SongPage;
-  width: number;
+  width: number | '100%';
 }) {
   return (
     <Animated.View style={[styles.copyPage, { paddingLeft: leadingInset, width }, animatedStyle]}>
       {song ? (
         <>
-          <Text numberOfLines={1} style={[styles.title, { color: colors.text }]}>{song.title}</Text>
-          <Text numberOfLines={1} style={[styles.artist, { color: colors.secondaryText }]}>{song.creator}</Text>
+          {fadeOverflow ? <>
+            <MarqueeText fadeOnly text={song.title} textStyle={[styles.title, compact && styles.compactTitle, { color: colors.text }]} />
+            <MarqueeText fadeOnly text={song.creator} textStyle={[styles.artist, compact && styles.compactArtist, { color: colors.secondaryText }]} />
+          </> : <>
+            <Text numberOfLines={1} style={[styles.title, compact && styles.compactTitle, { color: colors.text }]}>{song.title}</Text>
+            <Text numberOfLines={1} style={[styles.artist, compact && styles.compactArtist, { color: colors.secondaryText }]}>{song.creator}</Text>
+          </>}
         </>
       ) : null}
     </Animated.View>
@@ -282,4 +291,6 @@ const styles = StyleSheet.create({
   copyPage: { height: '100%', justifyContent: 'center', paddingHorizontal: 2 },
   title: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
   artist: { marginTop: 2, fontSize: 12 },
+  compactTitle: { fontSize: 12, lineHeight: 15, fontWeight: '600' },
+  compactArtist: { marginTop: 1, fontSize: 10, lineHeight: 12 },
 });

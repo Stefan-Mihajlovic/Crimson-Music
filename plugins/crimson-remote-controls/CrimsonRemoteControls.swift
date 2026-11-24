@@ -1,4 +1,6 @@
 import AVFoundation
+import AudioToolbox
+import CoreHaptics
 import Foundation
 import CryptoKit
 import ImageIO
@@ -54,6 +56,257 @@ final class CrimsonRemoteControls: RCTEventEmitter {
 
   override func stopObserving() {
     hasListeners = false
+  }
+
+  private var pullHapticEngine: CHHapticEngine?
+  private var pullHapticPlayer: CHHapticPatternPlayer?
+  private var pullHapticActive = false
+  private var pullChime: SystemSoundID = 0
+  private var pullChimeURL: URL?
+
+  @objc(prepareOnboardingFeedback:)
+  func prepareOnboardingFeedback(_ uri: String) {
+    DispatchQueue.main.async {
+      if let url = URL(string: uri), url.isFileURL, url != self.pullChimeURL {
+        if self.pullChime != 0 { AudioServicesDisposeSystemSoundID(self.pullChime) }
+        self.pullChime = 0
+        if AudioServicesCreateSystemSoundID(url as CFURL, &self.pullChime) == kAudioServicesNoError {
+          self.pullChimeURL = url
+        }
+      }
+      self.preparePullHapticEngine()
+    }
+  }
+
+  private func preparePullHapticEngine() {
+    guard pullHapticEngine == nil, CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
+    do {
+      let engine = try CHHapticEngine()
+      engine.playsHapticsOnly = true
+      engine.isAutoShutdownEnabled = true
+      engine.stoppedHandler = { [weak self] _ in
+        DispatchQueue.main.async { self?.pullHapticPlayer = nil }
+      }
+      engine.resetHandler = { [weak self] in
+        DispatchQueue.main.async {
+          self?.pullHapticPlayer = nil
+          if self?.pullHapticActive == true { self?.beginPullHaptic() }
+        }
+      }
+      pullHapticEngine = engine
+    } catch { /* Unsupported/unavailable feedback does not affect the gesture. */ }
+  }
+
+  private func beginPullHaptic() {
+    guard pullHapticPlayer == nil, UIApplication.shared.applicationState == .active else { return }
+    preparePullHapticEngine()
+    guard let engine = pullHapticEngine else { return }
+    do {
+      try engine.start()
+      let event = CHHapticEvent(eventType: .hapticContinuous, parameters: [
+        CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.2)
+      ], relativeTime: 0, duration: 30)
+      let pattern = try CHHapticPattern(events: [event], parameters: [
+        CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: 0.07, relativeTime: 0)
+      ])
+      let player = try engine.makePlayer(with: pattern)
+      try player.start(atTime: CHHapticTimeImmediate)
+      pullHapticPlayer = player
+    } catch { pullHapticPlayer = nil }
+  }
+
+  @objc(startOnboardingPull)
+  func startOnboardingPull() {
+    DispatchQueue.main.async {
+      self.pullHapticActive = true
+      self.beginPullHaptic()
+    }
+  }
+
+  @objc(updateOnboardingPull:)
+  func updateOnboardingPull(_ progress: Double) {
+    DispatchQueue.main.async {
+      guard self.pullHapticActive else { return }
+      self.beginPullHaptic()
+      let strength = Float(max(0, min(1, progress)))
+      try? self.pullHapticPlayer?.sendParameters([
+        CHHapticDynamicParameter(parameterID: .hapticIntensityControl,
+                                value: 0.07 + 0.78 * pow(strength, 1.6), relativeTime: 0),
+        CHHapticDynamicParameter(parameterID: .hapticSharpnessControl,
+                                value: 0.35 * strength, relativeTime: 0)
+      ], atTime: CHHapticTimeImmediate)
+    }
+  }
+
+  @objc(stopOnboardingPull)
+  func stopOnboardingPull() {
+    DispatchQueue.main.async {
+      self.pullHapticActive = false
+      try? self.pullHapticPlayer?.stop(atTime: CHHapticTimeImmediate)
+      self.pullHapticPlayer = nil
+    }
+  }
+
+  @objc(completeOnboardingPull)
+  func completeOnboardingPull() {
+    DispatchQueue.main.async {
+      guard UIApplication.shared.applicationState == .active else { return }
+      UINotificationFeedbackGenerator().notificationOccurred(.success)
+      // A short UI sound respects the silent switch and does not reconfigure
+      // the music player's AVAudioSession or claim Now Playing ownership.
+      if self.pullChime != 0 { AudioServicesPlaySystemSound(self.pullChime) }
+    }
+  }
+
+  deinit {
+    try? pullHapticPlayer?.stop(atTime: CHHapticTimeImmediate)
+    pullHapticEngine?.stop(completionHandler: nil)
+    if pullChime != 0 { AudioServicesDisposeSystemSoundID(pullChime) }
+  }
+
+  private var playerHandoffSnapshot: UIView?
+  private weak var playerHandoffTabs: UITabBarController?
+  private var playerHandoffAccessory: AnyObject?
+  private var playerHandoffFrame: [String: Any]?
+
+  // Freeze the already-rendered source before UIKit changes its accessory
+  // layout. The replica covers the atomic removal until the React surface has
+  // actually laid out, so neither a regular-sized accessory nor missing text
+  // can appear between the two rendering systems.
+  @objc(beginPlayerTransition:rejecter:)
+  func beginPlayerTransition(_ resolve: @escaping RCTPromiseResolveBlock,
+                             rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      if let frame = self.playerHandoffFrame { resolve(frame); return }
+      guard #available(iOS 26.0, *), UIDevice.current.userInterfaceIdiom == .phone else {
+        resolve(nil); return
+      }
+      func findTabs(_ controller: UIViewController) -> UITabBarController? {
+        if let tabs = controller as? UITabBarController, tabs.bottomAccessory != nil { return tabs }
+        for child in controller.children {
+          if let tabs = findTabs(child) { return tabs }
+        }
+        return nil
+      }
+      let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        .filter { $0.activationState == .foregroundActive }.flatMap { $0.windows }
+      for window in windows where window.isKeyWindow {
+        guard let root = window.rootViewController, let tabs = findTabs(root),
+          let accessory = tabs.bottomAccessory, accessory.contentView.window != nil else { continue }
+        let content = accessory.contentView
+        let frame: CGRect
+        if let layer = content.layer.presentation(), let target = window.layer.presentation() {
+          frame = layer.convert(layer.bounds, to: target)
+        } else { frame = content.convert(content.bounds, to: window) }
+        guard frame.width > 0, frame.height > 0, !frame.isInfinite, !frame.isNull,
+          let snapshot = window.resizableSnapshotView(from: frame, afterScreenUpdates: false,
+                                                     withCapInsets: .zero) else { continue }
+        // Capture only the departing capsule. Replaying a snapshot of the
+        // entire window also re-composites the unrelated tab bar's glass,
+        // causing a brightness flash as the handoff starts/ends. Navigation
+        // stays live, while this small source replica covers accessory removal.
+        snapshot.layer.cornerRadius = frame.height / 2
+        snapshot.layer.cornerCurve = .continuous
+        snapshot.clipsToBounds = true
+        let token = UUID().uuidString
+        let result: [String: Any] = [
+          "x": frame.minX, "y": frame.minY, "width": frame.width, "height": frame.height,
+          "inline": content.traitCollection.tabAccessoryEnvironment == .inline,
+          "contentWidth": content.bounds.width, "contentHeight": content.bounds.height,
+          "handoffToken": token
+        ]
+        snapshot.frame = frame
+        snapshot.isUserInteractionEnabled = false
+        snapshot.accessibilityElementsHidden = true
+        window.addSubview(snapshot)
+        self.playerHandoffSnapshot = snapshot
+        self.playerHandoffTabs = tabs
+        self.playerHandoffAccessory = accessory
+        self.playerHandoffFrame = result
+        UIView.performWithoutAnimation {
+          tabs.setBottomAccessory(nil, animated: false)
+          tabs.view.layoutIfNeeded()
+        }
+        resolve(result)
+        return
+      }
+      resolve(nil)
+    }
+  }
+
+  @objc(finishPlayerTransition:resolver:rejecter:)
+  func finishPlayerTransition(_ token: String,
+                              resolver resolve: @escaping RCTPromiseResolveBlock,
+                              rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      guard self.playerHandoffFrame?["handoffToken"] as? String == token,
+        let snapshot = self.playerHandoffSnapshot else { resolve(nil); return }
+      // The replacement already has matching presentation geometry. An alpha
+      // fade composites two translucent glass materials and causes a bright
+      // flash; swap them in one transaction instead of waiting another 100ms.
+      UIView.performWithoutAnimation { snapshot.removeFromSuperview() }
+      self.playerHandoffSnapshot = nil
+      self.playerHandoffFrame = nil
+      // Retain the detached accessory for live destination measurements.
+      resolve(nil)
+    }
+  }
+
+  // Sample UIKit's current destination, not the frame from when opening began.
+  // Both changes are committed in the same main-thread transaction: the
+  // accessory participates in layout but is never composited on screen.
+  @objc(measurePlayerDestination:rejecter:)
+  func measurePlayerDestination(_ resolve: @escaping RCTPromiseResolveBlock,
+                                rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      guard #available(iOS 26.0, *), let tabs = self.playerHandoffTabs,
+        let accessory = self.playerHandoffAccessory as? UITabAccessory,
+        let window = tabs.view.window, tabs.bottomAccessory == nil else { resolve(nil); return }
+      var result: [String: Any]?
+      UIView.performWithoutAnimation {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        tabs.setBottomAccessory(accessory, animated: false)
+        tabs.view.layoutIfNeeded()
+        let content = accessory.contentView
+        let frame = content.convert(content.bounds, to: window)
+        if frame.width > 0 && frame.height > 0 && !frame.isInfinite && !frame.isNull {
+          result = ["x": frame.minX, "y": frame.minY, "width": frame.width, "height": frame.height,
+                    "inline": content.traitCollection.tabAccessoryEnvironment == .inline]
+        }
+        tabs.setBottomAccessory(nil, animated: false)
+        tabs.view.layoutIfNeeded()
+        CATransaction.commit()
+      }
+      resolve(result)
+    }
+  }
+
+  @objc(completePlayerTransition)
+  func completePlayerTransition() {
+    DispatchQueue.main.async {
+      // React restores its current accessory after the destination has settled.
+      // Do not keep an obsolete content tree alive after ownership returns.
+      guard self.playerHandoffSnapshot == nil else { return }
+      self.playerHandoffAccessory = nil
+      self.playerHandoffTabs = nil
+    }
+  }
+
+  @objc(cancelPlayerTransition)
+  func cancelPlayerTransition() {
+    DispatchQueue.main.async {
+      if #available(iOS 26.0, *), let tabs = self.playerHandoffTabs,
+        let accessory = self.playerHandoffAccessory as? UITabAccessory, tabs.bottomAccessory == nil {
+        UIView.performWithoutAnimation { tabs.setBottomAccessory(accessory, animated: false) }
+      }
+      self.playerHandoffSnapshot?.removeFromSuperview()
+      self.playerHandoffSnapshot = nil
+      self.playerHandoffFrame = nil
+      self.playerHandoffAccessory = nil
+      self.playerHandoffTabs = nil
+    }
   }
 
   // Native tabs require an image source, so render the avatar once as a small
